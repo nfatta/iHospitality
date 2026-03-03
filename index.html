@@ -53,7 +53,7 @@
 
     .hero-eyebrow {
       display:inline-flex; align-items:center; gap:1rem;
-      font: size 0.85rem; font-weight:600;
+      font-size: clamp(0.6rem, 1.8vw, 0.85rem); font-weight:600;
       letter-spacing:3px; text-transform:uppercase;
       color:var(--white);
       text-shadow: 0 1px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6);
@@ -64,13 +64,13 @@
       flex-shrink:0;
     }
 
-    .hero-content h1 { font-size:clamp(2rem,5vw,5rem); color:var(--white); margin-bottom:1.75rem; font-weight:600; line-height:1.0; letter-spacing:-0.5px; }
+    .hero-content h1 { font-size:clamp(1.75rem,5vw,5rem); color:var(--white); margin-bottom:1.75rem; font-weight:600; line-height:1.0; letter-spacing:-0.5px; }
     .hero-content h1 em { color:var(--gold); font-style:italic; }
-    .hero-content p { font-size:1.1rem; color:rgba(232,224,213,0.75); margin-bottom:3rem; max-width:720px; line-height:1.9; font-weight:300; }
+    .hero-content p { font-size:clamp(0.875rem, 2.5vw, 1.1rem); color:rgba(232,224,213,0.75); margin-bottom:3rem; max-width:720px; line-height:1.9; font-weight:300; }
     .hero-btns { display:flex; gap:1rem; flex-wrap:wrap; align-items:center; }
-    .btn-gold { background:var(--gold); color:var(--black); padding:1rem 2.5rem; border-radius:2px; text-decoration:none; font-weight:700; font-size:0.8rem; letter-spacing:1.5px; text-transform:uppercase; transition:background 0.2s,transform 0.2s; display:inline-block; }
+    .btn-gold { background:var(--gold); color:var(--black); padding:clamp(0.75rem, 2vw, 1rem) clamp(1.5rem, 3vw, 2.5rem); border-radius:2px; text-decoration:none; font-weight:700; font-size:clamp(0.7rem, 1.8vw, 0.8rem); letter-spacing:1.5px; text-transform:uppercase; transition:background 0.2s,transform 0.2s; display:inline-block; }
     .btn-gold:hover { background:var(--gold-light); transform:translateY(-2px); }
-    .btn-outline-gold { border:1px solid rgba(232,224,213,0.35); color:rgba(232,224,213,0.85); padding:1rem 2.5rem; border-radius:2px; text-decoration:none; font-weight:500; font-size:0.8rem; letter-spacing:1.5px; text-transform:uppercase; transition:border-color 0.2s,color 0.2s; display:inline-block; }
+    .btn-outline-gold { border:1px solid rgba(232,224,213,0.35); color:rgba(232,224,213,0.85); padding:clamp(0.75rem, 2vw, 1rem) clamp(1.5rem, 3vw, 2.5rem); border-radius:2px; text-decoration:none; font-weight:500; font-size:clamp(0.7rem, 1.8vw, 0.8rem); letter-spacing:1.5px; text-transform:uppercase; transition:border-color 0.2s,color 0.2s; display:inline-block; }
     .btn-outline-gold:hover { border-color:var(--gold); color:var(--gold); }
 
     /* STATS */
