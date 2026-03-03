@@ -194,6 +194,26 @@
     .form-header p { font-size:0.82rem; color:rgba(232,224,213,0.45); }
     .google-form-embed { width:100%; min-height:700px; border:none; display:block; background:transparent; }
 
+    /* NELTIFY FORM */
+    .netlify-form { padding: 2rem; }
+    .hidden { display: none; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+    .form-group { display: flex; flex-direction: column; margin-bottom: 1.25rem; }
+    .form-group label { font-size: 0.72rem; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(232,224,213,0.5); margin-bottom: 0.5rem; }
+    .form-group input,
+    .form-group select,
+    .form-group textarea { background: rgba(255,255,255,0.05); border: 1px solid var(--divider-dark); border-radius: 2px; padding: 0.85rem 1rem; color: var(--white); font-family: 'Inter', sans-serif; font-size: 0.9rem; transition: border-color 0.2s; outline: none; }
+    .form-group input::placeholder,
+    .form-group textarea::placeholder { color: rgba(232,224,213,0.2); }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus { border-color: var(--gold); }
+    .form-group select option { background: var(--black-soft); color: var(--white); }
+    .form-group textarea { resize: vertical; min-height: 120px; }
+    .btn-submit { background: var(--gold); color: var(--black); padding: 1rem 3rem; border: none; border-radius: 2px; font-weight: 700; font-size: 0.8rem; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; transition: background 0.2s, transform 0.2s; width: 100%; margin-top: 0.5rem; }
+    .btn-submit:hover { background: var(--gold-light); transform: translateY(-2px); }
+    @media (max-width: 768px) { .form-row { grid-template-columns: 1fr; } }
+    
     /* FOOTER */
     footer { background:var(--black); border-top:1px solid var(--divider-dark); padding:3rem 6%; }
     .footer-top { display:flex; align-items:center; justify-content:space-between; padding-bottom:2rem; margin-bottom:2rem; border-bottom:1px solid var(--divider-dark); flex-wrap:wrap; gap:1.5rem; }
@@ -452,8 +472,53 @@
         </div>
       </div>
       <div class="form-wrapper">
-        <div class="form-header"><h3>Brand Partnership Inquiry</h3><p>Tell us about your brand and we'll reach out to discuss next steps.</p></div>
-        <iframe class="google-form-embed" src="https://docs.google.com/forms/d/e/1FAIpQLSfysKtXAw3RZCrAkljR9vA1SwNpYSpnmwlS1DStJ_y2XBSB6Q/viewform?embedded=true" title="Brand Partnership Inquiry Form" loading="lazy">Loading form...</iframe>
+        <div class="form-header">
+          <h3>Brand Partnership Inquiry</h3>
+          <p>Tell us about your brand and we'll reach out to discuss next steps.</p>
+        </div>
+        <form name="partnership" method="POST" data-netlify="true" netlify-honeypot="bot-field" class="netlify-form">
+          <input type="hidden" name="form-name" value="partnership"/>
+          <p class="hidden"><label>Don't fill this out: <input name="bot-field"/></label></p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Your Name *</label>
+              <input type="text" name="name" required placeholder="Full name"/>
+            </div>
+            <div class="form-group">
+              <label>Company / Brand *</label>
+              <input type="text" name="company" required placeholder="Brand name"/>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Email Address *</label>
+              <input type="email" name="email" required placeholder="your@email.com"/>
+            </div>
+            <div class="form-group">
+              <label>Phone Number</label>
+              <input type="tel" name="phone" placeholder="(555) 555-5555"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Spirit Category *</label>
+            <select name="category" required>
+              <option value="" disabled selected>Select a category</option>
+              <option value="vodka">Vodka</option>
+              <option value="tequila">Tequila</option>
+              <option value="whiskey">Whiskey / Bourbon</option>
+              <option value="rum">Rum</option>
+              <option value="gin">Gin</option>
+              <option value="cannabis">Cannabis Beverage</option>
+              <option value="rtd">Ready to Drink (RTD)</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tell Us About Your Brand *</label>
+            <textarea name="message" required rows="5" placeholder="What makes your brand unique? Where are you currently distributed? What are your goals in Central Florida?"></textarea>
+          </div>
+          <button type="submit" class="btn-submit">Submit Inquiry</button>
+        </form>
       </div>
     </div>
   </section>
@@ -496,3 +561,4 @@
   </script>
 </body>
 </html>
+
