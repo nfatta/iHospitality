@@ -128,18 +128,19 @@
     .brands-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:1px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; }
     .brand-card { background:var(--black-rich); display:flex; flex-direction:column; transition:background 0.3s; }
     .brand-card:hover { background:#181818; }
+    .brands-grid { align-items:start; }
     .brand-logo-wrap {
-      padding:3rem 2.5rem 2rem;
+      padding:1.5rem 2rem;
       display:flex; align-items:center; justify-content:center;
       border-bottom:1px solid rgba(255,255,255,0.05);
-      min-height:200px;
+      height:160px;
       background:#1C1C1C;
+      flex-shrink:0;
     }
-    .brand-logo-wrap img { max-width:150px; max-height:130px; object-fit:contain; }
-    .brand-body { padding:1.75rem 2rem 2.25rem; }
-    .brand-tag { font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:var(--gold); display:block; margin-bottom:0.5rem; }
-    .brand-card h3 { font-size:1.3rem; color:var(--white); margin-bottom:0.5rem; font-weight:600; }
-    .brand-card p { font-size:0.85rem; color:rgba(232,224,213,0.5); line-height:1.7; }
+    .brand-logo-wrap img { max-width:120px; max-height:80px; width:auto; height:auto; object-fit:contain; display:block; }
+    .brand-body { padding:1rem 1.25rem 1.25rem; }
+    .brand-tag { font-size:0.6rem; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:var(--gold); display:block; margin-bottom:0.35rem; }
+    .brand-card h3 { font-size:0.95rem; color:var(--white); font-weight:600; line-height:1.3; }
 
     /* ABOUT */
     #about { background:var(--black-soft); }
@@ -388,63 +389,63 @@
     <div class="brands-grid">
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/44_north_logo.png" alt="44 North Vodka"/></div>
-        <div class="brand-body"><span class="brand-tag">Vodka</span><h3>44 North Vodka</h3><p>100% Idaho potato vodka crafted from the finest spuds grown along the 44th parallel. Clean, creamy, and unmistakably American.</p></div>
+        <div class="brand-body"><span class="brand-tag">Vodka</span><h3>44 North Vodka</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/dame_mas_logo.png" alt="Dame Mas Tequila"/></div>
-        <div class="brand-body"><span class="brand-tag">Tequila</span><h3>Dame Mas Tequila</h3><p>A premium tequila that embodies the spirit of Mexico — bold, authentic, and built for those who demand more from every pour.</p></div>
+        <div class="brand-body"><span class="brand-tag">Tequila</span><h3>Dame Mas Tequila</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/aspen_green_logo.jpeg" alt="Aspen Green"/></div>
-        <div class="brand-body"><span class="brand-tag">Cannabis Beverage</span><h3>Aspen Green THC Seltzer</h3><p>A pioneering THC-infused seltzer redefining the social drinking experience for wellness-conscious consumers seeking something different.</p></div>
+        <div class="brand-body"><span class="brand-tag">Cannabis Beverage</span><h3>Aspen Green THC Seltzer</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/wodka_logo.png" alt="Wodka Vodka"/></div>
-        <div class="brand-body"><span class="brand-tag">Vodka</span><h3>Wodka Vodka</h3><p>100% Polish rye vodka with heritage and character. A serious spirit for bartenders who seek authenticity without the premium markup.</p></div>
+        <div class="brand-body"><span class="brand-tag">Vodka</span><h3>Wodka Vodka</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/Blue_Run.png" alt="Blue Run Spirits"/></div>
-        <div class="brand-body"><span class="brand-tag">Bourbon</span><h3>Blue Run Spirits</h3><p>A critically acclaimed craft bourbon house pushing the boundaries of American whiskey — bold expressions built for the connoisseur.</p></div>
+        <div class="brand-body"><span class="brand-tag">Bourbon</span><h3>Blue Run Spirits</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/Coors.png" alt="Coors Whiskey Company"/></div>
-        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>Coors Whiskey Company</h3><p>An iconic American name extending its legacy into whiskey — approachable, well-crafted, and built for broad market appeal.</p></div>
+        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>Coors Whiskey Company</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/Starr.webp" alt="Starr Rum"/></div>
-        <div class="brand-body"><span class="brand-tag">Rum</span><h3>Starr Rum</h3><p>A premium Caribbean rum with deep roots and refined character — smooth enough for sipping, complex enough to command back-bar real estate.</p></div>
+        <div class="brand-body"><span class="brand-tag">Rum</span><h3>Starr Rum</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/Heavens_Door.png" alt="Heaven's Door"/></div>
-        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>Heaven's Door</h3><p>Bob Dylan's acclaimed whiskey collection — a series of exceptionally crafted American whiskeys as layered and iconic as the man behind them.</p></div>
+        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>Heaven's Door</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/Blackwell.webp" alt="Blackwell Rum"/></div>
-        <div class="brand-body"><span class="brand-tag">Rum</span><h3>Blackwell Rum</h3><p>Jamaica's finest dark rum, backed by the legacy of Island Records founder Chris Blackwell — rich, complex, and deeply rooted in Caribbean culture.</p></div>
+        <div class="brand-body"><span class="brand-tag">Rum</span><h3>Blackwell Rum</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/Chinola.webp" alt="Chinola"/></div>
-        <div class="brand-body"><span class="brand-tag">Liqueur</span><h3>Chinola</h3><p>A vibrant passion fruit liqueur from the Dominican Republic — naturally bold, beautifully balanced, and endlessly versatile behind the bar.</p></div>
+        <div class="brand-body"><span class="brand-tag">Liqueur</span><h3>Chinola</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/Gin_Lane.avif" alt="Gin Lane 1751"/></div>
-        <div class="brand-body"><span class="brand-tag">Gin</span><h3>Gin Lane 1751</h3><p>A classically inspired British gin with an 18th-century soul — aromatic, elegant, and crafted for bartenders who take their craft seriously.</p></div>
+        <div class="brand-body"><span class="brand-tag">Gin</span><h3>Gin Lane 1751</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/Ten_to_one.png" alt="Ten to One Rum"/></div>
-        <div class="brand-body"><span class="brand-tag">Rum</span><h3>Ten to One Rum</h3><p>A modern Caribbean rum house blending exceptional multi-island distillates — designed to redefine how the world sees and drinks rum.</p></div>
+        <div class="brand-body"><span class="brand-tag">Rum</span><h3>Ten to One Rum</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/JYPSI.webp" alt="JYPSI Whiskey"/></div>
-        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>JYPSI Whiskey</h3><p>A boundary-defying American whiskey built for the free-spirited — crafted without rules, finished with character, and impossible to ignore.</p></div>
+        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>JYPSI Whiskey</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/Figenza.svg" alt="Figenza Vodka"/></div>
-        <div class="brand-body"><span class="brand-tag">Vodka</span><h3>Figenza Vodka</h3><p>The world's first Mediterranean fig vodka — a lush, fruit-forward spirit as unique on the back bar as it is on the palate.</p></div>
+        <div class="brand-body"><span class="brand-tag">Vodka</span><h3>Figenza Vodka</h3></div>
       </div>
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/Chicken.png" alt="Chicken Cock Whiskey"/></div>
-        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>Chicken Cock Whiskey</h3><p>One of America's oldest whiskey brands, revived with bold new expressions — a storied heritage bottled with unapologetic confidence.</p></div>
+        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>Chicken Cock Whiskey</h3></div>
       </div>
     </div>
   </section>
