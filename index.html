@@ -125,7 +125,7 @@
 
     /* BRANDS */
     #brands { background:var(--black); }
-    .brands-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; }
+    .brands-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:1px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; }
     .brand-card { background:var(--black-rich); display:flex; flex-direction:column; transition:background 0.3s; }
     .brand-card:hover { background:#181818; }
     .brand-logo-wrap {
@@ -239,12 +239,15 @@
 
     /* RESPONSIVE */
     @media (max-width:1100px) {
-      .brands-grid { grid-template-columns:repeat(2,1fr); }
+      .brands-grid { grid-template-columns:repeat(3,1fr); }
       .why-grid { grid-template-columns:repeat(2,1fr); }
       .services-grid { grid-template-columns:repeat(2,1fr); }
       .about-grid { grid-template-columns:1fr; gap:4rem; }
       .market-layout { grid-template-columns:1fr; gap:4rem; }
       .market-stat-callout { position:relative; bottom:auto; right:auto; display:inline-block; margin-top:1.5rem; }
+    }
+    @media (max-width:900px) {
+      .brands-grid { grid-template-columns:repeat(2,1fr); }
     }
     @media (max-width:768px) {
       #home { padding: 0 5% 6vh;}
@@ -378,9 +381,9 @@
   <!-- BRANDS -->
   <section id="brands" class="dark">
     <div class="section-header centered">
-      <span class="section-label">Our Portfolio</span>
-      <h2 class="section-title">Brands We're Proud to Represent</h2>
-      <p class="section-subtitle">We partner with brands that have a compelling story and a genuine commitment to quality. Here's who we're currently championing across Central Florida.</p>
+      <span class="section-label">Our Brand History</span>
+      <h2 class="section-title">Brands We've Worked With</h2>
+      <p class="section-subtitle">From craft distilleries to heritage houses, these are the brands we've been proud to champion across Central Florida's most influential accounts.</p>
     </div>
     <div class="brands-grid">
       <div class="brand-card">
@@ -398,6 +401,50 @@
       <div class="brand-card">
         <div class="brand-logo-wrap"><img src="images/wodka_logo.png" alt="Wodka Vodka"/></div>
         <div class="brand-body"><span class="brand-tag">Vodka</span><h3>Wodka Vodka</h3><p>100% Polish rye vodka with heritage and character. A serious spirit for bartenders who seek authenticity without the premium markup.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/Blue_Run.png" alt="Blue Run Spirits"/></div>
+        <div class="brand-body"><span class="brand-tag">Bourbon</span><h3>Blue Run Spirits</h3><p>A critically acclaimed craft bourbon house pushing the boundaries of American whiskey — bold expressions built for the connoisseur.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/Coors.png" alt="Coors Whiskey Company"/></div>
+        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>Coors Whiskey Company</h3><p>An iconic American name extending its legacy into whiskey — approachable, well-crafted, and built for broad market appeal.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/Starr.webp" alt="Starr Rum"/></div>
+        <div class="brand-body"><span class="brand-tag">Rum</span><h3>Starr Rum</h3><p>A premium Caribbean rum with deep roots and refined character — smooth enough for sipping, complex enough to command back-bar real estate.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/Heavens_Door.png" alt="Heaven's Door"/></div>
+        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>Heaven's Door</h3><p>Bob Dylan's acclaimed whiskey collection — a series of exceptionally crafted American whiskeys as layered and iconic as the man behind them.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/Blackwell.webp" alt="Blackwell Rum"/></div>
+        <div class="brand-body"><span class="brand-tag">Rum</span><h3>Blackwell Rum</h3><p>Jamaica's finest dark rum, backed by the legacy of Island Records founder Chris Blackwell — rich, complex, and deeply rooted in Caribbean culture.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/Chinola.webp" alt="Chinola"/></div>
+        <div class="brand-body"><span class="brand-tag">Liqueur</span><h3>Chinola</h3><p>A vibrant passion fruit liqueur from the Dominican Republic — naturally bold, beautifully balanced, and endlessly versatile behind the bar.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/Gin_Lane.avif" alt="Gin Lane 1751"/></div>
+        <div class="brand-body"><span class="brand-tag">Gin</span><h3>Gin Lane 1751</h3><p>A classically inspired British gin with an 18th-century soul — aromatic, elegant, and crafted for bartenders who take their craft seriously.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/Ten_to_one.png" alt="Ten to One Rum"/></div>
+        <div class="brand-body"><span class="brand-tag">Rum</span><h3>Ten to One Rum</h3><p>A modern Caribbean rum house blending exceptional multi-island distillates — designed to redefine how the world sees and drinks rum.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/JYPSI.webp" alt="JYPSI Whiskey"/></div>
+        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>JYPSI Whiskey</h3><p>A boundary-defying American whiskey built for the free-spirited — crafted without rules, finished with character, and impossible to ignore.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/Figenza.svg" alt="Figenza Vodka"/></div>
+        <div class="brand-body"><span class="brand-tag">Vodka</span><h3>Figenza Vodka</h3><p>The world's first Mediterranean fig vodka — a lush, fruit-forward spirit as unique on the back bar as it is on the palate.</p></div>
+      </div>
+      <div class="brand-card">
+        <div class="brand-logo-wrap"><img src="images/Chicken.png" alt="Chicken Cock Whiskey"/></div>
+        <div class="brand-body"><span class="brand-tag">Whiskey</span><h3>Chicken Cock Whiskey</h3><p>One of America's oldest whiskey brands, revived with bold new expressions — a storied heritage bottled with unapologetic confidence.</p></div>
       </div>
     </div>
   </section>
@@ -465,7 +512,7 @@
         <h2 class="section-title">Ready to Own Central Florida?</h2>
         <p class="section-subtitle">If your brand is ready to establish a serious presence in one of America's most powerful spirits markets, we want to hear from you. Fill out the form and we'll be in touch within 48 hours.</p>
         <div class="contact-detail"><div class="contact-line"></div><p><strong>Based in Orlando, Florida</strong>Serving the entire Central Florida market</p></div>
-        <div class="contact-detail"><div class="contact-line"></div><p><strong>Email</strong>info@ihospitality.vip</p></div>
+        <div class="contact-detail"><div class="contact-line"></div><p><strong>Email</strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="11787f777e5178797e62617865707d7865683f677861">[email&#160;protected]</a></p></div>
         <div class="social-links">
           <a href="https://www.instagram.com/ihospitalityvip/" target="_blank" rel="noopener" class="social-link">Instagram</a>
           <a href="https://www.facebook.com/iHospitalityVIP" target="_blank" rel="noopener" class="social-link">Facebook</a>
@@ -544,7 +591,7 @@
     </div>
   </footer>
 
-  <script>
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
     function toggleNav() { document.getElementById('mobileNav').classList.toggle('open'); }
     function closeNav() { document.getElementById('mobileNav').classList.remove('open'); }
     document.addEventListener('click', e => {
@@ -554,9 +601,9 @@
     const secs = document.querySelectorAll('section[id]');
     const links = document.querySelectorAll('.nav-links a:not(.nav-cta)');
     window.addEventListener('scroll', () => {
-      let cur = '';
-      secs.forEach(s => { if (window.scrollY >= s.offsetTop - 90) cur = s.id; });
-      links.forEach(a => { a.style.color = a.getAttribute('href') === '#' + cur ? 'var(--gold)' : ''; });
+      let current = '';
+      secs.forEach(s => { if (window.scrollY >= s.offsetTop - 120) current = s.id; });
+      links.forEach(a => { a.style.color = a.getAttribute('href') === '#' + current ? 'var(--white)' : ''; });
     });
   </script>
 </body>
