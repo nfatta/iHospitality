@@ -55,20 +55,34 @@ HubSpot IDs coexist. Last run: all passing.
 
 ---
 
+### Phase 1b — Admin-managed activity taxonomy ✅ 10 Aug 2026
+
+Operator ruling (D4): the activity vocabulary will keep changing, so an admin must
+be able to add and adjust types — imports must not depend on us guessing the
+mapping. Added `resolve_activity_type()`, `merge_activity_type()`, and the
+`v_activity_types_needing_review` queue. An unrecognized activity type now costs
+zero rows: it is created, flagged for review, and surfaces in the admin queue.
+
+**How to see it working:** same `bash portal/test/run.sh`. The taxonomy section
+shows a known alias resolving without creating anything; an unknown value being
+created and flagged; the same value twice staying stable; messy punctuation
+(`Drink List 3!!  (PK)`) yielding a legal code; blank and NULL both routing to
+`unclassified`; a merge moving activities and aliases and retiring rather than
+deleting the source; and a brand login refused on both functions.
+
+---
+
 ## Blocked
 
-### Phase 2 — Seed from HubSpot CSVs 🔴
+### Phase 2 — Seed from HubSpot CSVs 🟡 in progress, load step blocked
 
-Cannot complete without a **Supabase project**, which requires an account the
-operator must create — I can't create accounts. Needs, in `Hubspot/.env`:
-`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+The **load** needs a Supabase project, which requires an account only the operator
+can create. Needed in `Hubspot/.env`: `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY`.
 
-Also blocked on the D4 ruling: whether `account sold` (35 rows) means a case sale
-or a status change. Seeding before that answer bakes 35 wrong rows into every
-depletion figure.
-
-The seed script itself can be written and tested against the local harness before
-either unblocks — only the actual load needs the live project.
+Everything before the load is unblocked and underway (operator go-ahead 10 Aug):
+the loader is written and tested against the local harness, so only the final
+write to the real project waits on credentials.
 
 ---
 

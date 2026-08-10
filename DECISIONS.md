@@ -40,13 +40,29 @@ inspectable and editable without touching code.
 
 ---
 
-**D4 — `account sold` mapped to `case_sale`.** ⚠️ ASSUMPTION — needs a ruling before Phase 2 seeding
+**D4 — Activity taxonomy is admin-managed at runtime; imports never hard-fail on an unknown type.** ✅ operator-directed 10 Aug 2026
 
-35 rows carry this activity type. Mapped on the assumption it means the first case
-moved. If it actually means "account agreed to stock", it is a
-`brand_venue_status` transition, not an activity, and 35 rows will be wrong in
-every depletion number the dashboard shows. Conservative because it is visible and
-reversible — but it must be confirmed, not left.
+Superseded the original question. The operator's ruling: the activity vocabulary
+("account sold", "case sold" and the rest) is *going to change*, so the system
+must let an admin add and adjust types rather than have the mapping settled in
+SQL by us. Individual mapping calls are explicitly not worth resolving now.
+
+Built to match:
+- `resolve_activity_type(raw)` — looks up the alias table; on an unknown value it
+  creates the type, flags it `needs_review`, records the alias, and returns it. An
+  undefined activity type can never cost a row. Blank/NULL routes to a single
+  `unclassified` type instead of inventing one per empty value.
+- `merge_activity_type(source, target)` — folds one type into another, moving
+  activities *and* aliases, retiring the source rather than deleting it so the
+  merge is reversible and no foreign key breaks. Re-importing the old raw string
+  afterwards follows the merge instead of resurrecting the source.
+- `v_activity_types_needing_review` — the admin's review queue, with the raw
+  spellings each type has been seen as and how many activities it holds.
+
+Both functions are `revoke`d from `public`/`anon`/`authenticated`: Postgres grants
+EXECUTE to PUBLIC on new functions by default, which would have let any logged-in
+brand user create activity types. The review queue view is staff-only for the same
+reason. Tested — a brand login is refused on both functions.
 
 ---
 
@@ -72,7 +88,7 @@ Phase 1 is "verified locally", not "verified".
 
 ---
 
-**D7 — Trigger derives `brand_venue_status` from activity type, ignoring deal stage.** ⚠️ partial
+**D7 — Trigger derives `brand_venue_status` from activity type, ignoring deal stage.** ✅ operator-confirmed 10 Aug 2026
 
 `sync_brand_venue_status()` advances a venue to `pitched` on any activity and
 `placed` on a depletion activity, and never overwrites the human judgements

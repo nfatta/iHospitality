@@ -120,8 +120,15 @@ create table if not exists activity_types (
   -- Does this activity represent product actually moving?
   is_depletion    boolean not null default false,
   sort_order      smallint not null default 100,
-  is_active       boolean not null default true
+  is_active       boolean not null default true,
+  -- Set when a type was created automatically by an import that met a value it
+  -- did not recognize. It means "a human has not looked at this yet" — the admin
+  -- reviews these, then edits or merges them. See resolve_activity_type() below.
+  needs_review    boolean not null default false
 );
+
+-- Existing installs predate needs_review; add it without disturbing data.
+alter table activity_types add column if not exists needs_review boolean not null default false;
 
 insert into activity_types (code, label, is_billable, is_depletion, sort_order) values
   ('account_visit',     'Account Visit',        true,  false, 10),
@@ -186,10 +193,122 @@ from (values
 join activity_types t on t.code = v.code
 on conflict (raw_value) do nothing;
 
--- OPEN QUESTION (PORTAL_PLAN.md): 'account sold' is mapped to case_sale on the
--- assumption it means the first case moved. Confirm against the live pipeline
--- before seeding — if it actually means "account agreed to stock", it belongs
--- with brand_venue_status, not here.
+-- The seeded rows above are a STARTING POINT, not a fixed taxonomy. Activity
+-- types are expected to change as the business changes; the admin adds, renames,
+-- retires and merges them at runtime. Nothing below depends on this exact list —
+-- which is why this is a table and not an enum.
+
+
+-- -----------------------------------------------------------------------------
+-- Taxonomy administration
+--
+-- Three operations the admin needs, implemented once here rather than in the
+-- Streamlit app, so the sync script and the admin UI cannot disagree about what
+-- "merge two activity types" means.
+-- -----------------------------------------------------------------------------
+
+-- Look up a raw import string; if it has never been seen, create a type for it
+-- rather than failing or dropping the row.
+--
+-- This is the rule that makes imports safe: an activity type the admin has not
+-- defined yet must never lose data. The row loads, the new type is flagged
+-- needs_review, and it shows up in the admin's review queue to be edited or
+-- merged into an existing type. The alternative — hard-failing on unknown values
+-- — means every new HubSpot spelling breaks the whole import run.
+create or replace function resolve_activity_type(raw text)
+returns smallint
+language plpgsql
+as $$
+declare
+  normalized text := lower(trim(raw));
+  found_id   smallint;
+  new_code   text;
+begin
+  if normalized is null or normalized = '' then
+    -- An activity with no type at all is a data problem, not a new category.
+    -- Route it somewhere visible instead of inventing a type per blank value.
+    select id into found_id from activity_types where code = 'unclassified';
+    if found_id is null then
+      insert into activity_types (code, label, is_billable, sort_order, needs_review)
+      values ('unclassified', 'Unclassified', false, 999, true)
+      returning id into found_id;
+    end if;
+    return found_id;
+  end if;
+
+  select activity_type_id into found_id
+  from activity_type_aliases where raw_value = normalized;
+  if found_id is not null then
+    return found_id;
+  end if;
+
+  -- Derive a code from the raw label: lowercase, non-alphanumerics to
+  -- underscores, collapsed and trimmed — so 'Drink List 3!' becomes
+  -- 'drink_list_3' and satisfies the code check constraint.
+  new_code := trim(both '_' from regexp_replace(normalized, '[^a-z0-9]+', '_', 'g'));
+  if new_code = '' then
+    new_code := 'type_' || md5(normalized);
+  end if;
+
+  -- The derived code may already exist (two raw spellings normalizing to the
+  -- same code). Reuse it rather than colliding on the unique constraint.
+  select id into found_id from activity_types where code = new_code;
+  if found_id is null then
+    insert into activity_types (code, label, needs_review, sort_order)
+    values (new_code, initcap(normalized), true, 900)
+    returning id into found_id;
+  end if;
+
+  insert into activity_type_aliases (raw_value, activity_type_id)
+  values (normalized, found_id)
+  on conflict (raw_value) do nothing;
+
+  return found_id;
+end $$;
+
+
+-- Fold one activity type into another: every activity and every alias moves to
+-- the target, and the source is retired rather than deleted.
+--
+-- Retired, not deleted, on purpose — a hard delete would break the foreign key
+-- from any activity that had not moved, and would lose the record that the type
+-- ever existed. Retiring keeps the history and makes the merge reversible by
+-- hand if it was wrong.
+create or replace function merge_activity_type(source_code text, target_code text)
+returns void
+language plpgsql
+as $$
+declare
+  source_id smallint;
+  target_id smallint;
+begin
+  select id into source_id from activity_types where code = source_code;
+  select id into target_id from activity_types where code = target_code;
+
+  if source_id is null then raise exception 'no activity type with code %', source_code; end if;
+  if target_id is null then raise exception 'no activity type with code %', target_code; end if;
+  if source_id = target_id then raise exception 'cannot merge % into itself', source_code; end if;
+
+  update activities            set activity_type_id = target_id where activity_type_id = source_id;
+  -- Point the source's aliases at the target, so a future import of the old raw
+  -- string resolves to the merged type instead of recreating the source.
+  update activity_type_aliases set activity_type_id = target_id where activity_type_id = source_id;
+
+  update activity_types
+     set is_active = false, needs_review = false
+   where id = source_id;
+end $$;
+
+
+-- (The admin's review-queue view is defined in Section 4, once `activities`
+-- exists — plpgsql function bodies above are not parsed until called, but a
+-- view's query is resolved the moment it is created.)
+
+-- These functions WRITE. Postgres grants EXECUTE to PUBLIC on new functions by
+-- default, which would hand every logged-in brand user the ability to create
+-- activity types. Close that immediately — they are for service_role only.
+revoke all on function resolve_activity_type(text)         from public, anon, authenticated;
+revoke all on function merge_activity_type(text, text)     from public, anon, authenticated;
 
 
 -- -----------------------------------------------------------------------------
@@ -538,9 +657,26 @@ left join venues v    on v.id = a.venue_id
 order by a.activity_date desc;
 
 
+-- The admin's review queue: activity types an import invented that nobody has
+-- confirmed yet. Internal — staff only, never granted to brand users.
+create or replace view v_activity_types_needing_review as
+select t.id, t.code, t.label, t.is_billable, t.is_depletion,
+       count(distinct a.id)              as activity_count,
+       array_agg(distinct al.raw_value)  as seen_as
+from activity_types t
+left join activities            a  on a.activity_type_id  = t.id
+left join activity_type_aliases al on al.activity_type_id = t.id
+where t.needs_review
+group by t.id, t.code, t.label, t.is_billable, t.is_depletion
+order by count(distinct a.id) desc;
+
+
 grant select on
   v_brand_monthly_summary, v_brand_venue_counts, v_brand_activity_log
 to authenticated;
+
+-- Deliberately NOT granted to authenticated: the review queue is internal.
+revoke all on v_activity_types_needing_review from anon, authenticated;
 
 
 -- =============================================================================

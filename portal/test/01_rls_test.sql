@@ -144,3 +144,77 @@ insert into brands (name, slug) values ('Bad','Not A Slug');
 \echo '=== Two NULL hubspot ids must coexist (field-created rows) ==='
 insert into venues (name, market) values ('Field Venue A','central_florida'), ('Field Venue B','central_florida');
 select count(*) as field_created_venues from venues where hubspot_company_id is null;
+
+
+-- ============================================================
+-- Admin-managed taxonomy. An import must never lose a row just
+-- because the admin has not defined that activity type yet.
+-- ============================================================
+\echo ''
+\echo '=== TAXONOMY: resolve_activity_type ==='
+
+\echo '-- known alias resolves to the existing type, creates nothing:'
+select (select count(*) from activity_types) as types_before,
+       resolve_activity_type('  Account Visit  ') = (select id from activity_types where code='account_visit') as matched_existing,
+       (select count(*) from activity_types) as types_after;
+
+\echo '-- unknown value is created, flagged for review, NOT dropped:'
+select resolve_activity_type('Sponsored Brunch Takeover') as new_id;
+select code, label, needs_review from activity_types where code = 'sponsored_brunch_takeover';
+
+\echo '-- same unknown value twice does not create a second type:'
+select resolve_activity_type('sponsored brunch takeover') = resolve_activity_type('Sponsored Brunch Takeover') as stable;
+select count(*) as should_be_1 from activity_types where code = 'sponsored_brunch_takeover';
+
+\echo '-- messy punctuation still yields a legal code:'
+select resolve_activity_type('Drink List 3!!  (PK)') as id;
+select code from activity_types where needs_review and code like 'drink_list_3%';
+
+\echo '-- blank/null routes to unclassified rather than inventing a type:'
+select resolve_activity_type('') = resolve_activity_type(null) as both_unclassified;
+select code, needs_review from activity_types where code = 'unclassified';
+
+\echo ''
+\echo '-- admin review queue:'
+select code, label, activity_count from v_activity_types_needing_review;
+
+\echo ''
+\echo '=== TAXONOMY: merge_activity_type ==='
+-- Give the invented type some activities, then fold it into a real one.
+insert into activities (brand_id, venue_id, activity_type_id, activity_date)
+select 'aaaaaaaa-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000001',
+       id, current_date - 3
+from activity_types where code = 'sponsored_brunch_takeover';
+
+select count(*) as activities_on_source_before
+from activities where activity_type_id = (select id from activity_types where code='sponsored_brunch_takeover');
+
+select merge_activity_type('sponsored_brunch_takeover', 'tasting_event');
+
+select count(*) as activities_on_source_after
+from activities where activity_type_id = (select id from activity_types where code='sponsored_brunch_takeover');
+select is_active as source_retired_not_deleted, needs_review
+from activity_types where code = 'sponsored_brunch_takeover';
+
+\echo '-- the old raw string now resolves to the MERGE TARGET, not a fresh type:'
+select resolve_activity_type('Sponsored Brunch Takeover') = (select id from activity_types where code='tasting_event') as follows_merge;
+
+\echo '-- merge guards:'
+\set ON_ERROR_STOP off
+select merge_activity_type('does_not_exist', 'tasting_event');
+select merge_activity_type('tasting_event', 'tasting_event');
+\set ON_ERROR_STOP on
+
+\echo ''
+\echo '=== A BRAND USER MUST NOT BE ABLE TO CALL THESE (expect permission denied) ==='
+set role authenticated;
+set app.current_user_id = '11111111-1111-1111-1111-111111111111';
+\set ON_ERROR_STOP off
+select resolve_activity_type('Backdoor Type');
+select merge_activity_type('tasting_event','account_visit');
+\set ON_ERROR_STOP on
+reset role;
+
+\echo ''
+\echo '-- confirm the brand user created nothing:'
+select count(*) as backdoor_types from activity_types where code = 'backdoor_type';
