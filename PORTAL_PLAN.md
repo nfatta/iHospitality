@@ -1,12 +1,14 @@
 # iHospitality Brand Portal — Plan
 
-> **Picking this up cold?** Read this box first, then Phase 0.
+> **Picking this up cold?** Read this box first.
 >
-> This plan was written 7 Aug 2026. Nothing has been built yet — no code was written, no files changed. Every phase below is still to do.
+> Plan written 7 Aug 2026. **Phase 0 and Phase 1 were done 10 Aug 2026.**
 >
-> **Start Sunday with Phase 0** (rotate the exposed HubSpot token, ~15 min). Do not skip it; it is the only item with a real security cost attached.
+> - **Phase 0 — done, except step 4.** The token is out of both scripts and in `Hubspot/.env`, loaded via `python-dotenv`. The stray copy the plan warned about was already gone. `*.py`, `.env`, `credentials.json` are now gitignored in the website repo.
+>   **STILL TO DO: rotate the token in HubSpot.** It sat in plaintext in a synced OneDrive folder for months and is unchanged. Settings → Integrations → Private Apps → Auth → Rotate, then paste the new value into `Hubspot/.env`. Nothing else needs touching afterwards.
+> - **Phase 1 — done.** `portal/schema.sql`, verified against a real Postgres 18 (`bash portal/test/run.sh`). Applies clean, idempotent, and the RLS isolation test passes — see `portal/README.md` for exactly what was proven.
 >
-> **Then Phase 1** (the schema). That is the first substantial piece of work and the main SQL learning.
+> **Next: Phase 2**, seeding from the CSV exports. Read the "Still open" section of `portal/README.md` first — the live data has three specific problems that need a decision before seeding.
 >
 > Decisions already made, so they don't need relitigating:
 > - **Supabase** (managed Postgres) for the database, auth, and photo storage — chosen because it is real SQL and Nicholas is learning SQL.

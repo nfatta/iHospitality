@@ -1,2 +1,8 @@
 Photos/
 .claude/
+
+# Never let scripts or secrets reach the Netlify deploy from this repo.
+*.py
+.env
+.env.*
+credentials.json

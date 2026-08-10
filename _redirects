@@ -1,0 +1,10 @@
+# Netlify edge rules. No build step — Netlify reads this file directly.
+#
+# The repo root IS the publish directory, so every committed file is served.
+# The portal's source files are version-controlled but must never be fetchable:
+# schema.sql maps out the tables and the RLS policies, which is a gift to anyone
+# probing the portal. Block them at the edge — robots.txt only asks politely.
+/portal/*.sql   /   404
+/portal/*.sh    /   404
+/portal/test/*  /   404
+/portal/README.md   /   404
