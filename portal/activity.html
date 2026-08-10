@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Activity | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">Brand Portal</span>
+        <h1>Activity</h1>
+        <p class="portal-sub" id="count"></p>
+      </div>
+      <div class="filters">
+        <select id="f-market"><option value="">All markets</option></select>
+        <select id="f-type"><option value="">All activity types</option></select>
+        <select id="f-year"><option value="">All time</option></select>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Every activity, newest first</h2>
+        <span class="hint" id="shown"></span>
+      </div>
+      <div id="log"></div>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum, MARKET_LABEL, table, fillSelect } from './portal.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('activity.html', auth.profile);
+
+      const { data, error } = await db.from('v_brand_activity_log').select('*');
+      if (error) {
+        render(document.getElementById('log'), { error });
+      } else if (!data.length) {
+        render(document.getElementById('log'), { empty: {
+          title: 'No activity yet',
+          body: 'Activity logged for your brand will appear here.' } });
+      } else {
+        buildFilters(data);
+        ['f-market', 'f-type', 'f-year'].forEach(id =>
+          document.getElementById(id).addEventListener('change', () => draw(data)));
+        document.getElementById('count').textContent =
+          `${fmtNum(data.length)} activities on record`;
+        draw(data);
+      }
+    }
+
+    function buildFilters(rows) {
+      const uniq = (fn) => [...new Set(rows.map(fn).filter(Boolean))].sort();
+      fillSelect('f-market', uniq(r => r.market).map(m => [m, MARKET_LABEL[m] || m]));
+      fillSelect('f-type', uniq(r => r.activity_type).map(t => [t, t]));
+      fillSelect('f-year', uniq(r => r.activity_date?.slice(0, 4)).reverse().map(y => [y, y]));
+    }
+
+    function draw(rows) {
+      const market = document.getElementById('f-market').value;
+      const type = document.getElementById('f-type').value;
+      const year = document.getElementById('f-year').value;
+
+      const filtered = rows.filter(r =>
+        (!market || r.market === market) &&
+        (!type || r.activity_type === type) &&
+        (!year || r.activity_date?.startsWith(year)));
+
+      document.getElementById('shown').textContent =
+        filtered.length === rows.length
+          ? `${fmtNum(rows.length)} shown`
+          : `${fmtNum(filtered.length)} of ${fmtNum(rows.length)} shown`;
+
+      const el = document.getElementById('log');
+      if (!filtered.length) {
+        return render(el, { empty: {
+          title: 'Nothing matches those filters',
+          body: 'Try widening the market, type or year.' } });
+      }
+
+      // Columns with nothing in them anywhere are dropped — see table() in
+      // portal.js. Date, venue and activity always show.
+      el.innerHTML = table(filtered, [
+        { head: 'Date',     always: true, nowrap: true, get: r => esc(fmtDate(r.activity_date)) },
+        { head: 'Venue',    always: true, cls: 'venue', get: r => esc(r.venue_name || '—') },
+        { head: 'Market',   value: r => r.market,
+          get: r => r.market ? esc(MARKET_LABEL[r.market] || r.market) : '<span class="muted">—</span>' },
+        { head: 'Activity', always: true, get: r => esc(r.activity_type) },
+        { head: 'Qty',      cls: 'num', value: r => r.quantity,
+          get: r => r.quantity ? fmtNum(r.quantity) : '<span class="muted">—</span>' },
+        { head: 'Notes',    value: r => r.summary, get: r => esc(r.summary || '') },
+        { head: 'Photos',   cls: 'num', value: r => Number(r.photo_count),
+          get: r => fmtNum(r.photo_count) },
+      ]);
+    }
+  </script>
+</body>
+</html>

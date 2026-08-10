@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Photos | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">Brand Portal</span>
+        <h1>Photos</h1>
+        <p class="portal-sub" id="count"></p>
+      </div>
+    </div>
+    <div id="groups"></div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <div class="lightbox" id="lightbox">
+    <button class="lightbox-close" id="lb-close" aria-label="Close">&times;</button>
+    <button class="lightbox-prev" id="lb-prev" aria-label="Previous">&#8249;</button>
+    <button class="lightbox-next" id="lb-next" aria-label="Next">&#8250;</button>
+    <div class="lightbox-content">
+      <img id="lb-img" alt="">
+      <p class="lightbox-cap" id="lb-cap"></p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum } from './portal.js';
+
+    let shots = [];
+    let index = 0;
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('photos.html', auth.profile);
+
+      // Photos reach this brand through their activity — RLS enforces that join,
+      // so this select cannot return another brand's images.
+      const { data, error } = await db
+        .from('photos')
+        .select('id, storage_path, caption, taken_at, activities(activity_date, activity_type_id, venues(name))')
+        .order('taken_at', { ascending: false });
+
+      const el = document.getElementById('groups');
+      if (error) {
+        render(el, { error });
+      } else if (!data?.length) {
+        render(el, { empty: {
+          title: 'No photos yet',
+          body: 'Photos from your activations will appear here once they are uploaded.' } });
+        document.getElementById('count').textContent = '';
+      } else {
+        await renderGroups(data, el);
+      }
+    }
+
+    async function renderGroups(rows, el) {
+      // Storage is a private bucket, so every image needs a short-lived signed
+      // URL. One batch call rather than one request per photo.
+      const paths = rows.map(r => r.storage_path);
+      const { data: signed, error } = await db.storage
+        .from('activation-photos').createSignedUrls(paths, 3600);
+      if (error) return render(el, { error });
+
+      const urlFor = {};
+      (signed || []).forEach(s => { if (!s.error) urlFor[s.path] = s.signedUrl; });
+
+      shots = rows.filter(r => urlFor[r.storage_path]).map(r => ({
+        url: urlFor[r.storage_path],
+        caption: r.caption || '',
+        venue: r.activities?.venues?.name || '',
+        date: r.activities?.activity_date || null,
+      }));
+
+      document.getElementById('count').textContent = `${fmtNum(shots.length)} photos`;
+
+      // Group by the activity that produced them — a brand thinks in events,
+      // not in files.
+      const groups = {};
+      shots.forEach((s, i) => {
+        const key = `${s.date || 'undated'}|${s.venue}`;
+        (groups[key] ||= []).push({ ...s, i });
+      });
+
+      el.innerHTML = Object.entries(groups).map(([key, items]) => {
+        const [date, venue] = key.split('|');
+        return `<div class="photo-group">
+          <h3>${esc(venue || 'Activation')}</h3>
+          <p class="when">${esc(date === 'undated' ? 'Date unknown' : fmtDate(date))} &middot; ${items.length} photo${items.length === 1 ? '' : 's'}</p>
+          <div class="photo-grid">
+            ${items.map(p => `<div class="photo-item" data-i="${p.i}">
+              <img src="${esc(p.url)}" alt="${esc(p.caption || venue)}" loading="lazy">
+            </div>`).join('')}
+          </div></div>`;
+      }).join('');
+
+      el.querySelectorAll('.photo-item').forEach(node =>
+        node.addEventListener('click', () => open(Number(node.dataset.i))));
+    }
+
+    const box = document.getElementById('lightbox');
+    function open(i) { index = i; paint(); box.classList.add('open'); }
+    function close() { box.classList.remove('open'); }
+    function step(d) { index = (index + d + shots.length) % shots.length; paint(); }
+    function paint() {
+      const s = shots[index];
+      document.getElementById('lb-img').src = s.url;
+      document.getElementById('lb-cap').textContent =
+        [s.caption, s.venue, s.date ? fmtDate(s.date) : ''].filter(Boolean).join(' · ');
+    }
+
+    document.getElementById('lb-close').onclick = close;
+    document.getElementById('lb-prev').onclick = () => step(-1);
+    document.getElementById('lb-next').onclick = () => step(1);
+    box.addEventListener('click', e => { if (e.target === box) close(); });
+    document.addEventListener('keydown', e => {
+      if (!box.classList.contains('open')) return;
+      if (e.key === 'Escape') close();
+      if (e.key === 'ArrowLeft') step(-1);
+      if (e.key === 'ArrowRight') step(1);
+    });
+  </script>
+</body>
+</html>

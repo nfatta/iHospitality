@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Sign In | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        <img src="../images/ih_logo.png" alt="iHospitality" width="444" height="394">
+        <div class="t">i<span>Hospitality</span></div>
+        <p>Brand Portal</p>
+      </div>
+
+      <form class="login-form" id="form">
+        <div id="msg"></div>
+        <div class="fld">
+          <label for="email">Email</label>
+          <input type="email" id="email" autocomplete="username" required>
+        </div>
+        <div class="fld">
+          <label for="password">Password</label>
+          <input type="password" id="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-full" id="submit">Sign In</button>
+      </form>
+
+      <p class="login-note">
+        Accounts are created by iHospitality — there is no self-signup.<br>
+        Need access? Email <a href="mailto:nicholas@ihospitality.vip" style="color:var(--gold)">nicholas@ihospitality.vip</a>
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { db, esc } from './portal.js';
+
+    const form = document.getElementById('form');
+    const submit = document.getElementById('submit');
+    const msg = document.getElementById('msg');
+
+    // Where to go after login — only ever a bare filename from our own nav, so
+    // a crafted ?next= cannot bounce someone to another site.
+    const ALLOWED = ['index.html', 'activity.html', 'venues.html', 'photos.html'];
+    const wanted = new URLSearchParams(location.search).get('next');
+    const next = ALLOWED.includes(wanted) ? wanted : 'index.html';
+
+    // Already signed in? Skip the form.
+    const { data: { session } } = await db.auth.getSession();
+    if (session) location.replace(next);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.innerHTML = '';
+      submit.disabled = true;
+      submit.textContent = 'Signing in…';
+
+      const { error } = await db.auth.signInWithPassword({
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value,
+      });
+
+      if (error) {
+        // Deliberately generic: distinguishing "no such account" from "wrong
+        // password" tells an attacker which client emails are real.
+        msg.innerHTML = `<div class="err">That email and password did not match. Please try again.</div>`;
+        submit.disabled = false;
+        submit.textContent = 'Sign In';
+        return;
+      }
+      location.replace(next);
+    });
+  </script>
+</body>
+</html>

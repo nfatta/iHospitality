@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Dashboard | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">Brand Portal</span>
+        <h1 id="title">Dashboard</h1>
+        <p class="portal-sub" id="range"></p>
+      </div>
+    </div>
+
+    <div id="stats"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Month by month</h2>
+        <span class="hint">Activity across your accounts</span>
+      </div>
+      <div id="months"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Recent activity</h2>
+        <span class="hint"><a href="activity.html" style="color:var(--gold);text-decoration:none">View all &rarr;</a></span>
+      </div>
+      <div id="recent"></div>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtMonth, fmtNum } from './portal.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('index.html', auth.profile);
+      document.getElementById('title').textContent = auth.profile.brands?.name || 'Dashboard';
+
+      // Every query below is unfiltered by brand ON PURPOSE. Row-level security
+      // adds the brand restriction in Postgres, so the browser never decides
+      // what this user may see — and a bug here cannot leak another brand.
+      const [summary, log] = await Promise.all([
+        db.from('v_brand_monthly_summary').select('*').order('month', { ascending: false }),
+        db.from('v_brand_activity_log').select('*').limit(10),
+      ]);
+
+      renderStats(summary);
+      renderMonths(summary);
+      renderRecent(log);
+    }
+
+    function renderStats({ data, error }) {
+      const el = document.getElementById('stats');
+      if (error) return render(el, { error });
+      if (!data?.length) {
+        return render(el, { empty: {
+          title: 'Nothing here yet',
+          body: 'Once activity is logged for your brand it will appear here.' } });
+      }
+
+      const totals = data.reduce((a, r) => ({
+        activities: a.activities + Number(r.activity_count || 0),
+        units: a.units + Number(r.units_moved || 0),
+        photos: a.photos + Number(r.photo_count || 0),
+      }), { activities: 0, units: 0, photos: 0 });
+
+      // Venues touched must be counted distinctly across months — summing the
+      // per-month figures would count a venue once per month it was visited.
+      const latest = data[0];
+      document.getElementById('range').textContent =
+        `${fmtMonth(data[data.length - 1].month)} — ${fmtMonth(latest.month)}`;
+
+      db.from('v_brand_venue_counts').select('venue_id').then(({ data: v }) => {
+        document.getElementById('venue-count').textContent = fmtNum(v?.length || 0);
+      });
+
+      el.className = 'stat-grid';
+      el.innerHTML = `
+        <div class="stat-card">
+          <span class="num">${fmtNum(latest.activity_count)}</span>
+          <span class="lbl">Activities</span>
+          <div class="meta">in ${esc(fmtMonth(latest.month))}</div>
+        </div>
+        <div class="stat-card">
+          <span class="num" id="venue-count">—</span>
+          <span class="lbl">Venues</span>
+          <div class="meta">all time</div>
+        </div>
+        <div class="stat-card">
+          <span class="num">${fmtNum(totals.activities)}</span>
+          <span class="lbl">Total activities</span>
+          <div class="meta">across ${data.length} month${data.length === 1 ? '' : 's'}</div>
+        </div>
+        <div class="stat-card">
+          <span class="num">${fmtNum(totals.units)}</span>
+          <span class="lbl">Units moved</span>
+          <div class="meta">${fmtNum(totals.photos)} photo${totals.photos === 1 ? '' : 's'} captured</div>
+        </div>`;
+    }
+
+    function renderMonths({ data, error }) {
+      const el = document.getElementById('months');
+      if (error) return render(el, { error });
+      if (!data?.length) return render(el, { empty: { title: 'No months yet', body: '' } });
+
+      el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
+        <thead><tr>
+          <th>Month</th><th class="num">Activities</th><th class="num">Venues</th>
+          <th class="num">Units</th><th class="num">Photos</th>
+        </tr></thead><tbody>
+        ${data.map(r => `<tr>
+          <td class="venue">${esc(fmtMonth(r.month))}</td>
+          <td class="num">${fmtNum(r.activity_count)}</td>
+          <td class="num">${fmtNum(r.venues_touched)}</td>
+          <td class="num">${fmtNum(r.units_moved)}</td>
+          <td class="num ${Number(r.photo_count) ? '' : 'muted'}">${fmtNum(r.photo_count)}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`;
+    }
+
+    function renderRecent({ data, error }) {
+      const el = document.getElementById('recent');
+      if (error) return render(el, { error });
+      if (!data?.length) return render(el, { empty: { title: 'No activity yet', body: '' } });
+
+      el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Date</th><th>Venue</th><th>What</th><th class="num">Qty</th></tr></thead>
+        <tbody>${data.map(r => `<tr>
+          <td>${esc(fmtDate(r.activity_date))}</td>
+          <td class="venue">${esc(r.venue_name || '—')}</td>
+          <td>${esc(r.activity_type)}</td>
+          <td class="num ${r.quantity ? '' : 'muted'}">${r.quantity ? fmtNum(r.quantity) : '—'}</td>
+        </tr>`).join('')}</tbody></table></div>`;
+    }
+  </script>
+</body>
+</html>
