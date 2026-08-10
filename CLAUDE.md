@@ -1,75 +1,82 @@
 # CLAUDE.md — standing instructions
 
-Read these three, in order, before doing anything: `PROGRESS.md` (where the build
-is), `DECISIONS.md` (judgment calls already made), `PORTAL_PLAN.md` (the WHAT —
-its decisions are locked). `BUILD-PLAYBOOK.md` is the HOW.
+Read these before doing anything: `PROGRESS.md` (where the build is),
+`DECISIONS.md` (judgment calls already made and why), `PORTAL_PLAN.md` (the WHAT
+— its locked decisions are final). `BUILD-PLAYBOOK.md` is the HOW.
 
-## What this repo is
+## Two repos, and why
 
-The public iHospitality site (`ihospitality.vip`) plus the brand portal being
-built inside it. Plain static HTML, inline CSS, **no build step, no npm** — that
-is a locked decision, not an oversight. Netlify deploys from `main`.
+| Repo | Holds |
+|---|---|
+| **this one** (`Website/…/ihospitality/`) | The public site and the portal's *servable* files only. Deploys to Netlify from `main`. |
+| `Hubspot/portal_seed/` | All Python, `db/schema.sql`, and the SQL test harness. Its own git repo. **Not deployed.** |
 
-## Running it
+**The repo root IS the Netlify publish directory.** Every committed file here is
+served at `ihospitality.vip/<path>`. That single fact drives several decisions:
+`*.py`, `.env` and `credentials.json` are gitignored here, and the schema plus
+test harness live in the other repo entirely. Do not rely on `_redirects` to
+hide a file — Netlify's `*` is a trailing splat, not a filename glob, so
+`/portal/*.sql` does **not** match (D12). If a file must not be public, it does
+not belong in this repo.
+
+## Running the site
 
 ```bash
 python -m http.server 8123
 ```
 
-Or use the `ihospitality-static` config in `.claude/launch.json` via `preview_start`.
+Or the `ihospitality-static` config in `.claude/launch.json` via `preview_start`.
+The portal is at `/portal/login.html` — it needs `http://localhost`, not
+`file://`, because it uses ES modules.
 
-## The live database
+## The database
 
-Supabase project is live and seeded (942 activities). Everything reads
-`DATABASE_URL` from `../../Hubspot/.env` — never pass it on a command line.
+Live on Supabase (Postgres 17.6), seeded. Everything reads `DATABASE_URL` from
+`Hubspot/.env` — never pass it on a command line.
 
 ```bash
 cd ../../Hubspot/portal_seed
-python verify_live.py            # read-only health check of the live database
-python apply_schema.py --apply   # re-apply schema.sql (idempotent)
-python seed_from_csv.py          # dry run; add --apply to load
+python verify_live.py                  # read-only health check
+python apply_schema.py --apply         # re-apply db/schema.sql (idempotent)
+python seed_from_csv.py                # dry run; --apply to load
+python create_portal_user.py --list    # who has portal access
+python -m pytest test_normalize.py -q  # 35 unit tests
+bash db/test/run.sh                    # schema + RLS suite, no network
+bash test_seed_integration.sh          # end-to-end load, asserts idempotency
 ```
 
-**Local Postgres is not Supabase.** Anything touching roles, grants, or default
+**Local Postgres is not Supabase.** Anything touching roles, grants or default
 privileges must be checked against the real project — Supabase grants `ALL` on
-new public objects to `anon`/`authenticated` by default, and a stock local
-cluster does not. That difference already hid one real bug (D6).
-
-## Testing the database layer
-
-```bash
-bash portal/test/run.sh
-```
-
-Spins up a throwaway Postgres cluster, applies `portal/schema.sql` twice
-(idempotency), runs the RLS isolation test, tears down. Needs no Supabase project
-and no network. Run it after any schema change — the isolation test is the spec.
+new public objects to `anon`/`authenticated` by default and a stock local
+cluster does not. That difference hid a real bug once (D6). The local stub now
+reproduces it; keep it that way.
 
 ## Conventions that matter
 
-- **The repo root is the Netlify publish directory.** Every committed file is
-  served at `ihospitality.vip/<path>`. Before adding a file, ask whether it should
-  be public. Non-public source under `portal/` is blocked by `_redirects`.
-- **No secrets in this repo, ever.** `*.py`, `.env`, and `credentials.json` are
-  gitignored specifically because a `git add -A` would otherwise publish them.
-- **Python tooling lives in `../../Hubspot/`, not here** — see DECISIONS.md D1.
-  The HubSpot token comes from `Hubspot/.env` via `python-dotenv`, never inline.
+- **No build step, no npm.** Locked decision. Plain static HTML.
+- **Shared CSS is in `css/site.css`.** Page-specific CSS stays inline *after*
+  the link so pages can override (gallery.html relies on this). Change brand
+  colours in `:root` in that file only.
 - **Two markets only:** `central_florida`, `palm_beach_county`. Never "South
-  Florida" — the database enum enforces this so it cannot leak into brand-facing
-  output.
-- **Internal notes are not brand-facing.** `activities.notes` is internal;
+  Florida" — the database enum enforces it.
+- **Internal notes are never brand-facing.** `activities.notes` is internal;
   `activities.brand_visible_summary` is what a client reads. The brand-facing
-  views never select `notes`. Do not add it to one.
-- CSS/nav/footer are currently duplicated between `index.html` and `gallery.html`.
-  Extracting them to `css/site.css` is the first task of Phase 4 — don't do it
-  opportunistically before then.
+  views do not select `notes`. Do not add it.
+- **Portal queries are written without a brand filter, on purpose.** RLS applies
+  the restriction in Postgres. Never "helpfully" add `.eq('brand_id', …)` — it
+  implies the security lives in the browser, and it does not.
+- **Escape anything from the database before putting it in HTML** (`esc()` in
+  `portal.js`). Venue names come from HubSpot and are untrusted.
+- The portal is **read-only by construction**: RLS has SELECT policies only, and
+  `authenticated` holds no write grants. Writes go through `service_role` in the
+  Python tooling.
 
 ## Where things are
 
 | Path | What |
 |---|---|
-| `portal/schema.sql` | The database. Apply via the Supabase SQL editor. Idempotent. |
-| `portal/test/` | Local verification harness. Not deployed. |
+| `portal/` | The five portal pages, `portal.css`, `portal.js`. Servable files only. |
+| `css/site.css` | Shared tokens, nav, buttons, section base, footer, mobile nav. |
 | `PORTAL_PLAN.md` | Architecture doc — phases, locked decisions. |
-| `../../Hubspot/` | HubSpot exports and the extraction scripts (outside this repo). |
-| `../../Hubspot/.env` | The HubSpot token. Not in git. |
+| `../../Hubspot/portal_seed/` | Python tooling + `db/schema.sql`. Separate repo. |
+| `../../Hubspot/.env` | HubSpot token, Supabase keys, `DATABASE_URL`. Not in git. |

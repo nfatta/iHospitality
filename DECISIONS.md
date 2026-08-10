@@ -150,6 +150,43 @@ drift, which is exactly how "works locally" happens.
 
 ---
 
+**D12 — Non-servable files live outside the website repo, not behind a redirect.** ✅ 10 Aug 2026
+
+`_redirects` originally carried rules like `/portal/*.sql   /   404` to stop the
+schema being downloaded. **Those rules do not work.** Netlify's `*` is a trailing
+splat, not a filename glob, so `/portal/*.sql` matches nothing — `schema.sql`
+would have been served at `ihospitality.vip/portal/schema.sql` while appearing to
+be protected. This was caught before any deploy, but only by questioning a rule
+that could not be tested locally.
+
+`schema.sql`, the SQL test harness and the db README moved to
+`Hubspot/portal_seed/db/`. The website repo's `portal/` now contains only the
+five pages, `portal.css` and `portal.js`.
+
+Standing rule: **if a file must not be public, it does not belong in the website
+repo.** Do not reach for a redirect rule to hide something. Verified against the
+live deploy preview — all four source paths return 404.
+
+---
+
+**D13 — `Hubspot/portal_seed/` is its own git repo.** ✅ operator-directed 10 Aug 2026
+
+D1 put the Python outside the website repo for deploy safety, which left it with
+no version history at all. It is now a separate repo with its own `.gitignore`
+(secrets stay in `Hubspot/.env`, one level up and outside it), README and
+`requirements.txt`. It has no remote — local only.
+
+---
+
+**D14 — The portal is demoed via a Netlify deploy preview, not production.** ✅ operator-directed 10 Aug 2026
+
+Branch `portal-v1` + PR #1 produce a preview at
+`deploy-preview-1--cool-dusk-e84d8f.netlify.app`, which is a complete working
+copy against the live database. `ihospitality.vip` stays untouched until the PR
+is merged. The preview lives only as long as the PR is open.
+
+---
+
 **D9 — `anon` lockdown placed at the end of `schema.sql`.**
 
 Supabase's default privileges grant `anon` access to newly created objects in

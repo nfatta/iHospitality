@@ -9,7 +9,12 @@ brands and 297 venues are loaded.
 
 Not yet done: Phase 3 (the HubSpot sync script — the data is currently a
 one-time seed), Phase 5 (Streamlit admin), Phase 6 (field entry and cutover).
-Nothing is deployed publicly yet; the portal exists only in local commits.
+
+**Nothing is on `ihospitality.vip` yet.** The work sits on branch `portal-v1`
+with [PR #1](https://github.com/nfatta/iHospitality/pull/1) open, which gives a
+Netlify deploy preview at
+`https://deploy-preview-1--cool-dusk-e84d8f.netlify.app`. Merging that PR is what
+puts the portal on the live domain.
 
 ---
 
@@ -32,9 +37,9 @@ only in `.env`.
 **Token rotated by the operator 10 Aug 2026** and confirmed working against the
 HubSpot API (deals endpoint, HTTP 200). Phase 0 is fully closed.
 
-### Phase 1 — Schema ✅ 10 Aug 2026 (verified locally, not on Supabase)
+### Phase 1 — Schema ✅ 10 Aug 2026 (also verified on Supabase — see Phase 2 load)
 
-`portal/schema.sql` — tables, RLS, three dashboard views, triggers, storage
+`Hubspot/portal_seed/db/schema.sql` — tables, RLS, three dashboard views, triggers, storage
 bucket. Heavily commented; it is the SQL learning artifact.
 
 Beyond the plan: an `activity_type_aliases` table (D3), because the live exports
@@ -48,7 +53,7 @@ every `sum()` in that view.
 **How to see it working:**
 
 ```bash
-bash portal/test/run.sh
+bash db/test/run.sh   # from Hubspot/portal_seed/
 ```
 
 Expect: two clean applies, then the isolation test — Blue Run sees 1 row per
@@ -67,7 +72,7 @@ mapping. Added `resolve_activity_type()`, `merge_activity_type()`, and the
 `v_activity_types_needing_review` queue. An unrecognized activity type now costs
 zero rows: it is created, flagged for review, and surfaces in the admin queue.
 
-**How to see it working:** same `bash portal/test/run.sh`. The taxonomy section
+**How to see it working:** same `bash db/test/run.sh`. The taxonomy section
 shows a known alias resolving without creating anything; an unknown value being
 created and flagged; the same value twice staying stable; messy punctuation
 (`Drink List 3!!  (PK)`) yielding a legal code; blank and NULL both routing to
@@ -83,7 +88,7 @@ Lives in `../../Hubspot/portal_seed/` (D1 — Python stays out of the deployed r
 | File | What |
 |---|---|
 | `normalize.py` | Pure transformation rules. No DB, no filesystem. |
-| `test_normalize.py` | 30 unit tests, every fixture a real string from the exports. |
+| `normalize.py` / `test_normalize.py` | Pure rules + 35 unit tests, every fixture a real string from the exports. |
 | `seed_from_csv.py` | The loader. Dry-run by default. |
 | `test_seed_integration.sh` | End-to-end against a throwaway Postgres, twice, checking idempotency. |
 
@@ -91,7 +96,7 @@ A Sonnet subagent audited all 29 CSVs first (`Hubspot/DATA_AUDIT.md`); its three
 headline claims were independently re-verified before anything was built on them.
 
 **Results on the real exports:** 25 files, 1,777 raw rows → **942 activities,
-303 venues, 11 brands**. 818 duplicate Record IDs collapsed (81% of rows overlap
+297 venues, 11 brands** (303 before the Phase 4 brand-as-venue fix). 818 duplicate Record IDs collapsed (81% of rows overlap
 across the monthly exports and their `_with_notes` siblings). 282 venues matched
 by HubSpot company ID, 21 by name only. 11 rows skipped, all for an unusable
 close date.
@@ -114,7 +119,7 @@ cd ../../Hubspot/portal_seed && python seed_from_csv.py
 ```
 
 Dry run — reports every count above and writes nothing. Then
-`python -m pytest test_normalize.py -q` (30 tests) and
+`python -m pytest test_normalize.py -q` (35 tests) and
 `bash test_seed_integration.sh` (loads twice, asserts the second run changes
 nothing). Last run: all green.
 
@@ -123,8 +128,8 @@ nothing). Last run: all green.
 ### Phase 2 load onto Supabase ✅ 10 Aug 2026
 
 Operator created the project; schema applied (Postgres 17.6, 12 objects, 8 RLS
-policies) and the seed run against it. **Live counts: 11 brands, 303 venues, 942
-activities, 521 brand/venue status rows.** Identical to the local run. The seed
+policies) and the seed run against it. **Live counts at the time: 11 brands, 303 venues, 942
+activities.** (Now 297 venues after the brand-as-venue fix in Phase 4.) Identical to the local run. The seed
 was then run a second time end-to-end and every count was unchanged — idempotency
 proven on the real target, not just locally.
 
@@ -204,22 +209,44 @@ real brands are onboarded**:
 
 ---
 
+## Live state as of end of 10 Aug 2026
+
+**Portal accounts** (`python create_portal_user.py --list`):
+
+| Email | Role | Sees |
+|---|---|---|
+| `phil@ihospitality.vip` | staff | All 11 brands — created for a remote demo |
+| `test-bluerun@example.com` | brand_user | Blue Run only |
+| `test-wodka@example.com` | brand_user | Wodka only |
+
+**Demo preview:** https://deploy-preview-1--cool-dusk-e84d8f.netlify.app/portal/login.html
+(from PR #1; disappears when the PR closes).
+
+**Repos.** Website repo is on branch `portal-v1`, 8 commits ahead of `main`,
+pushed. `Hubspot/portal_seed/` is a separate local repo, 2 commits, no remote.
+
 ## Open items for the operator
 
-1. **Two test logins exist** (`test-bluerun@`, `test-wodka@` at example.com).
-   Delete before onboarding real brands.
-2. **`All Brands` (20 activities) and `iHospitality` (16)** are loaded as brands.
-   Neither looks like a real client brand — say how to treat them and they can be
-   retired or merged.
-3. **11 activity types are flagged for review** — `recurring_case` (51
+1. **Delete the two test logins before real brands are onboarded.**
+   `python create_portal_user.py --delete --email test-bluerun@example.com`
+2. **Merge or close PR #1.** Merging puts the portal on `ihospitality.vip`;
+   closing takes the demo preview down.
+3. **`All Brands` (20 activities) and `iHospitality` (16)** are loaded as brands.
+   Neither looks like a real client — decide whether to retire or merge them.
+   There is no brand-merge function yet (the equivalent exists only for activity
+   types), so this needs either a decision to build one or a manual fix.
+4. **11 activity types are flagged for review** — `recurring_case` (51
    activities) is the big one. `python verify_live.py` lists them.
-4. **`Hubspot/portal_seed/` is not under version control.** D1 put the Python
-   outside the website repo so it could never be served, but that folder is not a
-   git repo, so the loader, its 35 tests and the user-provisioning script have no
-   history. Worth `git init` there.
-5. **No city or market data exists** on any venue — the HubSpot exports do not
-   carry either, so those columns and the market filter stay hidden until
-   something fills them in.
+5. **No city or market data exists** on any venue — the HubSpot exports carry
+   neither, so those columns and the market filter stay hidden until something
+   fills them in. Populating `venues.market` is also what makes the
+   two-market positioning visible to brands.
+6. **No password reset flow.** A user who loses their password cannot self-serve;
+   an admin must re-create the account or reset it in the Supabase dashboard.
+   Build before real brands get logins — belongs with Phase 5.
+7. **Photos are entirely empty.** `photos.html` renders its empty state
+   correctly, but nothing populates that table until Phase 3 brings the HubSpot
+   attachment download across.
 
 ## Not started
 

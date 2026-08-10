@@ -1,14 +1,24 @@
 # iHospitality Brand Portal — Plan
 
-> **Picking this up cold?** Read this box first.
+> **Picking this up cold?** Read `PROGRESS.md` first, then `DECISIONS.md`, then
+> this document. `CLAUDE.md` has the standing instructions.
 >
-> Plan written 7 Aug 2026. **Phase 0 and Phase 1 were done 10 Aug 2026.**
+> Plan written 7 Aug 2026. **Phases 0, 1, 2 and 4 were completed 10 Aug 2026.**
+> The portal works end to end against a live Supabase project: a brand logs in
+> and sees only their own data, verified in a browser with two real logins.
 >
-> - **Phase 0 — done, except step 4.** The token is out of both scripts and in `Hubspot/.env`, loaded via `python-dotenv`. The stray copy the plan warned about was already gone. `*.py`, `.env`, `credentials.json` are now gitignored in the website repo.
->   **STILL TO DO: rotate the token in HubSpot.** It sat in plaintext in a synced OneDrive folder for months and is unchanged. Settings → Integrations → Private Apps → Auth → Rotate, then paste the new value into `Hubspot/.env`. Nothing else needs touching afterwards.
-> - **Phase 1 — done.** `portal/schema.sql`, verified against a real Postgres 18 (`bash portal/test/run.sh`). Applies clean, idempotent, and the RLS isolation test passes — see `portal/README.md` for exactly what was proven.
+> **Next up: Phase 3** (the HubSpot sync script — the data is currently a
+> one-time seed, so nothing new from HubSpot reaches the portal) or **Phase 5**
+> (the Streamlit admin, which is also where a password-reset flow belongs).
 >
-> **Next: Phase 2**, seeding from the CSV exports. Read the "Still open" section of `portal/README.md` first — the live data has three specific problems that need a decision before seeding.
+> Two corrections to this plan, made during the build and already applied:
+> - **File layout.** The plan puts `schema.sql`, the Python and the admin under
+>   `portal/` in the website repo. They are not there. The website repo root is
+>   the Netlify publish directory, so everything non-servable lives in
+>   `Hubspot/portal_seed/` instead. See DECISIONS D1 and D12.
+> - **Activity taxonomy.** The plan treats the HubSpot→`activity_type` mapping as
+>   a question to answer once. It is instead admin-managed at runtime, because
+>   the vocabulary keeps changing. See DECISIONS D4.
 >
 > Decisions already made, so they don't need relitigating:
 > - **Supabase** (managed Postgres) for the database, auth, and photo storage — chosen because it is real SQL and Nicholas is learning SQL.
