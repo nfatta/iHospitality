@@ -2,8 +2,9 @@
 
 Build log for the brand portal. Phases are from `PORTAL_PLAN.md`.
 
-**Current position:** Phase 1 complete and verified locally. Phase 2 is
-**blocked** — see below.
+**Current position:** Phases 0–2 complete and **live on Supabase**. 942
+activities across 11 brands and 303 venues are loaded. Next up is Phase 3 (the
+sync script) or Phase 4 (the portal pages) — Phase 4 is where v1 ships.
 
 ---
 
@@ -23,10 +24,8 @@ Build log for the brand portal. Phases are from `PORTAL_PLAN.md`.
 working directory; a grep across the whole `Ihospitality/` tree finds the token
 only in `.env`.
 
-**⚠️ OUTSTANDING — operator action.** The token value is unchanged and sat in
-plaintext in a synced OneDrive folder for months. Rotate it: HubSpot → Settings →
-Integrations → Private Apps → Auth → Rotate, then paste the new value into
-`Hubspot/.env`. No code changes needed after.
+**Token rotated by the operator 10 Aug 2026** and confirmed working against the
+HubSpot API (deals endpoint, HTTP 200). Phase 0 is fully closed.
 
 ### Phase 1 — Schema ✅ 10 Aug 2026 (verified locally, not on Supabase)
 
@@ -72,17 +71,80 @@ deleting the source; and a brand login refused on both functions.
 
 ---
 
-## Blocked
+### Phase 2 — Seed from HubSpot CSVs ✅ built and proven on real data 10 Aug 2026
 
-### Phase 2 — Seed from HubSpot CSVs 🟡 in progress, load step blocked
+Lives in `../../Hubspot/portal_seed/` (D1 — Python stays out of the deployed repo).
 
-The **load** needs a Supabase project, which requires an account only the operator
-can create. Needed in `Hubspot/.env`: `SUPABASE_URL` and
-`SUPABASE_SERVICE_ROLE_KEY`.
+| File | What |
+|---|---|
+| `normalize.py` | Pure transformation rules. No DB, no filesystem. |
+| `test_normalize.py` | 30 unit tests, every fixture a real string from the exports. |
+| `seed_from_csv.py` | The loader. Dry-run by default. |
+| `test_seed_integration.sh` | End-to-end against a throwaway Postgres, twice, checking idempotency. |
 
-Everything before the load is unblocked and underway (operator go-ahead 10 Aug):
-the loader is written and tested against the local harness, so only the final
-write to the real project waits on credentials.
+A Sonnet subagent audited all 29 CSVs first (`Hubspot/DATA_AUDIT.md`); its three
+headline claims were independently re-verified before anything was built on them.
+
+**Results on the real exports:** 25 files, 1,777 raw rows → **942 activities,
+303 venues, 11 brands**. 818 duplicate Record IDs collapsed (81% of rows overlap
+across the monthly exports and their `_with_notes` siblings). 282 venues matched
+by HubSpot company ID, 21 by name only. 11 rows skipped, all for an unusable
+close date.
+
+**Two bugs the integration test caught that a dry run never would have:**
+1. *Not idempotent* — `ON CONFLICT (hubspot_company_id)` never fires when that
+   column is NULL, so all 60 name-only venues were re-inserted on every run.
+   Fixed by resolving venues through a pre-loaded cache keyed by both ID and
+   name, plus a partial unique index in the schema as a database-level guard.
+   Side benefit: 39 name-only rows now resolve onto their ID-matched twin
+   instead of duplicating it.
+2. *A `nan` activity type was created* — a blank cell read with `dtype=str`
+   comes back as float NaN, and `str(nan)` is `"nan"`. Blanks now route to
+   `unclassified`. Regression test added.
+
+**How to see it working:**
+
+```bash
+cd ../../Hubspot/portal_seed && python seed_from_csv.py
+```
+
+Dry run — reports every count above and writes nothing. Then
+`python -m pytest test_normalize.py -q` (30 tests) and
+`bash test_seed_integration.sh` (loads twice, asserts the second run changes
+nothing). Last run: all green.
+
+---
+
+### Phase 2 load onto Supabase ✅ 10 Aug 2026
+
+Operator created the project; schema applied (Postgres 17.6, 12 objects, 8 RLS
+policies) and the seed run against it. **Live counts: 11 brands, 303 venues, 942
+activities, 521 brand/venue status rows.** Identical to the local run. The seed
+was then run a second time end-to-end and every count was unchanged — idempotency
+proven on the real target, not just locally.
+
+**This is where verifying on the real target paid for itself.** `authenticated`
+held 33 INSERT/UPDATE/DELETE grants that no local run had ever shown, because
+Supabase grants `ALL` on new public objects by default and our `grant select`
+added to that rather than replacing it. RLS was still holding (0 rows affected,
+verified live in a rolled-back transaction), but the grants are gone now, and the
+local stub was updated to reproduce Supabase's default privileges so the harness
+would catch it next time. See D6.
+
+Two connection gotchas worth knowing: the database password contains an `@` and
+must be percent-encoded as `%40` in `DATABASE_URL` (D10), and the load takes a
+few minutes because it is ~1,900 network round trips — batching is the obvious
+optimization if it ever becomes annoying.
+
+**How to see it working:**
+
+```bash
+cd ../../Hubspot/portal_seed && python verify_live.py
+```
+
+Read-only. Prints row counts, per-brand totals and date ranges, proof the three
+dashboard views return data, the derived account list, the full grant/RLS audit,
+and your activity-type review queue.
 
 ---
 

@@ -18,6 +18,23 @@ python -m http.server 8123
 
 Or use the `ihospitality-static` config in `.claude/launch.json` via `preview_start`.
 
+## The live database
+
+Supabase project is live and seeded (942 activities). Everything reads
+`DATABASE_URL` from `../../Hubspot/.env` — never pass it on a command line.
+
+```bash
+cd ../../Hubspot/portal_seed
+python verify_live.py            # read-only health check of the live database
+python apply_schema.py --apply   # re-apply schema.sql (idempotent)
+python seed_from_csv.py          # dry run; add --apply to load
+```
+
+**Local Postgres is not Supabase.** Anything touching roles, grants, or default
+privileges must be checked against the real project — Supabase grants `ALL` on
+new public objects to `anon`/`authenticated` by default, and a stock local
+cluster does not. That difference already hid one real bug (D6).
+
 ## Testing the database layer
 
 ```bash

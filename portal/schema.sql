@@ -100,6 +100,18 @@ create table if not exists venues (
 create index if not exists venues_name_lower_idx on venues (lower(name));
 create index if not exists venues_market_idx     on venues (market);
 
+-- A venue with no HubSpot ID can only be identified by its name, so two of them
+-- sharing a name are the same venue. This partial unique index says so at the
+-- database level.
+--
+-- It is partial on purpose: venues that DO have a HubSpot ID are already kept
+-- unique by that ID, and genuinely distinct locations are allowed to share a
+-- name there (two 'Fresh Market' rows with different company IDs are two real
+-- stores). Without this index the seed re-inserted every name-only venue on each
+-- run, because NULL hubspot_company_id values never collide.
+create unique index if not exists venues_name_unique_without_hubspot_id
+  on venues (lower(name)) where hubspot_company_id is null;
+
 
 -- -----------------------------------------------------------------------------
 -- activity_types — a LOOKUP TABLE, not an enum.
@@ -809,3 +821,19 @@ revoke all on all functions in schema public from anon;
 alter default privileges in schema public revoke all on tables    from anon;
 alter default privileges in schema public revoke all on sequences from anon;
 alter default privileges in schema public revoke all on functions from anon;
+
+-- `authenticated` keeps SELECT (granted in Section 3) but must never hold write
+-- privileges. Supabase grants ALL to `authenticated` on new objects in `public`
+-- by default, so the SELECT grants earlier in this file ADDED to that default
+-- rather than replacing it — leaving 33 stray INSERT/UPDATE/DELETE grants on the
+-- real project. A local Postgres does not reproduce this, which is precisely why
+-- it went unnoticed until the schema was applied to Supabase.
+--
+-- RLS was still holding the line (with no INSERT/UPDATE/DELETE policy, no row
+-- qualifies, so those statements affect 0 rows). This is the second lock: the
+-- grants are removed so that a future permissive policy — or someone toggling
+-- RLS off in the dashboard — cannot silently turn a read-only portal into a
+-- writable one.
+revoke insert, update, delete, truncate on all tables in schema public from authenticated;
+alter default privileges in schema public
+  revoke insert, update, delete on tables from authenticated;

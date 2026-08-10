@@ -77,14 +77,34 @@ deliberately, one at a time.
 
 ---
 
-**D6 — Verified on local Postgres 18, not Supabase Postgres 15.** ⚠️ VERIFICATION GAP
+**D6 — Verify on the real target, not just locally.** ✅ CLOSED 10 Aug 2026 — and it caught a real bug
 
-`bash portal/test/run.sh` proves the schema applies, is idempotent, and that RLS
-isolates brands — on a local cluster with a hand-written stub for `auth.users`,
-`auth.uid()`, and `storage.*`. It does **not** prove behaviour on Supabase. The
-playbook (Part 5.3) requires verification on the real target. Closing this needs a
-Supabase project, which needs an account the operator must create. Until then,
-Phase 1 is "verified locally", not "verified".
+Originally logged as a gap: the schema was proven only against a local cluster
+with a hand-written Supabase stub. The operator created the project the same day
+and the schema was applied to it (Postgres 17.6).
+
+**The gap was not theoretical.** On Supabase, `authenticated` held **33
+INSERT/UPDATE/DELETE grants** that no local run ever showed. Cause: Supabase's
+default privileges grant `ALL` on new objects in `public` to `anon` and
+`authenticated`, so this file's `grant select ... to authenticated` *added* to
+that default instead of replacing it. A stock local Postgres has no such default,
+so the local harness was **more secure than production** and hid the whole class
+of bug.
+
+RLS was still holding — with no INSERT/UPDATE/DELETE policy, no row qualifies, so
+those statements affect 0 rows (verified against the live database inside a
+rolled-back transaction: 0 rows affected, 942 activities intact). The grants were
+nonetheless removed, because they are one permissive policy or one dashboard
+toggle away from mattering.
+
+Two follow-ups, both done:
+- `schema.sql` now revokes writes from `authenticated` and sets default
+  privileges so future objects cannot reopen it.
+- `test/00_supabase_stub.sql` now reproduces Supabase's default privileges, and
+  `run.sh` asserts the grant counts. The local harness would now fail on this.
+
+Standing lesson: local Postgres is not Supabase. Anything involving roles,
+grants, or default privileges must be checked against the real project.
 
 ---
 
@@ -105,6 +125,28 @@ The playbook treats dependencies as liabilities. This one is ~30 lines of
 equivalent hand-rolled parsing, is the near-universal convention, and touches only
 local scripts — not the deployed site, which has no dependencies at all. Added to
 `Hubspot/automate_hurry/requirements.txt`.
+
+---
+
+**D10 — The `@` in the Supabase database password must be percent-encoded in `DATABASE_URL`.**
+
+Not a design decision, a trap worth writing down. libpq splits a connection URI
+at the **first** `@`, so a password containing one makes it read the rest of the
+password as the hostname — the error is a DNS failure
+(`failed to resolve host 'mpioncollege!23@db...'`), which points nowhere near the
+real cause. Encoded as `%40` in `Hubspot/.env`, with a comment listing the other
+characters needing the same treatment (`:` `/` `#` `?`). The password itself is
+unchanged in Supabase.
+
+---
+
+**D11 — One `DATABASE_URL` for both local testing and Supabase.**
+
+The loader and `apply_schema.py` take a single connection string rather than
+having a "local mode". Supabase is plain Postgres, so the code path exercised by
+`test_seed_integration.sh` against a throwaway cluster is byte-for-byte the code
+path that runs against production. A local-only mode would have let the two
+drift, which is exactly how "works locally" happens.
 
 ---
 

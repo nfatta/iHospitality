@@ -47,8 +47,23 @@ echo "==> isolation test"
 echo ""
 echo "==> anon lockdown (all three must be 'permission denied')"
 for rel in activities brands v_brand_activity_log; do
-  $PSQL -d portal_test -c "set role anon; select count(*) from $rel;" 2>&1 | tail -1
+  # `|| true`: a permission-denied here is the PASSING case, but psql still
+  # exits non-zero and `set -e` + `pipefail` would abort the script on it.
+  { $PSQL -d portal_test -c "set role anon; select count(*) from $rel;" 2>&1 | tail -1; } || true
 done
+
+echo ""
+echo "==> grant audit (Supabase grants ALL by default; both must be 0)"
+$PSQL -d portal_test -tAc "
+  select 'anon grants: '   || count(*) from information_schema.role_table_grants
+   where grantee='anon' and table_schema='public'"
+$PSQL -d portal_test -tAc "
+  select 'authenticated write grants: ' || count(*) from information_schema.role_table_grants
+   where grantee='authenticated' and table_schema='public'
+     and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE')"
+$PSQL -d portal_test -tAc "
+  select 'authenticated SELECT grants: ' || count(*) from information_schema.role_table_grants
+   where grantee='authenticated' and table_schema='public' and privilege_type='SELECT'"
 
 echo ""
 echo "==> done"
