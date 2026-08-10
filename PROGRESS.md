@@ -2,9 +2,14 @@
 
 Build log for the brand portal. Phases are from `PORTAL_PLAN.md`.
 
-**Current position:** Phases 0–2 complete and **live on Supabase**. 942
-activities across 11 brands and 303 venues are loaded. Next up is Phase 3 (the
-sync script) or Phase 4 (the portal pages) — Phase 4 is where v1 ships.
+**Current position:** Phases 0, 1, 2 and 4 are complete. **v1 of the brand
+portal works end to end** against the live Supabase project — a brand logs in
+and sees only their own activity, venues and dashboard. 942 activities across 11
+brands and 297 venues are loaded.
+
+Not yet done: Phase 3 (the HubSpot sync script — the data is currently a
+one-time seed), Phase 5 (Streamlit admin), Phase 6 (field entry and cutover).
+Nothing is deployed publicly yet; the portal exists only in local commits.
 
 ---
 
@@ -147,6 +152,74 @@ dashboard views return data, the derived account list, the full grant/RLS audit,
 and your activity-type review queue.
 
 ---
+
+### Phase 4 — The brand portal ✅ 10 Aug 2026 — v1 works end to end
+
+**CSS extraction first**, as the plan required. `css/site.css` now holds the
+tokens, nav, buttons, section base, footer and mobile nav; page-specific CSS
+stays inline after the link so a page can still override (gallery.html relies on
+that). Proven a no-op rather than assumed: each page was diffed against its
+pre-change version from git, side by side in iframes, comparing 33 computed
+style properties plus bounding boxes for every element at 1440/1024/768/375px.
+index.html 359 elements, gallery.html 123 — zero differences at every width.
+
+**Five pages** — `login`, `index` (dashboard), `activity`, `venues`, `photos` —
+plus `portal.js` (Supabase client, auth guard, shared shell) and `portal.css`.
+
+Every query is deliberately written **without** a brand filter. RLS applies the
+restriction in Postgres, so the browser never decides what a user may see.
+
+**Verified in a real browser with two real logins against the live database:**
+
+| | Blue Run | Wodka |
+|---|---|---|
+| Brands visible | 1 | 1 |
+| Activities | 91 | 155 |
+| Venues | 44 | 70 |
+
+Neither can reach the other by name or id; naming another brand's id returns 0
+rows; insert, update, profile self-escalation and the admin RPCs are all refused
+with 42501. Mobile checked at 375px: no horizontal overflow, hamburger toggles,
+tables scroll inside their container.
+
+**A data defect this surfaced.** Searching venues for "whiskey" returned *Blue
+Run Whiskey* — a brand name sitting in the venues table, shown to that brand as
+one of its own accounts. 6 such rows, 27 activities. The venue column sometimes
+holds a bare brand name with no venue after it; those now resolve to no venue
+rather than inventing one. The first fix missed `iHospitality`, which has a
+genuine HubSpot company record of its own, so the name check now runs before the
+id check. Re-seeded: 0 brand names in venues, all 942 activities retained, 45
+correctly carrying no venue.
+
+**How to see it working:**
+
+```bash
+python -m http.server 8123
+```
+
+Then open `http://localhost:8123/portal/login.html`. Two test accounts exist
+(`test-bluerun@example.com`, `test-wodka@example.com`) — **delete them before
+real brands are onboarded**:
+`python create_portal_user.py --delete --email test-bluerun@example.com`
+
+---
+
+## Open items for the operator
+
+1. **Two test logins exist** (`test-bluerun@`, `test-wodka@` at example.com).
+   Delete before onboarding real brands.
+2. **`All Brands` (20 activities) and `iHospitality` (16)** are loaded as brands.
+   Neither looks like a real client brand — say how to treat them and they can be
+   retired or merged.
+3. **11 activity types are flagged for review** — `recurring_case` (51
+   activities) is the big one. `python verify_live.py` lists them.
+4. **`Hubspot/portal_seed/` is not under version control.** D1 put the Python
+   outside the website repo so it could never be served, but that folder is not a
+   git repo, so the loader, its 35 tests and the user-provisioning script have no
+   history. Worth `git init` there.
+5. **No city or market data exists** on any venue — the HubSpot exports do not
+   carry either, so those columns and the market filter stay hidden until
+   something fills them in.
 
 ## Not started
 
