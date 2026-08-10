@@ -1,10 +1,15 @@
 # Netlify edge rules. No build step — Netlify reads this file directly.
 #
 # The repo root IS the publish directory, so every committed file is served.
-# The portal's source files are version-controlled but must never be fetchable:
-# schema.sql maps out the tables and the RLS policies, which is a gift to anyone
-# probing the portal. Block them at the edge — robots.txt only asks politely.
-/portal/*.sql   /   404
-/portal/*.sh    /   404
-/portal/test/*  /   404
-/portal/README.md   /   404
+# Non-public portal source (schema.sql, the SQL test harness) therefore does NOT
+# live in this repo at all — it is in Hubspot/portal_seed/db/, outside the
+# publish directory.
+#
+# That is deliberate rather than belt-and-braces: Netlify's `*` is a trailing
+# splat, not a filename glob, so a rule like `/portal/*.sql` does NOT match and
+# would have served the schema while looking like it was blocked. Keeping the
+# files out of the directory is the only guarantee that does not depend on
+# redirect semantics.
+#
+# portal/ now contains only what the browser is meant to fetch: the five pages,
+# portal.css and portal.js.
