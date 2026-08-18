@@ -929,3 +929,70 @@ happened before it did); and **sale vs reorder** is inferred as "earliest
 depletion at this venue is the sale, anything later is a reorder", counting
 existing HubSpot case sales — so a venue that bought cases in March and bottles
 in April reads as a reorder.
+
+---
+
+**D42 — The rate card carries TWO rates, because charge and cost are different numbers.** ✅ operator-directed 18 Aug 2026
+
+The instruction that forced it: *"For 44 North we don't charge them back for
+reorders just the initial case. But we do pay our contractors for reorders so we
+need to be aware of which are reorders or not."*
+
+One rate per activity cannot express that. `rate_card` therefore holds
+`charge_rate` and `pay_rate` as separate columns, plus `charge_pct` / `pay_pct`
+for money that is a percentage of the sale rather than a rate per anything.
+
+Keyed on `source_activity_type` — the raw string — because the sheet prices
+"tasting event", "tasting event N/C" and "Tasting Event Split" at $150, $0 and
+$100 while all three resolve to one type (D22).
+
+**Staff-only, and this is the one policy that must not soften.** A single row is
+one brand's price; the table is every brand's price side by side. Verified: a
+brand login sees 0 rows. The operator's own point stands though — per-activity
+*fees* are safe to show a brand, because RLS means they only ever see fees on
+their own rows. It is the card that is sensitive, not the number.
+
+---
+
+**D43 — Two rate lookups per activity, not one. This was a real bug.** 18 Aug 2026
+
+`v_activity_money` first resolved charge and pay in a single `DISTINCT ON`.
+Charge rates are brand-specific rows; contractor pay is mostly a shared row with
+`brand_id` NULL. So the brand-specific charge row won and **every pay rate was
+silently discarded** — cost came out $0 for all five brands that had charges,
+and 67 Wodka reorders reported $670 charged against nothing paid.
+
+Fixed with two lateral joins, each resolving against the best row that actually
+carries that side, both preferring a brand-specific line over the shared
+default. Cost went from $0 to $12,560.
+
+Caught only by reading the numbers. The view ran without error and returned a
+plausible-looking table; a margin equal to revenue is exactly the sort of wrong
+that survives a green test suite.
+
+**A second bug in the same family:** the bottle importer had
+`source_activity_type` in its INSERT but not in its `ON CONFLICT DO UPDATE`, so
+all 14 already-existing rows kept it NULL through a run reporting "14 updated".
+Adding a column to an upsert means adding it in **both** halves.
+
+---
+
+**D44 — Dame Mas: `amount` is gross sales; 10% to iHospitality, 8% to the contractor, 2% kept.** ✅ operator-confirmed 18 Aug 2026
+
+Briefly ambiguous and worth recording, because the two readings differed by a
+factor of ten. The operator first said the figures in the summary were already
+iHospitality's 10%. The data said otherwise: $163.10 a bottle overall, with
+$163.88 recurring exactly — a bottle price, not a tenth of one. Had it been the
+10%, gross would have been $1,631 a bottle.
+
+Confirmed: **Extra Añejo $210.75, Reposado $123.00**, both present as pure rows
+in the data; the intermediate per-bottle figures are mixed-expression orders,
+which is precisely what `pods` counts.
+
+So `amount` is gross sales. iHospitality charges 10% of the monthly depletion
+total, the contractor receives 80% of that — 8% of sales — and 2% is kept.
+Verified against the live data at **10.00% / 8.00% / 2.00%** exactly.
+
+The lesson worth keeping: a per-unit sanity check settled in one query what the
+description alone could not. When a money figure has two readings, divide it by
+something physical.
