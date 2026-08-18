@@ -1157,3 +1157,48 @@ summary and **2 do not** — City Dog Cantina (30 Apr) and Star Liquors VII
 something physical. A commission total alone is unfalsifiable; a commission
 implying $2,401 a bottle is obviously wrong. Same technique caught the gross-vs-
 commission ambiguity in D44.
+
+---
+
+**D52 — The operator's matching rule works, with a one-month lag. It identifies the mis-typed rows.** ✅ 18 Aug 2026
+
+Refines D51. That entry established that `account sold` **quantities** cannot
+reconcile to the invoice — correct, and unchanged. But the operator's actual
+rule was about **which venues**, not how many bottles: *"if we have 5 account
+sold in a month and some combination make 3 match that month, the other two were
+account visits."*
+
+Tested properly — month by month, and allowing the depletion report to lag the
+placement by one month, which is the operator's own description of the process
+("we have to wait for the depletion report"):
+
+| placement | depleted |
+|---|---|
+| 9 Apr · Black Hawk Social | April |
+| 16 Apr · El Patron Mexican | April |
+| 30 Apr · City Dog Cantina | **May** |
+| 21 May · Gleneagle Country Club | **June** |
+| 28 May · Dancers Royale | **June** |
+| 2 Jun · Vineyard Wine Co | June |
+| 30 Jun · Gleneagle Country Club | June |
+
+**7 of 8 tie to a depletion. One does not: 26 May, Star Liquors VII** — the
+candidate for having really been an account visit.
+
+**An earlier figure in this session was wrong.** "6 of 8 match" came from
+comparing against every summary venue at once rather than against each month's,
+which both missed the lag and allowed false matches. The month-aware test is the
+correct one; the careless version happened to give a similar-looking number for
+the wrong reasons.
+
+Three things follow:
+
+1. **The rule is a working QA tool**, not a one-off. Applied to the remaining 48
+   `account sold` rows as their depletion summaries arrive, it will separate real
+   placements from mis-typed visits mechanically.
+2. **Venue name families matter.** "City Dog Cantina" matched "City Dog Cantina
+   #2" only after normalising away the `#` suffix. Those are probably two records
+   for one premises and worth merging.
+3. **`account sold` is being retired** by the operator, so this is historical
+   cleanup rather than an ongoing concern — but the 74 existing rows still need
+   classifying before any Dame Mas revenue figure is trustworthy.

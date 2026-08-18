@@ -616,9 +616,16 @@ the depletion summaries for Jul 2025 – Mar 2026**: $2,307.75 of 2025 commissio
 plus $1,020.53 across Jan–Mar 2026. `import_bottle_sales.py` already reads that
 format; it needs the files and their section-to-month order.
 
-Still worth a look, from the operator's own test in the other direction: two
-in-window `account sold` rows have no line on the summary — City Dog Cantina
-(30 Apr) and Star Liquors VII (26 May).
+**The operator's matching rule does work, at venue level with a one-month lag
+(D52).** Tested month by month: 7 of the 8 in-window `account sold` rows tie to
+a depletion, several in the following month — which is the lag the operator
+described. **Exactly one does not: 26 May, Star Liquors VII.** That is the row
+that was really an account visit.
+
+That rule is a reusable QA tool: as the missing summaries arrive, it separates
+real placements from mis-typed visits mechanically across the remaining 48 rows.
+`account sold` is being retired, so this is historical cleanup — but the 74 rows
+still need classifying before any Dame Mas revenue figure is trustworthy.
 
 ### 1b. Superseded — the original framing of the above
 
