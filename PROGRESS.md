@@ -235,6 +235,74 @@ real brands are onboarded**:
 **Repos.** Website repo is on branch `portal-v1`, 8 commits ahead of `main`,
 pushed. `Hubspot/portal_seed/` is a separate local repo, 2 commits, no remote.
 
+### Stage 1a — deal sync ✅ 18 Aug 2026
+
+`Hubspot/portal_seed/sync_hubspot.py` (+ `test_sync.py`, 27 tests). Commit
+`27b062a` in the portal_seed repo. Dry run by default; `--month YYYY-MM`
+backfills a calendar month, `--since YYYY-MM-DD` picks up anything *edited* on
+or after a date (default: the last 7 days) so an edit to an old deal re-syncs,
+not just new ones.
+
+Reuses `normalize.py` unchanged and mirrors `seed_from_csv.py`'s venue cache and
+upsert on purpose — that cache fixed a real duplicate-venue bug and the two
+writers must not drift apart. Writes neither `notes` nor `brand_visible_summary`
+(D17). Deals only: notes and photos are later slices.
+
+**Three things the live API taught us that no local test could have.**
+
+1. **The deals-search `associations` request field is a silent no-op.** A search
+   with `"associations": ["companies"]` returns 200 with no `associations` key on
+   any result, even for deals that demonstrably have a company. Venues must be
+   resolved through `POST /crm/v4/associations/deals/companies/batch/read`.
+   `Hubspot_Automation/main.py` carries the same dead field, so it never had
+   working associations either.
+2. **That batch endpoint answers HTTP 207, not 200**, whenever any input in the
+   batch has no associations — which is a legitimate no-venue deal, not a fault.
+   Treating 207 as failure would drop whole batches.
+3. **The month upper bound must be `LT` the first of the next month**, not `LTE`
+   the last day of this one — see below.
+
+**The bug worth remembering.** The first version filtered `closedate LTE
+'2026-06-30'` and returned 91 deals for June 2026. The database holds 103, and
+exactly 12 of them fall on June 30. `closedate` is a full timestamp
+(`2026-06-30T16:52:15.459Z`), so `LTE` a bare date compares against midnight and
+silently drops everything that closed *during* the last day of every month.
+Confirmed directly against the live API — `LTE` the 30th returns 91, `LT` 1 July
+returns 103. Now expressed as a half-open interval, which is also immune to month
+length and leap years. Regression test asserts both the operator and that the
+bound is never the last day, since either mistake alone brings the bug back.
+
+It was reported as "live drift" before being checked. It was not drift. **This is
+the case for re-running a subagent's verification rather than reading its
+summary** — the numbers were plausible and the explanation was wrong.
+
+Separately this fixes `main.py`'s single-page read, which truncates at 100
+results with no warning. June 2026 needs two pages.
+
+**How to see it working:**
+
+```bash
+cd ../../Hubspot/portal_seed && python sync_hubspot.py --month 2026-06
+```
+
+Dry run, writes nothing. Expect 103 deals over 2 pages, 4 brands, 64 venues,
+6 deals with no company.
+
+**Verified:** 62 unit tests pass; the schema + RLS suite is green; June 2026 was
+loaded **twice** into a throwaway local cluster — 103 activities both times,
+0 inserted / 103 updated on the second run, 0 duplicate `hubspot_deal_id`, and
+`notes` / `brand_visible_summary` both untouched at 0 rows. Per-brand counts came
+out **identical to the CSV seed already in Supabase** — 44 North 40, Wodka 28,
+Aspen Green 25, Dame Mas 10 — which is the plan's "seed accuracy" reconciliation
+satisfied for one month by two independent paths. Nothing was run against
+production; `load_dotenv` does not override a shell-set `DATABASE_URL`, which is
+what keeps the local test local.
+
+**Not yet run against Supabase.** The live database still holds the CSV seed
+only. Awaiting the operator's go-ahead.
+
+---
+
 ## Session of 18 Aug 2026 — what a fresh read found
 
 **The Supabase project had paused itself.** Free tier pauses after 7 days idle;
