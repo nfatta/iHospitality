@@ -24,7 +24,13 @@
         <h1>Photos</h1>
         <p class="portal-sub" id="count"></p>
       </div>
+      <div class="filters">
+        <select id="f-month"></select>
+        <select id="f-brand"><option value="">All brands</option></select>
+        <select id="f-type"><option value="">All activity types</option></select>
+      </div>
     </div>
+    <p class="portal-sub" id="shown"></p>
     <div id="groups"></div>
   </main>
 
@@ -41,21 +47,20 @@
   </div>
 
   <script type="module">
-    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum } from './portal.js';
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtMonth, fmtNum,
+             fillSelect } from './portal.js';
 
-    let shots = [];
+    let shots = [];           // the currently displayed photos, in lightbox order
     let index = 0;
+    const signedFor = {};     // storage_path -> signed URL, cached for the session
 
     const auth = await requireAuth();
     if (auth) {
       renderShell('photos.html', auth.profile);
 
-      // Photos reach this brand through their activity — RLS enforces that join,
-      // so this select cannot return another brand's images.
-      const { data, error } = await db
-        .from('photos')
-        .select('id, storage_path, caption, taken_at, activities(activity_date, activity_type_id, venues(name))')
-        .order('taken_at', { ascending: false });
+      // One view carries the photo AND the activity that gives it meaning.
+      // No brand filter here on purpose: RLS applies it in Postgres.
+      const { data, error } = await db.from('v_brand_photos').select('*');
 
       const el = document.getElementById('groups');
       if (error) {
@@ -66,46 +71,102 @@
           body: 'Photos from your activations will appear here once they are uploaded.' } });
         document.getElementById('count').textContent = '';
       } else {
-        await renderGroups(data, el);
+        document.getElementById('count').textContent =
+          `${fmtNum(data.length)} photos on record`;
+        buildFilters(data);
+        ['f-month', 'f-brand', 'f-type'].forEach(id =>
+          document.getElementById(id).addEventListener('change', () => draw(data)));
+        await draw(data);
       }
     }
 
-    async function renderGroups(rows, el) {
-      // Storage is a private bucket, so every image needs a short-lived signed
-      // URL. One batch call rather than one request per photo.
-      const paths = rows.map(r => r.storage_path);
-      const { data: signed, error } = await db.storage
-        .from('activation-photos').createSignedUrls(paths, 3600);
-      if (error) return render(el, { error });
+    function buildFilters(rows) {
+      const months = [...new Set(rows.map(r => r.month))].sort().reverse();
+      // Default to the most recent month rather than to everything. 400+ images
+      // at once is a slow page and, more to the point, it is exactly the wall of
+      // photos that the month-then-brand structure exists to avoid.
+      document.getElementById('f-month').innerHTML =
+        months.map(m => `<option value="${esc(m)}">${esc(fmtMonth(m + '-01'))}</option>`).join('') +
+        `<option value="">All months</option>`;
 
-      const urlFor = {};
-      (signed || []).forEach(s => { if (!s.error) urlFor[s.path] = s.signedUrl; });
+      const uniq = (fn) => [...new Set(rows.map(fn).filter(Boolean))].sort();
+      // fillSelect hides a filter with fewer than two choices, so a brand user
+      // never sees a brand picker containing only their own name.
+      fillSelect('f-brand', uniq(r => r.brand_name).map(b => [b, b]));
+      fillSelect('f-type', uniq(r => r.activity_type).map(t => [t, t]));
+    }
 
-      shots = rows.filter(r => urlFor[r.storage_path]).map(r => ({
-        url: urlFor[r.storage_path],
-        caption: r.caption || '',
-        venue: r.activities?.venues?.name || '',
-        date: r.activities?.activity_date || null,
-      }));
+    async function draw(rows) {
+      const month = document.getElementById('f-month').value;
+      const brand = document.getElementById('f-brand').value;
+      const type = document.getElementById('f-type').value;
 
-      document.getElementById('count').textContent = `${fmtNum(shots.length)} photos`;
+      const filtered = rows.filter(r =>
+        (!month || r.month === month) &&
+        (!brand || r.brand_name === brand) &&
+        (!type || r.activity_type === type));
 
-      // Group by the activity that produced them — a brand thinks in events,
-      // not in files.
-      const groups = {};
-      shots.forEach((s, i) => {
-        const key = `${s.date || 'undated'}|${s.venue}`;
-        (groups[key] ||= []).push({ ...s, i });
+      const el = document.getElementById('groups');
+      document.getElementById('shown').textContent =
+        filtered.length === rows.length ? '' : `${fmtNum(filtered.length)} shown`;
+
+      if (!filtered.length) {
+        shots = [];
+        return render(el, { empty: {
+          title: 'No photos match those filters',
+          body: 'Try another month, brand or activity type.' } });
+      }
+
+      // The bucket is private, so every image needs a short-lived signed URL.
+      // Only the visible subset is signed, and the results are cached, so
+      // changing filters never re-signs what has already been signed.
+      const need = [...new Set(filtered.map(r => r.storage_path))].filter(p => !signedFor[p]);
+      if (need.length) {
+        const { data: signed, error } = await db.storage
+          .from('activation-photos').createSignedUrls(need, 3600);
+        if (error) return render(el, { error });
+        (signed || []).forEach(s => { if (!s.error) signedFor[s.path] = s.signedUrl; });
+      }
+
+      const usable = filtered.filter(r => signedFor[r.storage_path]);
+
+      // Group by ACTIVITY, not by date-and-venue. Two different activities at
+      // one venue on one day are two different things that happened, and the
+      // old key merged them into a single unlabelled block.
+      const groups = new Map();
+      shots = [];
+      usable.forEach(r => {
+        if (!groups.has(r.activity_id)) groups.set(r.activity_id, { head: r, items: [] });
+        // The lightbox walks photos in DISPLAY order, so the index is assigned
+        // here rather than taken from the unfiltered list.
+        groups.get(r.activity_id).items.push({ ...r, i: shots.length });
+        shots.push({
+          url: signedFor[r.storage_path],
+          summary: r.summary || '',
+          venue: r.venue_name || '',
+          type: r.activity_type || '',
+          date: r.activity_date || null,
+        });
       });
 
-      el.innerHTML = Object.entries(groups).map(([key, items]) => {
-        const [date, venue] = key.split('|');
+      el.innerHTML = [...groups.values()].map(({ head, items }) => {
+        // The heading is what happened. Falling back to the activity type keeps
+        // a block labelled even for the archived deals that carry no title.
+        const heading = head.summary || head.activity_type || 'Activation';
+        const meta = [
+          fmtDate(head.activity_date),
+          head.venue_name,
+          head.activity_type,
+          `${items.length} photo${items.length === 1 ? '' : 's'}`,
+        ].filter(Boolean).map(esc).join(' &middot; ');
         return `<div class="photo-group">
-          <h3>${esc(venue || 'Activation')}</h3>
-          <p class="when">${esc(date === 'undated' ? 'Date unknown' : fmtDate(date))} &middot; ${items.length} photo${items.length === 1 ? '' : 's'}</p>
+          <h3>${esc(heading)}</h3>
+          <p class="when">${meta}</p>
           <div class="photo-grid">
             ${items.map(p => `<div class="photo-item" data-i="${p.i}">
-              <img src="${esc(p.url)}" alt="${esc(p.caption || venue)}" loading="lazy">
+              <img src="${esc(signedFor[p.storage_path])}"
+                   alt="${esc(head.summary || head.venue_name || 'Activation photo')}"
+                   loading="lazy">
             </div>`).join('')}
           </div></div>`;
       }).join('');
@@ -117,12 +178,15 @@
     const box = document.getElementById('lightbox');
     function open(i) { index = i; paint(); box.classList.add('open'); }
     function close() { box.classList.remove('open'); }
-    function step(d) { index = (index + d + shots.length) % shots.length; paint(); }
+    function step(d) { if (shots.length) { index = (index + d + shots.length) % shots.length; paint(); } }
     function paint() {
       const s = shots[index];
+      if (!s) return;
       document.getElementById('lb-img').src = s.url;
+      // Every photo carries its reason into the lightbox: what happened, where,
+      // what kind of activity, and when.
       document.getElementById('lb-cap').textContent =
-        [s.caption, s.venue, s.date ? fmtDate(s.date) : ''].filter(Boolean).join(' · ');
+        [s.summary, s.venue, s.type, s.date ? fmtDate(s.date) : ''].filter(Boolean).join(' · ');
     }
 
     document.getElementById('lb-close').onclick = close;

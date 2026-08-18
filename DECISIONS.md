@@ -633,3 +633,43 @@ Result: **412 photos**, 393 distinct images. The 19 non-distinct ones are the
 same photograph on *different* activities, which the per-activity uniqueness of
 D25 deliberately permits — one photo of a joint event legitimately belongs to
 both brands' records, and each brand sees it in their own gallery.
+
+---
+
+**D32 — The gallery is built on `v_brand_photos`, grouped by activity.** ✅ 18 Aug 2026
+
+Implements D26. A new view carries each photo together with the activity that
+gives it meaning — date, venue, activity type, and the deal name as `summary` —
+so the page runs one query instead of nested joins, and so what a brand can see
+is decided in SQL rather than assembled in the browser.
+
+Four changes from the old gallery, each fixing something real:
+
+1. **Ordered by `activity_date`, not `photos.taken_at`.** HubSpot strips EXIF on
+   upload, so `taken_at` is NULL for all 412 photos and the old page was sorting
+   on an empty column — the order was arbitrary. The activity date is also the
+   better key: it is when the work happened, not when a shutter fired.
+2. **Grouped by `activity_id`, not by `date|venue`.** The old key merged two
+   different activities at one venue on one day into a single unlabelled block.
+3. **Every group is headed by what happened** — the deal name, then date · venue
+   · type · count. This is the whole point of the operator's objection: a photo
+   with no reason attached is not proof of anything.
+4. **Month first, then brand and type.** The month picker defaults to the most
+   recent month rather than to everything. 412 images at once is a slow page and
+   is precisely the wall the structure exists to avoid.
+
+Signed URLs are minted only for the visible subset and cached per session, so
+changing filters never re-signs what is already signed. The lightbox walks
+photos in *display* order, so its arrows follow what is on screen rather than
+the unfiltered list.
+
+Per-photo captions stay out (D26). `caption` is exposed by the view but is
+expected to be NULL — it is deliberately not filled from the HubSpot note body,
+which is internal writing (D17).
+
+**Verified:** `v_brand_photos` returns 412 rows for staff and 46/45 for the two
+brand logins, each seeing exactly one brand; the page's module graph executes in
+a real browser with zero console errors before the auth redirect; JS
+syntax-checked with node. **Not verified: the rendered gallery itself** — that
+needs a login, and entering a password is out of scope for this session. The
+data layer beneath it is checked; anything wrong will be layout.
