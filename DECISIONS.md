@@ -839,3 +839,82 @@ CIGAR SHOP & LOUNGE, SANFORD" matched an existing "Executive Cigar" in
 so those are two locations, not one. "CITY DOG CANTINA #11529" matched "City Dog
 Cantina #2". Both are exactly the wrong merge `normalize.py` refuses to make
 automatically; they need a human, not a fuzzy matcher.
+
+---
+
+**D39 — `case_equivalent` makes bottles and cases comparable; units stay in their own unit.** ✅ operator-informed 18 Aug 2026
+
+Six bottles make one case (operator). Without that factor, importing 100 bottles
+as depletion `quantity` would have added bottles to cases in every `units_moved`
+figure across five views — the comparability problem D35 named, made concrete.
+
+`activity_types.case_equivalent` holds the factor: 1 for the case types, 1/6 for
+the two new bottle types. **`quantity` stays in the activity's own natural unit**
+so a row still matches the document it came from — 12 bottles reads as 12 — and
+the views multiply. Default 1 means no existing number moved; verified
+byte-identical across all five views before and after.
+
+Two SQL traps, both worth remembering because `create or replace view` hides
+them until you run it:
+
+- **It cannot change a column's data type.** Adding `::numeric(12,2)` turned a
+  working replace into "cannot change data type of view column units_moved",
+  and rolled back the whole apply — including the `alter table` that had already
+  succeeded.
+- **It matches columns by POSITION.** Inserting `pods_total` before
+  `photo_count` reads as renaming every column after it. New view columns go at
+  the tail, always. Hit three times in one session.
+
+And a numeric wart: 6 × 0.166667 is 1.000002, so the sums are rounded to 2dp. A
+dashboard reading "1.000002 cases" is a bug report waiting to happen.
+
+---
+
+**D40 — `activities.pods` and per-row `amount` are BRAND-FACING.** ✅ operator-ruled 18 Aug 2026
+
+Both were first built as internal — pods as a line in `notes`, amount exposed
+only as a monthly total. The operator corrected it: **iHospitality is paid a
+percentage of sales plus a bonus based on pods**, so a brand cannot check what
+it is billed without seeing both at row level.
+
+Pods therefore gets a real column rather than free text. A number a client is
+paid against cannot live in an internal field they never see.
+
+Checked before exposing `amount`, since brand-facing money deserves it: only 89
+of 1,070 HubSpot rows carry one, all small (max $200), and `total_amount` was
+already visible in the monthly views — so this is the same information at row
+grain, not a new disclosure.
+
+`activities.external_ref` was added alongside: a unique, nullable idempotency
+key for rows with no HubSpot deal. Same pattern as `hubspot_deal_id`, and the
+mechanism Phase 6 field entry will need rather than a second meaning bolted onto
+the HubSpot column.
+
+---
+
+**D41 — Dame Mas bottle sales: 13 of 18 rows imported, and the gap is the majority of the value.** ⚠️ incomplete by design
+
+Imported 13 rows — **57 bottles, 19 pods, $7,973.30** — across April to July
+2026. Dame Mas now shows 11 bottle reorders and 2 bottle sales where it
+previously showed no repeat business at all.
+
+**Five rows are deliberately skipped**, their venues not yet identified in the
+portal: O-Ku, Pescado Seafood Grill, Eden Lounge, Rachels World Class Mens Club,
+and Executive Cigar Shop & Lounge (Sanford).
+
+**Those five carry $8,604 — more than half the file's $16,577.30**, including
+the two largest single rows: Executive Cigar Sanford at $3,933 and Eden Lounge
+at $2,458.50. Any Dame Mas revenue figure is materially understated until they
+are resolved. `--create-venues` loads them once the names are settled.
+
+Skipping rather than creating is the reversible choice: three of the first eight
+unmatched names turned out to exist under another spelling — "Gleneagles" missed
+"Gleneagle" by one letter — and a duplicate venue splits one account's history
+in two.
+
+Rules applied, worth re-checking against reality: dates land on the **last day**
+of each month (the summary gives no day, and the last day cannot claim a sale
+happened before it did); and **sale vs reorder** is inferred as "earliest
+depletion at this venue is the sale, anything later is a reorder", counting
+existing HubSpot case sales — so a venue that bought cases in March and bottles
+in April reads as a reorder.
