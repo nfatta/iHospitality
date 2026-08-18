@@ -602,3 +602,34 @@ name — neither page needs to know which kind of user it is serving.
 Drill-down is `activity.html?month=YYYY-MM`, validated against a strict
 year-month pattern rather than trusted, and shown as a dismissible chip. No
 router, no build step — consistent with the locked no-npm decision.
+
+---
+
+**D31 — `sync.py` is the single command; `pillow-heif` is the third dependency.** ✅ operator-requested 18 Aug 2026
+
+**One command.** `sync.py` wraps the deal and photo syncs, which must run in
+that order — a photo hangs off an activity, so importing photos first finds
+nothing to attach them to. It stops if the deals step fails rather than
+reporting a clean photo run over incomplete data, and drops the `--limit`
+guardrail that only existed while the photo sync was being built. The four
+reasons a photo will not appear are in `--help`, so the answer does not live
+only in a chat log.
+
+**`pillow-heif`.** iPhones shoot HEIC by default and Pillow cannot decode it
+unaided — that was the entirety of the "6 image could not be decoded" failures
+in the first backfill. Six real photos, and a share that grows as more people
+shoot on phones. Justified on the same grounds as D8 and D16: local tooling
+only, the deployed site still has no dependencies at all, and the alternative
+is not writing 30 lines but implementing an image codec.
+
+Registered at import time, not inside `optimize()`: per-call registration would
+re-run for every photo, and a caller importing the module for its other
+functions would get format support that depended on call order. Four regression
+tests build a real HEIC in memory and assert it decodes, emerges as JPEG, and
+resizes like anything else — so if the registration is ever dropped, the tests
+fail rather than the photos quietly vanishing.
+
+Result: **412 photos**, 393 distinct images. The 19 non-distinct ones are the
+same photograph on *different* activities, which the per-activity uniqueness of
+D25 deliberately permits — one photo of a joint event legitimately belongs to
+both brands' records, and each brand sees it in their own gallery.
