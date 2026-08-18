@@ -731,3 +731,55 @@ somewhere says nothing about whether Wodka is.
 recorded initial sale — Sable (Club Allenby) has 4 reorders and no `case_sale`.
 Either the first sale was logged under another activity type or it predates the
 imported data. Worth a look before these numbers are shown to a brand.
+
+---
+
+**D35 — Reorder counts are a measurement artifact, not a performance ranking.** ✅ operator-explained 18 Aug 2026
+
+`v_venue_performance` showed Wodka holding almost every reorder in the database
+— 66 of 68, with 44 North holding the other one and every remaining brand at
+zero. That reads as a product performance story. It is not one.
+
+Operator's explanation: **Wodka was the first brand tracked for reorder rates,
+and the first that pays for that tracking.** Dame Mas pays too, but its price
+point means it sells by the bottle rather than the case, so its repeat business
+never appears as `recurring_case` at all — 62 case sales, zero reorder rows.
+
+So a zero in the Reorders column means **"not measured for this brand"**, never
+"no repeat business". Shown to Dame Mas or 44 North as a column of zeroes it
+would be actively misleading about their own accounts.
+
+Handled by the drop-empty-column behaviour already in `sortableTable()`: a
+column whose every value is 0 is not rendered. A brand with no reorder tracking
+simply never sees the column, and staff — who can see Wodka's — do. Neither page
+needs to know which case it is in.
+
+**Left for the operator:** if reorder tracking expands to other brands, or if
+bottle-level repeat business should be counted, the activity taxonomy needs a
+type for it. `recurring_case` is a case-shaped word for a case-shaped fact.
+
+---
+
+**D36 — The venues page is driven by `v_venue_performance`, and the market filter is gone.** ✅ 18 Aug 2026
+
+Rebuilt on the analysis view, adding sales, reorders, units and days-quiet, all
+sortable, defaulting to quietest-first — the order that answers "who needs a
+visit".
+
+Three things the rebuild fixed or avoided:
+
+1. **The Market filter was dead.** Market is NULL on every venue since D33, so
+   that picker filtered on nothing. Replaced with **City**, which 317 of 349
+   venues now carry.
+2. **The first `v_venue_performance` inner-joined activities**, which dropped
+   every venue with none — 22 accounts, and precisely the ones worth chasing.
+   Rebuilt from `brand_venue_status` with activities LEFT JOINed, the same trap
+   `v_brand_venue_counts` already documents. Row count went from a silent 574 to
+   the correct 596.
+3. **"Quiet" counts only accounts that have actually been visited.** A venue
+   never visited has `days_since` NULL, which is a different problem from one
+   that has gone quiet; counting them together would hide both. Never-visited
+   rows sort to the bottom rather than the top.
+
+Days-quiet is colour-coded at 90 and 180 days, and sorts on the raw day count so
+"412 days" outranks "90 days" instead of sorting as text.
