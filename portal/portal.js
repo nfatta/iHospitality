@@ -61,11 +61,19 @@ const NAV = [
   ['photos.html', 'Photos'],
 ];
 
+/* Staff-only pages. Hiding the link is convenience, not security — business.html
+   shows money, and the money comes from rate_card, whose RLS policy is
+   staff-only. A brand user who typed the URL would get a page of nulls. */
+const STAFF_NAV = [
+  ['business.html', 'Business'],
+];
+
 /** Render the nav and footer. Kept in JS so five pages share one copy —
     the duplication problem the public site already has. */
 export function renderShell(active, profile) {
-  const brand = profile.brands?.name || 'Your brand';
-  const links = NAV.map(([href, label]) =>
+  const brand = profile.brands?.name || 'All brands';
+  const nav = profile.role === 'staff' ? [...NAV, ...STAFF_NAV] : NAV;
+  const links = nav.map(([href, label]) =>
     `<li><a href="${href}"${href === active ? ' class="current"' : ''}>${label}</a></li>`).join('');
 
   document.getElementById('shell-nav').innerHTML = `
@@ -81,7 +89,7 @@ export function renderShell(active, profile) {
     <button class="hamburger" id="burger" aria-label="Menu"><span></span><span></span><span></span></button>`;
 
   document.getElementById('shell-mobile').innerHTML =
-    NAV.map(([href, label]) =>
+    nav.map(([href, label]) =>
       `<a href="${href}"${href === active ? ' class="current"' : ''}>${label}</a>`).join('') +
     `<a href="#" id="signout-m">Sign out</a>`;
 

@@ -996,3 +996,64 @@ Verified against the live data at **10.00% / 8.00% / 2.00%** exactly.
 The lesson worth keeping: a per-unit sanity check settled in one query what the
 description alone could not. When a money figure has two readings, divide it by
 something physical.
+
+---
+
+**D45 — Account visits are $0 for every brand, stated rather than left absent.** ✅ operator-ruled 18 Aug 2026
+
+*"We do not charge any brand for account visits."* Loaded as an explicit $0 with
+`brand_id` NULL, not left out of the rate card.
+
+The distinction matters more than it looks. A **missing** rate reads as
+"unpriced", which inflates the gap count and makes every margin beside it look
+understated. An explicit **$0** says "we know, and it is free". Dame Mas alone
+had 102 account visits sitting in that gap. Overall unpriced fell from 367 to
+193 — over half the apparent gap was this one rule.
+
+---
+
+**D46 — The Dame Mas invoice recap independently validates the whole import.** ✅ 18 Aug 2026
+
+The operator's 2026 recap gives a Commission figure per month. Checked against
+what the portal computes from the bottle data:
+
+| month | portal | invoice | |
+|---|---|---|---|
+| April | $690.16 | $960.60 | short $270.44 |
+| May | **$266.93** | **$266.93** | exact |
+| June | $212.48 | $409.13 | short $196.65 |
+| July | **$21.08** | **$21.08** | exact |
+
+Two months match to the cent, and **both gaps are exactly 10% of the venues
+still unidentified** — $270.44 is a tenth of April's missing $2,704.50 (O-Ku,
+Pescado, Eden Lounge) and $196.65 a tenth of June's Rachels at $1,966.50.
+
+One check therefore confirms four separate things at once: the section-to-month
+mapping (April, May, June, July), that `amount` is gross sales rather than a
+commission, that the rate is 10%, and precisely which rows are still missing and
+what they are worth. Worth more than any test written against our own
+assumptions.
+
+The recap also shows Dame Mas on **$750 a month consulting**, where the
+chargeback sheet's retainers run $975–$1,850 — so Dame Mas is a different
+arrangement, not an omission from that sheet.
+
+---
+
+**D47 — `business.html`: an internal page, and the first use of `brands.is_active`.** ✅ operator-requested 18 Aug 2026
+
+Charge, cost and margin per brand, with a toggle between current brands and all
+of them — which is what finally gives `is_active` (D37) a job after being set as
+a label that read nothing.
+
+Three deliberate choices:
+
+- **Unpriced counts sit beside the margin, in amber.** Every unpriced activity
+  makes the number next to it an understatement, and a margin shown without
+  that context invites a decision it cannot support.
+- **A second table lists exactly what is unpriced**, by brand and by the string
+  HubSpot actually wrote — so the gap is a worklist rather than a complaint.
+- **Nav link hidden for brand users, but that is convenience, not the gate.**
+  The money comes from `rate_card`, whose RLS is staff-only, so a brand user
+  reaching the URL reads nulls. Verified: a brand login sees 91 of its own
+  activity rows with 0 charges and 0 costs, and 0 rate-card rows.

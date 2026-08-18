@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Business | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">Internal</span>
+        <h1>Business</h1>
+        <p class="portal-sub" id="count"></p>
+      </div>
+      <div class="filters">
+        <select id="f-scope">
+          <option value="active">Current brands</option>
+          <option value="all">All brands, including retired</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="stats"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Charge, cost and margin by brand</h2>
+        <span class="hint" id="shown"></span>
+      </div>
+      <div id="list"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Not yet priced</h2>
+        <span class="hint">These count as nothing until a rate exists</span>
+      </div>
+      <div id="gaps"></div>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum,
+             sortableTable } from './portal.js';
+
+    const money = (v) => '$' + Number(v || 0).toLocaleString(undefined,
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('business.html', auth.profile);
+
+      // Hiding the nav link is convenience; this is the actual gate. Even so it
+      // is not the last line of defence — the money columns come from
+      // rate_card, whose RLS policy is staff-only, so a brand user reaching
+      // this page would read nulls rather than anyone's rates.
+      if (auth.profile.role !== 'staff') {
+        render(document.getElementById('list'), { empty: {
+          title: 'Staff only',
+          body: 'This page shows internal figures and is not part of your portal.' } });
+      } else {
+        const [brands, gaps] = await Promise.all([
+          db.from('v_brand_money').select('*'),
+          db.from('v_activity_money').select('brand_name, source_activity_type')
+            .is('charge', null),
+        ]);
+        if (brands.error) {
+          render(document.getElementById('list'), { error: brands.error });
+        } else {
+          document.getElementById('f-scope')
+            .addEventListener('change', () => draw(brands.data, gaps.data));
+          draw(brands.data, gaps.data);
+        }
+      }
+    }
+
+    function draw(rows, gapRows) {
+      const scope = document.getElementById('f-scope').value;
+      // `brands.is_active` was set weeks of decisions ago and did nothing until
+      // now. This is the toggle that gives it a job.
+      const shown = scope === 'active' ? rows.filter(r => r.is_active) : rows;
+
+      renderStats(shown);
+      document.getElementById('count').textContent =
+        `${fmtNum(shown.length)} brand${shown.length === 1 ? '' : 's'}`;
+      document.getElementById('shown').textContent =
+        scope === 'active'
+          ? `${fmtNum(rows.length - shown.length)} retired brand(s) hidden`
+          : '';
+
+      sortableTable(document.getElementById('list'), shown, [
+        { head: 'Brand', always: true, cls: 'venue', value: r => r.brand_name,
+          get: r => esc(r.brand_name) +
+            (r.is_active ? '' : ' <span class="muted" style="font-size:0.72rem">retired</span>') },
+        { head: 'Activities', always: true, cls: 'num',
+          value: r => Number(r.activities), get: r => fmtNum(r.activities) },
+        { head: 'Unpriced', cls: 'num', value: r => Number(r.unpriced_activities),
+          // Amber when some of a brand's work has no rate, because every one of
+          // those makes the margin beside it an understatement.
+          get: r => Number(r.unpriced_activities)
+            ? `<span class="pill pill-dormant">${fmtNum(r.unpriced_activities)}</span>`
+            : '<span class="muted">—</span>' },
+        { head: 'Charged', always: true, cls: 'num', nowrap: true,
+          value: r => Number(r.charged), get: r => money(r.charged) },
+        { head: 'Contractor cost', cls: 'num', nowrap: true,
+          value: r => Number(r.contractor_cost), get: r => money(r.contractor_cost) },
+        { head: 'Margin', always: true, cls: 'num', nowrap: true,
+          value: r => Number(r.margin),
+          get: r => {
+            const m = Number(r.margin);
+            const cls = m < 0 ? 'pill pill-lost' : m === 0 ? 'muted' : '';
+            return `<span class="${cls}">${money(m)}</span>`;
+          } },
+        { head: 'Last activity', cls: 'num', nowrap: true,
+          sortValue: r => r.last_activity || '',
+          get: r => r.last_activity ? esc(fmtDate(r.last_activity)) : '<span class="muted">—</span>' },
+      ], { sort: 'Margin', dir: 'desc' });
+
+      renderGaps(shown, gapRows || []);
+    }
+
+    function renderStats(rows) {
+      const sum = (f) => rows.reduce((a, r) => a + Number(r[f] || 0), 0);
+      const charged = sum('charged'), cost = sum('contractor_cost');
+      const unpriced = sum('unpriced_activities'), acts = sum('activities');
+
+      const el = document.getElementById('stats');
+      el.className = 'stat-grid';
+      el.innerHTML = `
+        <div class="stat-card"><span class="num">${money(charged)}</span>
+          <span class="lbl">Charged</span></div>
+        <div class="stat-card"><span class="num">${money(cost)}</span>
+          <span class="lbl">Contractor cost</span></div>
+        <div class="stat-card"><span class="num">${money(charged - cost)}</span>
+          <span class="lbl">Margin</span>
+          <div class="meta">${charged ? ((charged - cost) / charged * 100).toFixed(1) : '0'}% of charged</div></div>
+        <div class="stat-card"><span class="num">${fmtNum(unpriced)}</span>
+          <span class="lbl">Unpriced activities</span>
+          <div class="meta">of ${fmtNum(acts)} — margin above is understated</div></div>`;
+    }
+
+    function renderGaps(shownBrands, gapRows) {
+      const names = new Set(shownBrands.map(b => b.brand_name));
+      const counts = new Map();
+      for (const r of gapRows) {
+        if (!names.has(r.brand_name)) continue;
+        const key = `${r.brand_name}|${r.source_activity_type || '(archived, no type recorded)'}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      const rows = [...counts.entries()]
+        .map(([k, n]) => {
+          const [brand, type] = k.split('|');
+          return { brand, type, n };
+        })
+        .sort((a, b) => b.n - a.n);
+
+      const el = document.getElementById('gaps');
+      if (!rows.length) {
+        return render(el, { empty: {
+          title: 'Everything is priced',
+          body: 'Every activity for these brands resolves to a rate.' } });
+      }
+      sortableTable(el, rows, [
+        { head: 'Brand', always: true, cls: 'venue', value: r => r.brand,
+          get: r => esc(r.brand) },
+        { head: 'What HubSpot wrote', always: true, value: r => r.type,
+          get: r => esc(r.type) },
+        { head: 'Activities', always: true, cls: 'num', value: r => r.n,
+          get: r => fmtNum(r.n) },
+      ], { sort: 'Activities', dir: 'desc' });
+    }
+  </script>
+</body>
+</html>
