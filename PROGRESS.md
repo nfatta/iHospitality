@@ -235,6 +235,59 @@ real brands are onboarded**:
 **Repos.** Website repo is on branch `portal-v1`, 8 commits ahead of `main`,
 pushed. `Hubspot/portal_seed/` is a separate local repo, 2 commits, no remote.
 
+### Full backfill, June 2025 → August 2026 ✅ 18 Aug 2026 — operator-approved
+
+15 months synced month by month. **942 → 1,070 activities, 297 → 349 venues**,
+0 duplicate deal ids, all 508 seed-loaded `notes` intact, brands still 11.
+
+**Every one of HubSpot's 1,076 dated deals is accounted for:**
+
+| | |
+|---|---|
+| fetched across 15 months | 1,076 — exactly HubSpot's total |
+| skipped, no `brand` property | 80 |
+| skipped, close date in the future | 1 (dated 2026-08-31; today is the 18th) |
+| loaded from the API | 995 |
+| CSV-only rows the API cannot maintain | 75 |
+| **activities in the database** | **1,070** |
+
+**July and August 2026 were entirely new** — 82 and 29 activities the one-time
+seed never had. This is the phase paying for itself: the portal was a snapshot
+ending 30 June, and is now current to 13 Aug.
+
+#### The finding: 75 rows are correct but frozen
+
+From 2026-01 onward every row is maintained by the sync. Across Jun–Dec 2025,
+**75 are not** — the sync skips them because HubSpot's `brand` property is
+**empty** on those deals, while the CSV exports carried a Brand value.
+
+Checked rather than assumed: fetching those deals from HubSpot returns 200 with
+`brand` blank, even though the deal *names* plainly identify it
+("Intro to Starr follow w/Peter", "HD Whiskey & Bootleg tasting"). So the
+structured field was never filled on older deals and the CSV had better data
+than the API does.
+
+Those 75 rows are **not wrong** — they carry the right brand and brands see them
+correctly. They are frozen: no future sync will ever update them, and a
+truncate-and-reload from the API alone would lose them.
+
+Deriving the brand from the deal name was deliberately **not** done. That is
+exactly the fuzzy matching `normalize.py` refuses on the grounds that it
+eventually merges two real brands.
+
+**The fix is a worklist, not code.** The database already knows the correct brand
+for all 75, from the CSV. Written to
+`Hubspot/hubspot_missing_brand_worklist.csv` (outside the website repo — it must
+never be public): Record ID, deal name, close date, and the brand to set. Filling
+those in HubSpot and re-syncing closes the gap permanently.
+
+**5 deals are known to no source at all** — never loaded by CSV or API, because
+they have no brand in either. Four read as Starr Rum from their names, one
+("Spirits2U introducing") is ambiguous. They are in the worklist marked
+`UNKNOWN — needs your judgement`.
+
+---
+
 ### Taxonomy cleanup ✅ 18 Aug 2026 — done before Stage 2, deliberately
 
 Five merges run against the live database (D22), and `recurring_case` corrected
