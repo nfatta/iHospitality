@@ -135,12 +135,12 @@
           get: r => esc(r.activity_type) },
         { head: 'Qty', cls: 'num', value: r => r.quantity,
           get: r => r.quantity ? fmtNum(r.quantity) : '<span class="muted">—</span>' },
-        // Pods and Value are brand-facing because the fee is a percentage of
-        // value and the bonus is driven by pods — a brand cannot check what it
-        // is billed without seeing both. Both columns disappear for brands that
-        // have neither, which today is every brand except Dame Mas.
-        { head: 'Pods', cls: 'num', value: r => Number(r.pods),
-          get: r => r.pods ? fmtNum(r.pods) : '<span class="muted">—</span>' },
+        // Pods is deliberately NOT a column here. Dame Mas is the only brand
+        // whose pods are tracked, so on a shared activity table it is a column
+        // that is blank for everyone else — and the auto-hide cannot help,
+        // because staff see all brands at once and would get it permanently.
+        // The data stays in `activities.pods` and in the aggregate views; it
+        // wants a Dame Mas-shaped home, not a general one.
         { head: 'Value', cls: 'num', nowrap: true, value: r => Number(r.amount),
           get: r => Number(r.amount)
             ? '$' + Number(r.amount).toLocaleString(undefined,
