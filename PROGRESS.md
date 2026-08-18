@@ -424,6 +424,32 @@ only. Awaiting the operator's go-ahead.
 
 ---
 
+### Stage 2 — analysis views ✅ 18 Aug 2026
+
+`v_activity_mix`, `v_venue_performance`, `v_city_summary` (D34), plus cities
+loaded through the sync (D33). Stage 1 is complete.
+
+Real numbers from the live database:
+
+- **Staff trainings: 18 overall** — Blue Run 7 across 6 venues, Barmen 1873 and
+  Dame Mas 3 each.
+- **Reordering is Wodka's story.** Copper Rocket 9 reorders, The Whiskey 8,
+  Vineyard Wine Co 6, Serafina Miami 6.
+- **Accounts gone quiet:** a tail of venues placed once and untouched for
+  390–413 days.
+- **Where the work is:** Orlando 192 activities over 52 venues, Melbourne 101
+  over 26, Sanford 68, Boynton Beach 64, Tampa 51.
+
+**How to see it working:**
+
+```sql
+select * from v_venue_performance where reorders > 0 order by reorders desc;
+```
+
+Not yet surfaced in the portal — these are views, not pages. Stage 3.
+
+---
+
 ## Session of 18 Aug 2026 — what a fresh read found
 
 **The Supabase project had paused itself.** Free tier pauses after 7 days idle;

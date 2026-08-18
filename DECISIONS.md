@@ -673,3 +673,61 @@ a real browser with zero console errors before the auth redirect; JS
 syntax-checked with node. **Not verified: the rendered gallery itself** — that
 needs a login, and entering a password is out of scope for this session. The
 data layer beneath it is checked; anything wrong will be layout.
+
+---
+
+**D33 — Cities are recorded; `market` is not, because the business is expanding.** ✅ operator-ruled 18 Aug 2026
+
+The two-value `market_enum` (`central_florida`, `palm_beach_county`) left roughly
+90 venues unclassifiable — Melbourne, Cocoa Beach, Palm Bay, Satellite Beach,
+Tampa, Miami Beach, Jacksonville, Port St Lucie. The question put to the operator
+was whether to add a third market. The answer reframed it: *"it shouldn't matter
+if in or out of market. We are in the midst of expanding so let's not cap
+ourselves."*
+
+So `venues.city` is populated and **`venues.market` stays NULL on every row**.
+The enum is left in place — it still enforces the positioning rule if anything
+ever writes to it — but nothing classifies a city into it. A schema constraint
+written to protect brand-facing language was quietly becoming a constraint on
+where the business could be seen to operate; that is the wrong job for it.
+
+Cities arrive **through the sync**, not from a one-time CSV load: `city` was
+added to the company batch read, so venues stay current as HubSpot changes. Two
+details that matter — city is written with a separate UPDATE rather than in the
+venue INSERT, because 349 venues already existed before the column was populated
+and the insert loop skips anything already cached; and the update uses
+`coalesce` semantics so a value entered by hand is never blanked by an empty CRM
+field.
+
+Result: **317 of 349 venues** carry a city. **64 sit in cities the old rule would
+have discarded** — Melbourne 26, Tampa 14, Cocoa Beach 10, Jacksonville 6,
+Palm Bay 5, Port St Lucie 3.
+
+---
+
+**D34 — Three analysis views, one per question actually asked.** ✅ operator-approved 18 Aug 2026
+
+Not a generic pile of views. A view nobody reads is worse than no view, because
+it still has to be kept correct. All three are `security_invoker`, so RLS answers
+each question at the asker's own scope from a single definition.
+
+| view | the question |
+|---|---|
+| `v_activity_mix` | "How many staff trainings for this brand, or overall?" |
+| `v_venue_performance` | "Which venues are reordering, and which have gone quiet?" |
+| `v_city_summary` | "Where are we actually working?" |
+
+**Two of the three depended on earlier rulings, which is the argument for having
+done the data work first.** `v_activity_mix` is only trustworthy because of the
+taxonomy merges (D22) — before them, counting tasting events returned 35 when
+the honest answer was 37. And `v_venue_performance` only became possible once the
+operator explained that `recurring_case` is a reorder and `case_sale` the initial
+sale (D21); until then, winning an account and keeping one were indistinguishable.
+
+`v_venue_performance` is at brand × venue grain, because Blue Run reordering
+somewhere says nothing about whether Wodka is.
+
+**A data observation this surfaced:** some venues show reorders with zero
+recorded initial sale — Sable (Club Allenby) has 4 reorders and no `case_sale`.
+Either the first sale was logged under another activity type or it predates the
+imported data. Worth a look before these numbers are shown to a brand.
