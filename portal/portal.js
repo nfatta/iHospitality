@@ -150,6 +150,90 @@ export function table(rows, columns) {
     </tbody></table></div>`;
 }
 
+/**
+ * A sortable table, rendered into `el`.
+ *
+ * Same column definitions as table(), plus:
+ *   sortValue(row) — what to order by, when it differs from what is displayed.
+ *                    Dates need this: 'Aug 11, 2026' sorts alphabetically and
+ *                    lands nowhere near August, so the raw ISO date is used.
+ *   sortable: false — opt a column out.
+ *
+ * opts: { sort: <column head to sort by>, dir: 'asc'|'desc', onRowClick(row) }
+ *
+ * Sorting happens here rather than in SQL on purpose. A view per sort order
+ * would be a dozen views that all say the same thing, and at these row counts
+ * (about 1,100 activities) the browser reorders instantly. The aggregates stay
+ * in SQL, where they are correctness-critical; ordering is presentation.
+ */
+export function sortableTable(el, rows, columns, opts = {}) {
+  const live = columns.filter(c => c.always || rows.some(r => {
+    const v = c.value ? c.value(r) : c.get(r);
+    return v !== null && v !== undefined && v !== '' && v !== 0;
+  }));
+
+  let sortHead = opts.sort ?? null;
+  let dir = opts.dir === 'asc' ? 1 : -1;
+
+  const keyOf = (col, row) =>
+    col.sortValue ? col.sortValue(row) : (col.value ? col.value(row) : col.get(row));
+
+  function sorted() {
+    const col = live.find(c => c.head === sortHead);
+    if (!col) return rows;
+    // Copy first: sort() mutates, and the caller's array is reused by the
+    // filter controls on every redraw.
+    return [...rows].sort((a, b) => {
+      const x = keyOf(col, a), y = keyOf(col, b);
+      // Blanks always sink to the bottom, whichever way the column is sorted —
+      // a column of em-dashes at the top is never what someone wanted to see.
+      const xe = x === null || x === undefined || x === '';
+      const ye = y === null || y === undefined || y === '';
+      if (xe && ye) return 0;
+      if (xe) return 1;
+      if (ye) return -1;
+      const bothNumeric = typeof x !== 'object' && typeof y !== 'object'
+        && x !== '' && y !== '' && !isNaN(Number(x)) && !isNaN(Number(y));
+      if (bothNumeric) return (Number(x) - Number(y)) * dir;
+      return String(x).localeCompare(String(y), undefined, { numeric: true }) * dir;
+    });
+  }
+
+  function draw() {
+    const body = sorted();
+    const arrow = (c) => c.head !== sortHead ? '' : (dir === 1 ? ' ↑' : ' ↓');
+    el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
+      <thead><tr>${live.map(c => c.sortable === false
+        ? `<th class="${c.cls || ''}">${esc(c.head)}</th>`
+        : `<th class="${c.cls || ''} sortable${c.head === sortHead ? ' sorted' : ''}"
+             data-head="${esc(c.head)}" role="button" tabindex="0"
+             aria-label="Sort by ${esc(c.head)}">${esc(c.head)}${arrow(c)}</th>`).join('')}</tr></thead>
+      <tbody>${body.map((r, i) => `<tr${opts.onRowClick ? ` class="clickable" data-i="${i}"` : ''}>${
+        live.map(c => `<td class="${c.cls || ''}${c.nowrap ? ' nowrap' : ''}">${c.get(r) ?? ''}</td>`).join('')
+      }</tr>`).join('')}</tbody></table></div>`;
+
+    el.querySelectorAll('th.sortable').forEach(th => {
+      const go = () => {
+        const head = th.dataset.head;
+        // Re-clicking the active column flips it; a new column starts descending,
+        // which is what you want for dates and counts alike.
+        if (head === sortHead) dir = -dir; else { sortHead = head; dir = -1; }
+        draw();
+      };
+      th.onclick = go;
+      th.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
+    });
+
+    if (opts.onRowClick) {
+      el.querySelectorAll('tr.clickable').forEach(tr => {
+        tr.onclick = () => opts.onRowClick(body[Number(tr.dataset.i)]);
+      });
+    }
+  }
+
+  draw();
+}
+
 /** Hide a filter that has fewer than two real choices. */
 export function fillSelect(id, values, label) {
   const el = document.getElementById(id);

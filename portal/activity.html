@@ -25,11 +25,14 @@
         <p class="portal-sub" id="count"></p>
       </div>
       <div class="filters">
+        <select id="f-brand"><option value="">All brands</option></select>
         <select id="f-market"><option value="">All markets</option></select>
         <select id="f-type"><option value="">All activity types</option></select>
         <select id="f-year"><option value="">All time</option></select>
       </div>
     </div>
+
+    <div id="month-note"></div>
 
     <div class="panel">
       <div class="panel-head">
@@ -43,11 +46,18 @@
   <footer id="shell-footer"></footer>
 
   <script type="module">
-    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum, MARKET_LABEL, table, fillSelect } from './portal.js';
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtMonth, fmtNum,
+             MARKET_LABEL, sortableTable, fillSelect } from './portal.js';
 
     const auth = await requireAuth();
     if (auth) {
       renderShell('activity.html', auth.profile);
+
+      // Drill-down from the dashboard: ?month=YYYY-MM. Validated rather than
+      // trusted — it is compared against activity_date as a string prefix, and
+      // anything that is not exactly a year-month is ignored.
+      const wanted = new URLSearchParams(location.search).get('month');
+      const month = /^\d{4}-\d{2}$/.test(wanted || '') ? wanted : null;
 
       const { data, error } = await db.from('v_brand_activity_log').select('*');
       if (error) {
@@ -57,28 +67,39 @@
           title: 'No activity yet',
           body: 'Activity logged for your brand will appear here.' } });
       } else {
+        if (month) {
+          document.getElementById('month-note').innerHTML =
+            `<span class="filter-note">Showing ${esc(fmtMonth(month + '-01'))}` +
+            `<a href="activity.html" title="Show all months">&times;</a></span>`;
+        }
         buildFilters(data);
-        ['f-market', 'f-type', 'f-year'].forEach(id =>
-          document.getElementById(id).addEventListener('change', () => draw(data)));
+        ['f-brand', 'f-market', 'f-type', 'f-year'].forEach(id =>
+          document.getElementById(id).addEventListener('change', () => draw(data, month)));
         document.getElementById('count').textContent =
           `${fmtNum(data.length)} activities on record`;
-        draw(data);
+        draw(data, month);
       }
     }
 
     function buildFilters(rows) {
       const uniq = (fn) => [...new Set(rows.map(fn).filter(Boolean))].sort();
+      // fillSelect hides a filter with fewer than two choices, so the brand
+      // picker simply does not appear for a brand user — they only ever have one.
+      fillSelect('f-brand', uniq(r => r.brand_name).map(b => [b, b]));
       fillSelect('f-market', uniq(r => r.market).map(m => [m, MARKET_LABEL[m] || m]));
       fillSelect('f-type', uniq(r => r.activity_type).map(t => [t, t]));
       fillSelect('f-year', uniq(r => r.activity_date?.slice(0, 4)).reverse().map(y => [y, y]));
     }
 
-    function draw(rows) {
+    function draw(rows, month) {
+      const brand = document.getElementById('f-brand').value;
       const market = document.getElementById('f-market').value;
       const type = document.getElementById('f-type').value;
       const year = document.getElementById('f-year').value;
 
       const filtered = rows.filter(r =>
+        (!month || r.activity_date?.startsWith(month)) &&
+        (!brand || r.brand_name === brand) &&
         (!market || r.market === market) &&
         (!type || r.activity_type === type) &&
         (!year || r.activity_date?.startsWith(year)));
@@ -92,23 +113,32 @@
       if (!filtered.length) {
         return render(el, { empty: {
           title: 'Nothing matches those filters',
-          body: 'Try widening the market, type or year.' } });
+          body: 'Try widening the month, brand, market or type.' } });
       }
 
-      // Columns with nothing in them anywhere are dropped — see table() in
-      // portal.js. Date, venue and activity always show.
-      el.innerHTML = table(filtered, [
-        { head: 'Date',     always: true, nowrap: true, get: r => esc(fmtDate(r.activity_date)) },
-        { head: 'Venue',    always: true, cls: 'venue', get: r => esc(r.venue_name || '—') },
-        { head: 'Market',   value: r => r.market,
+      // Columns with nothing in them anywhere are dropped — see sortableTable()
+      // in portal.js. Date, venue and activity always show. The Brand column
+      // therefore appears for staff and disappears for a brand user, without
+      // either page needing to know which it is looking at.
+      const multiBrand = new Set(filtered.map(r => r.brand_name)).size > 1;
+
+      sortableTable(el, filtered, [
+        { head: 'Date', always: true, nowrap: true,
+          sortValue: r => r.activity_date, get: r => esc(fmtDate(r.activity_date)) },
+        ...(multiBrand ? [{ head: 'Brand', value: r => r.brand_name,
+          get: r => esc(r.brand_name || '—') }] : []),
+        { head: 'Venue', always: true, cls: 'venue', value: r => r.venue_name,
+          get: r => esc(r.venue_name || '—') },
+        { head: 'Market', value: r => r.market,
           get: r => r.market ? esc(MARKET_LABEL[r.market] || r.market) : '<span class="muted">—</span>' },
-        { head: 'Activity', always: true, get: r => esc(r.activity_type) },
-        { head: 'Qty',      cls: 'num', value: r => r.quantity,
+        { head: 'Activity', always: true, value: r => r.activity_type,
+          get: r => esc(r.activity_type) },
+        { head: 'Qty', cls: 'num', value: r => r.quantity,
           get: r => r.quantity ? fmtNum(r.quantity) : '<span class="muted">—</span>' },
-        { head: 'Notes',    value: r => r.summary, get: r => esc(r.summary || '') },
-        { head: 'Photos',   cls: 'num', value: r => Number(r.photo_count),
+        { head: 'What happened', value: r => r.summary, get: r => esc(r.summary || '') },
+        { head: 'Photos', cls: 'num', value: r => Number(r.photo_count),
           get: r => fmtNum(r.photo_count) },
-      ]);
+      ], { sort: 'Date', dir: 'desc' });
     }
   </script>
 </body>

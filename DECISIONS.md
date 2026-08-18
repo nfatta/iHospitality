@@ -539,3 +539,66 @@ because those are receipts.
 This is why D27 built `is_expense` as a flag rather than filtering the rows away
 at import: the ruling landed on the side the flag already supported, and no
 re-import was needed to honour it.
+
+---
+
+**D29 — The month roll-up is one view for both audiences, and it had to be SQL.** ✅ operator-requested 18 Aug 2026
+
+The staff dashboard showed August as "3 activities". The real figure is 29. It
+was rendering one row per *(brand, month)* from `v_brand_monthly_summary` with
+no brand column, so August appeared four times and the headline card read
+whichever brand happened to sort first — Dame Mas, with 3.
+
+`v_monthly_summary` groups by month alone. Because it runs `security_invoker`,
+RLS filters the underlying activities *before* the aggregate: a brand user gets
+their own months, staff get every brand combined into one row per month. One
+definition, no staff-only variant to keep in step, and no path by which a brand
+user can see a cross-brand total. Verified against all three real logins, plus
+`anon`, which is refused outright.
+
+**Why this could not be a JavaScript sum.** `venues_touched` is a
+`count(distinct venue_id)` *per brand*, so a venue two brands both visited is 1
+in each row and adding them gives 2 for one venue. Measured on live data, naive
+summing overstates venues by **7 to 14 per month**. Activity counts, units and
+photos are additive; the distinct count is not, and only SQL can recompute it at
+the coarser grain. Everything else on these pages — sorting, filtering, grouping
+— stays in the browser, where it belongs.
+
+Two smaller staff-only bugs fixed alongside: the "Venues, all time" card counted
+rows of `v_brand_venue_counts`, which holds one row per brand/venue *pair* (596
+pairs over far fewer venues), and the date range read `data[0]` for both ends.
+
+A SQL note worth keeping: the first draft counted photos with a correlated
+subquery on `a.activity_date` and Postgres refused it — that column is not in
+the `GROUP BY`, only `date_trunc()` of it is. Rewritten to aggregate photos to
+the same grain and join, matching `v_brand_monthly_summary`. The rejection was
+lucky: a naive direct join would have fanned each activity into N rows and
+quietly multiplied every sum.
+
+---
+
+**D30 — Sorting lives in the browser; aggregates live in SQL.** ✅ 18 Aug 2026
+
+`sortableTable()` in `portal.js` replaces `table()` on the pages that need it,
+keeping the drop-empty-columns behaviour and adding click-to-sort, keyboard
+support, and optional row navigation.
+
+The line: a view per sort order would be a dozen views all saying the same
+thing, and at ~1,100 activities the browser reorders instantly. Aggregates stay
+in SQL because they are correctness-critical (D29 is the proof); ordering is
+presentation.
+
+Three details that are deliberate:
+- Dates sort on the raw ISO value, not the rendered one — "Aug 11, 2026" sorted
+  alphabetically lands nowhere near August.
+- Blanks always sink to the bottom regardless of direction. A screen of
+  em-dashes at the top is never what someone was asking for.
+- A new column starts descending, which is right for dates and counts alike.
+
+The Brand column appears only when more than one brand is present in the rows,
+so staff get it and a brand user never sees a column containing only their own
+name — neither page needs to know which kind of user it is serving.
+
+Drill-down is `activity.html?month=YYYY-MM`, validated against a strict
+year-month pattern rather than trusted, and shown as a dismissible chip. No
+router, no build step — consistent with the locked no-npm decision.

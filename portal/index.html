@@ -48,33 +48,40 @@
   <footer id="shell-footer"></footer>
 
   <script type="module">
-    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtMonth, fmtNum } from './portal.js';
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtMonth, fmtNum,
+             sortableTable } from './portal.js';
 
     const auth = await requireAuth();
     if (auth) {
       renderShell('index.html', auth.profile);
-      document.getElementById('title').textContent = auth.profile.brands?.name || 'Dashboard';
+      document.getElementById('title').textContent = auth.profile.brands?.name || 'All brands';
 
       // Every query below is unfiltered by brand ON PURPOSE. Row-level security
       // adds the brand restriction in Postgres, so the browser never decides
       // what this user may see — and a bug here cannot leak another brand.
-      const [summary, log] = await Promise.all([
-        db.from('v_brand_monthly_summary').select('*').order('month', { ascending: false }),
+      //
+      // v_monthly_summary is grouped by MONTH ONLY. Because the view runs as
+      // security_invoker, RLS filters the rows before the aggregate: a brand
+      // user gets their own months, staff get all brands combined into one row
+      // per month. That is the fix for August appearing four times.
+      const [months, log, venues] = await Promise.all([
+        db.from('v_monthly_summary').select('*').order('month', { ascending: false }),
         db.from('v_brand_activity_log').select('*').limit(10),
+        db.from('v_brand_venue_counts').select('venue_id'),
       ]);
 
-      renderStats(summary);
-      renderMonths(summary);
+      renderStats(months, venues);
+      renderMonths(months);
       renderRecent(log);
     }
 
-    function renderStats({ data, error }) {
+    function renderStats({ data, error }, venues) {
       const el = document.getElementById('stats');
       if (error) return render(el, { error });
       if (!data?.length) {
         return render(el, { empty: {
           title: 'Nothing here yet',
-          body: 'Once activity is logged for your brand it will appear here.' } });
+          body: 'Once activity is logged it will appear here.' } });
       }
 
       const totals = data.reduce((a, r) => ({
@@ -83,25 +90,29 @@
         photos: a.photos + Number(r.photo_count || 0),
       }), { activities: 0, units: 0, photos: 0 });
 
-      // Venues touched must be counted distinctly across months — summing the
-      // per-month figures would count a venue once per month it was visited.
+      // data is ordered newest first, so the range runs from the LAST row to
+      // the first. Reading data[0] for both ends was part of the old bug.
       const latest = data[0];
+      const earliest = data[data.length - 1];
       document.getElementById('range').textContent =
-        `${fmtMonth(data[data.length - 1].month)} — ${fmtMonth(latest.month)}`;
+        `${fmtMonth(earliest.month)} — ${fmtMonth(latest.month)}`;
 
-      db.from('v_brand_venue_counts').select('venue_id').then(({ data: v }) => {
-        document.getElementById('venue-count').textContent = fmtNum(v?.length || 0);
-      });
+      // Venues must be counted DISTINCTLY. v_brand_venue_counts has one row per
+      // brand/venue pair, so for staff its length counts a venue once per brand
+      // that has touched it — 596 pairs across far fewer real venues.
+      const venueCount = new Set((venues.data || []).map(v => v.venue_id)).size;
 
       el.className = 'stat-grid';
       el.innerHTML = `
         <div class="stat-card">
           <span class="num">${fmtNum(latest.activity_count)}</span>
           <span class="lbl">Activities</span>
-          <div class="meta">in ${esc(fmtMonth(latest.month))}</div>
+          <div class="meta">in ${esc(fmtMonth(latest.month))}${
+            Number(latest.brands_active) > 1
+              ? ` across ${fmtNum(latest.brands_active)} brands` : ''}</div>
         </div>
         <div class="stat-card">
-          <span class="num" id="venue-count">—</span>
+          <span class="num">${fmtNum(venueCount)}</span>
           <span class="lbl">Venues</span>
           <div class="meta">all time</div>
         </div>
@@ -122,19 +133,32 @@
       if (error) return render(el, { error });
       if (!data?.length) return render(el, { empty: { title: 'No months yet', body: '' } });
 
-      el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
-        <thead><tr>
-          <th>Month</th><th class="num">Activities</th><th class="num">Venues</th>
-          <th class="num">Units</th><th class="num">Photos</th>
-        </tr></thead><tbody>
-        ${data.map(r => `<tr>
-          <td class="venue">${esc(fmtMonth(r.month))}</td>
-          <td class="num">${fmtNum(r.activity_count)}</td>
-          <td class="num">${fmtNum(r.venues_touched)}</td>
-          <td class="num">${fmtNum(r.units_moved)}</td>
-          <td class="num ${Number(r.photo_count) ? '' : 'muted'}">${fmtNum(r.photo_count)}</td>
-        </tr>`).join('')}
-        </tbody></table></div>`;
+      // Only worth a Brands column when more than one brand is visible — a
+      // brand user would otherwise get a column of 1s.
+      const multiBrand = data.some(r => Number(r.brands_active) > 1);
+
+      const columns = [
+        { head: 'Month', always: true, nowrap: true, cls: 'venue',
+          sortValue: r => r.month, get: r => esc(fmtMonth(r.month)) },
+        ...(multiBrand ? [{ head: 'Brands', cls: 'num',
+          value: r => Number(r.brands_active), get: r => fmtNum(r.brands_active) }] : []),
+        { head: 'Activities', cls: 'num', always: true,
+          value: r => Number(r.activity_count), get: r => fmtNum(r.activity_count) },
+        { head: 'Venues', cls: 'num',
+          value: r => Number(r.venues_touched), get: r => fmtNum(r.venues_touched) },
+        { head: 'Units', cls: 'num',
+          value: r => Number(r.units_moved), get: r => fmtNum(r.units_moved) },
+        { head: 'Photos', cls: 'num', value: r => Number(r.photo_count),
+          get: r => `<span class="${Number(r.photo_count) ? '' : 'muted'}">${fmtNum(r.photo_count)}</span>` },
+      ];
+
+      sortableTable(el, data, columns, {
+        sort: 'Month',
+        dir: 'desc',
+        // Drill down: the month carries through as a query parameter, which the
+        // activity page reads. No build step, no router.
+        onRowClick: r => { location.href = `activity.html?month=${String(r.month).slice(0, 7)}`; },
+      });
     }
 
     function renderRecent({ data, error }) {
@@ -142,12 +166,15 @@
       if (error) return render(el, { error });
       if (!data?.length) return render(el, { empty: { title: 'No activity yet', body: '' } });
 
+      const multiBrand = new Set(data.map(r => r.brand_name)).size > 1;
       el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
-        <thead><tr><th>Date</th><th>Venue</th><th>What</th><th class="num">Qty</th></tr></thead>
+        <thead><tr><th>Date</th>${multiBrand ? '<th>Brand</th>' : ''}<th>Venue</th>
+          <th>What</th><th class="num">Qty</th></tr></thead>
         <tbody>${data.map(r => `<tr>
-          <td>${esc(fmtDate(r.activity_date))}</td>
+          <td class="nowrap">${esc(fmtDate(r.activity_date))}</td>
+          ${multiBrand ? `<td>${esc(r.brand_name || '—')}</td>` : ''}
           <td class="venue">${esc(r.venue_name || '—')}</td>
-          <td>${esc(r.activity_type)}</td>
+          <td>${esc(r.title || r.activity_type)}</td>
           <td class="num ${r.quantity ? '' : 'muted'}">${r.quantity ? fmtNum(r.quantity) : '—'}</td>
         </tr>`).join('')}</tbody></table></div>`;
     }

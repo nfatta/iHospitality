@@ -123,3 +123,54 @@
 }
 
 .tbl td.nowrap, .tbl th.nowrap { white-space: nowrap; }
+
+/* ---------- sortable / clickable tables ---------- */
+/* Added with the staff dashboard rebuild: months roll up across brands and
+   drill down into the activity log, so headers sort and rows navigate. */
+
+.tbl th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.tbl th.sortable:hover,
+.tbl th.sortable:focus-visible {
+  color: var(--gold);
+}
+.tbl th.sorted {
+  color: var(--gold);
+}
+.tbl tr.clickable {
+  cursor: pointer;
+}
+.tbl tr.clickable:hover {
+  background: rgba(197, 164, 106, 0.07);
+}
+/* Keyboard users must be able to see which header is focused. */
+.tbl th.sortable:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+/* A filter chip showing the drill-down currently applied, with a way out. */
+.filter-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.9rem;
+  border: 1px solid rgba(197, 164, 106, 0.4);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--gold);
+}
+.filter-note a {
+  color: inherit;
+  text-decoration: none;
+  border: 0;
+  padding: 0 0.45rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  opacity: 0.75;
+}
+.filter-note a:hover { opacity: 1; }
