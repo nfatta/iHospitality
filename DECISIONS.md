@@ -193,3 +193,118 @@ Supabase's default privileges grant `anon` access to newly created objects in
 `public`. Revoking mid-file would miss everything defined after that point,
 including the three dashboard views. The revoke plus `alter default privileges`
 runs last so it catches all of it, and stops future objects reopening the hole.
+
+---
+
+**D15 — The Supabase free tier pauses a project after 7 days of inactivity, and it looks like DNS failure.** 18 Aug 2026
+
+The project went unreachable between 10 and 18 Aug. The symptom was
+`failed to resolve host 'db.<ref>.supabase.co'`, which reads like a network or a
+`DATABASE_URL` problem and is neither. Confirmed it was the project and not the
+network by resolving the API host `<ref>.supabase.co` against three independent
+resolvers (the ISP's, 8.8.8.8, 1.1.1.1) — all NXDOMAIN — while the shared host
+`aws-0-us-east-1.pooler.supabase.com` resolved normally from the same machine.
+A paused project is removed from public DNS entirely; both hostnames vanish.
+
+Restored from the dashboard by the operator with no data loss: 942 activities,
+297 venues, 11 brands, and the full grant/RLS posture all intact afterwards.
+
+Two things follow. The demo preview stays live on Netlify while the database
+behind it is gone, so the portal appears broken rather than offline — anyone
+holding that URL sees errors. And **any gap of more than a week will do this
+again**, which is an argument for the Pro tier once real brands have logins,
+not merely for the storage headroom.
+
+Standing lesson, alongside D10: a Supabase connection failure that presents as
+DNS is far more likely to be a paused project than a bad connection string.
+Check the dashboard before debugging the URL.
+
+---
+
+**D16 — Photos are stored as web-optimized derivatives; originals never leave the local library.** ✅ operator-confirmed 18 Aug 2026
+
+The existing library is 465 MB of full-size originals against a 1 GB free-tier
+storage cap, so uploading originals would exhaust the tier within one import.
+Derivatives are resized to a 1600px longest edge at JPEG quality ~82 — roughly
+200 KB each, which keeps thousands of photos inside the free tier.
+
+One shared pure function, two entry points: the sync optimizes in flight
+(download, resize in memory, upload) and a standalone batch script processes the
+existing local library. EXIF is stripped except orientation, and
+`DateTimeOriginal` populates `photos.taken_at` so the gallery sorts by when a
+photo was taken rather than when it was imported.
+
+Alternative considered: upload originals and pay for the Pro tier now. Rejected
+as premature — originals stay in OneDrive, which is already backed up, so
+regenerating larger derivatives later costs a re-run and nothing else.
+
+**Accepted consequence:** 1600px is right for decks and social and wrong for
+print, so a brand cannot pull a print-resolution file from the portal. Revisit
+if one asks; the originals still exist.
+
+This adds **Pillow**, a new dependency. Justified on the same grounds as D8: the
+alternative is hand-rolled image decoding, which is not a 30-line job, and it
+touches only local tooling — the deployed site still has no dependencies at all.
+
+---
+
+**D17 — The sync writes `notes` only, and never `brand_visible_summary`.** ✅ operator-confirmed 18 Aug 2026
+
+The two columns exist so internal candour can never be published to a client by
+accident. HubSpot note bodies are internal writing and go to `notes`; the
+brand-facing summary is written by a human and stays under human control. An
+importer that filled both would collapse the distinction the schema was built to
+enforce.
+
+**Known consequence, and it is currently visible.** `v_brand_activity_log`
+exposes `brand_visible_summary as summary`, and `activity.html` renders it under
+a "Notes" heading. Nothing populates it, so all 942 rows show a blank column
+today. Writing those summaries is a Phase 5 admin screen. Until then the column
+should be dropped from the UI rather than shown empty — logged as presentation
+work, not fixed here.
+
+---
+
+**D18 — Password reset ships as static HTML, split out of Phase 5.** ✅ operator-confirmed 18 Aug 2026
+
+PROGRESS listed password reset as Phase 5 work because that is where account
+management lives. But Supabase does this with `resetPasswordForEmail()` plus one
+new page, and it is the item gating real brand logins. Tying it to the Streamlit
+admin would have made the smallest blocker wait on the largest build.
+
+Alternative: build it inside the admin as originally planned. Rejected — same
+result, months later.
+
+---
+
+**D19 — Build order resequenced: all data in, then analysis, then presentation.** ✅ operator-directed 18 Aug 2026
+
+The operator's call, and the reason is sound: the build was moving to new
+features while the foundation was incomplete. The order is now
+
+1. **Everything in** — sync deals, notes, photos, city/market, then reconcile
+   against HubSpot.
+2. **Analysis** — purpose-built views for the questions actually asked monthly,
+   chosen by the operator rather than guessed.
+3. **Presentation** — sorting, clickable rows, and dropping columns that carry
+   no data.
+
+This supersedes the phase ordering in `PORTAL_PLAN.md` for sequencing only; no
+phase's content changes.
+
+---
+
+**D20 — `consent_confirmed` gates the public gallery, not viewing inside the portal.** ⚠️ awaiting operator ruling
+
+Neither the `photos_select` RLS policy nor `photos.html` filters on
+`consent_confirmed`, which defaults to `false`. That is harmless at zero photos
+and stops being harmless the moment the sync runs.
+
+Reading taken: the portal is private and brand-scoped, and a brand seeing a
+photo of its own activation is not publication. The constraint carried over from
+`GALLERY_PLAN.md` is about publishing identifiable people to the **public**
+gallery, which is what `consent_confirmed` should gate.
+
+Recorded as an assumption rather than a decision because it concerns
+identifiable people. If the operator rules the other way, the fix is a `where
+consent_confirmed` in the policy, not in the JavaScript.

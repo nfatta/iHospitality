@@ -7,6 +7,16 @@ portal works end to end** against the live Supabase project — a brand logs in
 and sees only their own activity, venues and dashboard. 942 activities across 11
 brands and 297 venues are loaded.
 
+**As of 18 Aug 2026 the build order is resequenced (D19): all data in, then the
+analysis views, then presentation.** Work in flight is Stage 1 — Phase 3's sync,
+starting with deals.
+
+| Stage | What | State |
+|---|---|---|
+| 1 — Everything in | sync deals, notes, photos + optimizer, city/market, reconcile vs HubSpot | in progress |
+| 2 — Analysis | purpose-built views for the questions asked monthly | needs the operator's list of questions |
+| 3 — Presentation | staff brand column, sorting, clickable rows, drop empty columns | not started |
+
 Not yet done: Phase 3 (the HubSpot sync script — the data is currently a
 one-time seed), Phase 5 (Streamlit admin), Phase 6 (field entry and cutover).
 
@@ -225,28 +235,104 @@ real brands are onboarded**:
 **Repos.** Website repo is on branch `portal-v1`, 8 commits ahead of `main`,
 pushed. `Hubspot/portal_seed/` is a separate local repo, 2 commits, no remote.
 
+## Session of 18 Aug 2026 — what a fresh read found
+
+**The Supabase project had paused itself.** Free tier pauses after 7 days idle;
+the last activity was 10 Aug. It presents as a DNS failure on both the DB and
+API hostnames, which looks like a broken `DATABASE_URL` and is not — see D15 for
+how to tell the difference in thirty seconds. The operator restored it; every
+count and the full grant/RLS posture came back intact.
+
+**Baseline re-verified before any new work**, all green:
+`bash db/test/run.sh` (anon 0 grants, authenticated 0 write grants, 11 SELECT),
+`python -m pytest test_normalize.py -q` (35 passed), `python verify_live.py`
+(942 activities, 297 venues, 11 brands, 0 photos).
+
+### Bug found: the staff dashboard repeats every month, unlabelled
+
+Reported by the operator from the `phil@ihospitality.vip` login: June appeared
+four times, then May four times, with nothing indicating which brand each row
+belonged to.
+
+**Cause.** `v_brand_monthly_summary` returns one row per *(brand, month)*.
+`renderMonths()` in `portal/index.html` renders one table row per view row with
+a Month column and no brand column. Under RLS a brand user sees exactly one
+brand, so it looks correct; staff see all 11, so each month repeats once per
+brand with activity that month. Four brands had June 2026 activity — hence four
+Junes.
+
+**It is not only the missing label.** The stat cards above that table are also
+wrong for staff: "Activities in [month]" reads `data[0]`, which is one arbitrary
+brand's month rather than the total across brands, and the displayed date range
+reads the last row instead of the true minimum.
+
+**Root cause, stated plainly:** the portal was designed as one-user-one-brand,
+and the staff role was added later for a remote demo without a matching UI. Fix
+belongs in Stage 3 (D19); the operator was offered it earlier and it stays in
+Stage 3 unless that changes.
+
+### New data found in `Hubspot/`, dated after the portal was built
+
+- **`hubspot-crm-exports-all-companies-2026-08-13.csv`** — 465 companies, **447
+  carrying a City**, 241 a Type. This is the city/market data open item 5 says
+  does not exist. It also generalizes something currently hardcoded:
+  `Type == 'Brand'` marks 22 companies where `normalize.py` hardcodes 5 brand
+  company IDs by hand.
+  **Caveat:** the cities do not fit the two-market enum cleanly. Orlando (71),
+  Sanford, Winter Park, Oviedo, Clermont and Kissimmee are Central Florida;
+  Boynton Beach, Delray Beach, West Palm Beach and Boca Raton are Palm Beach
+  County. But Melbourne (38), Cocoa Beach (13), Palm Bay and Satellite Beach are
+  Brevard, and Tampa (14), Miami Beach (7), Jacksonville (5) and Port St Lucie
+  (5) are neither market. Roughly 90 venues have no legal `market` value;
+  `market` stays NULL for those pending a ruling. The City column also has
+  whitespace duplicates ("Melbourne" 23 + "Melbourne " 15).
+
+- **`July/July_2026.csv` and `Reference.csv`** are **not** HubSpot exports —
+  schema is `Contractor, Date, Brand, Account, City, Buyer, Rep, Backbar, Qty,
+  Opportunity, Expense, Images, Notes`, with no `Record ID`. Alongside them,
+  `automate_hurry/monthly_invoice.py` (13 Aug). The seed safely ignores all of
+  these: `load_rows()` skips any CSV without a `Record ID` column, so nothing has
+  drifted. The operator confirmed 18 Aug that **HubSpot is still the source of
+  record for now**, so Phase 3 proceeds — but this format is the likely shape of
+  the eventual replacement importer.
+
+---
+
 ## Open items for the operator
 
-1. **Delete the two test logins before real brands are onboarded.**
+1. ~~Delete the two test logins.~~ **Deferred 18 Aug** — they are the only way
+   to re-verify RLS in a browser, so they stay until Stage 1 is verified. Still
+   must go before real brands are onboarded.
    `python create_portal_user.py --delete --email test-bluerun@example.com`
 2. **Merge or close PR #1.** Merging puts the portal on `ihospitality.vip`;
-   closing takes the demo preview down.
+   closing takes the demo preview down. Note the preview stayed live and broken
+   through the 10–18 Aug database pause (D15).
 3. **`All Brands` (20 activities) and `iHospitality` (16)** are loaded as brands.
    Neither looks like a real client — decide whether to retire or merge them.
    There is no brand-merge function yet (the equivalent exists only for activity
    types), so this needs either a decision to build one or a manual fix.
+   *Raised again 18 Aug, still unanswered; it will resurface in Stage 2.*
 4. **11 activity types are flagged for review** — `recurring_case` (51
    activities) is the big one. `python verify_live.py` lists them.
-5. **No city or market data exists** on any venue — the HubSpot exports carry
-   neither, so those columns and the market filter stay hidden until something
-   fills them in. Populating `venues.market` is also what makes the
-   two-market positioning visible to brands.
-6. **No password reset flow.** A user who loses their password cannot self-serve;
-   an admin must re-create the account or reset it in the Supabase dashboard.
-   Build before real brands get logins — belongs with Phase 5.
+5. ~~No city or market data exists.~~ **Unblocked 18 Aug** — the 13 Aug companies
+   export carries a City for 447 of 465 companies, and the operator approved
+   loading it. Scheduled as Stage 1d. **Ruling still needed** on the ~90 venues
+   whose city is in neither market (Brevard, Tampa, Miami, Jacksonville,
+   Port St Lucie); those keep `market` NULL until then.
+6. ~~No password reset flow.~~ **Split out of Phase 5 on 18 Aug (D18)** — ships
+   as static HTML using `resetPasswordForEmail()`. Still required before real
+   brands get logins.
 7. **Photos are entirely empty.** `photos.html` renders its empty state
-   correctly, but nothing populates that table until Phase 3 brings the HubSpot
-   attachment download across.
+   correctly, but nothing populates that table until Stage 1c brings the HubSpot
+   attachments across, resized per D16.
+8. **The staff dashboard is wrong** — months repeat once per brand with no brand
+   column, and its stat cards show one arbitrary brand's figures. Detail in the
+   18 Aug session notes above. Queued for Stage 3.
+9. **Stage 2 needs your questions.** Which three or four analyses would you
+   actually look at monthly? Building generic views instead of the ones you use
+   is the main way this stage gets wasted.
+10. **Consent ruling (D20).** Confirm that `consent_confirmed` gates the public
+    gallery rather than viewing inside the private portal, before photos load.
 
 ## Not started
 
