@@ -898,14 +898,25 @@ Imported 13 rows — **57 bottles, 19 pods, $7,973.30** — across April to July
 2026. Dame Mas now shows 11 bottle reorders and 2 bottle sales where it
 previously showed no repeat business at all.
 
-**Five rows are deliberately skipped**, their venues not yet identified in the
-portal: O-Ku, Pescado Seafood Grill, Eden Lounge, Rachels World Class Mens Club,
-and Executive Cigar Shop & Lounge (Sanford).
+**Update, same day:** the Sanford location was **bought out and now trades as
+Barrel & Blend**, which was already in the portal with six activities against it
+— including two Dame Mas visits in April and May 2026. Mapped onto it, so one
+premises' history stays in one place rather than splitting across its old and
+new trading names. That row (24 bottles, 2 pods, **$3,933** — the file's largest)
+imported as a *sale* rather than a reorder, correctly: Dame Mas's earlier visits
+there were an Account Visit and a Tasting Event, neither a depletion.
 
-**Those five carry $8,604 — more than half the file's $16,577.30**, including
-the two largest single rows: Executive Cigar Sanford at $3,933 and Eden Lounge
-at $2,458.50. Any Dame Mas revenue figure is materially understated until they
-are resolved. `--create-venues` loads them once the names are settled.
+**Four rows remain skipped**, their venues not yet identified: O-Ku, Pescado
+Seafood Grill, Eden Lounge, Rachels World Class Mens Club.
+
+Position now: **$11,906.30 of $16,577.30 imported**, 21 pods, 73 bottles.
+**$4,671.00 still missing** — Eden Lounge $2,458.50, Rachels $1,966.50, and the
+two Inlet Beach venues at $123 each. `--create-venues` loads them once the names
+are settled.
+
+The Executive Cigar pair is a good illustration of why fuzzy matching is refused
+here: two venues sharing a trading name, in different cities, only one of which
+was sold, and the sold one now answering to a third name entirely.
 
 Skipping rather than creating is the reversible choice: three of the first eight
 unmatched names turned out to exist under another spelling — "Gleneagles" missed
