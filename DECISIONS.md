@@ -1114,3 +1114,46 @@ Dog Cantina"). If those are what the depletion report bills, charging them
 separately would double-count against the 10% commission — so they stay unpriced
 until the operator rules, which is the safe direction. The other 18, across four
 brands, look like ordinary case sales.
+
+---
+
+**D51 — `account sold` is a placement, not a billing event. It was never going to reconcile.** ✅ established 18 Aug 2026
+
+The operator asked whether the `account sold` rows line up with the monthly
+commission on the Dame Mas invoice recaps. Tested across all thirteen months
+those recaps cover (Jul 2025 – Jul 2026) by dividing each month's implied gross
+(commission × 10) by that month's `account sold` units. A plausible answer would
+land between the two known bottle prices, $123.00 and $210.75.
+
+**Eleven of thirteen months do not.** Implied unit prices run to $933 (Oct
+2025), $1,364 (Jun 2026) and $2,401 (Apr 2026), and July 2026 was billed $21.08
+with **no `account sold` rows at all**.
+
+April 2026 settles it, because both sources exist for that month: the depletion
+summary lists **10 venues and 59 bottles**, while HubSpot holds **3 account-sold
+events totalling 4 units**.
+
+So the two record different things. **`account sold` is a new placement** — an
+account being sold into. **Commission is billed off the monthly depletion
+report**, every bottle moved across every account. They were never the same
+number.
+
+Two consequences:
+
+1. **Do not price Dame Mas `account sold` at a case rate.** It would not match
+   the invoice and would double-count against the 10%. Leaving those 56
+   activities unpriced was correct, not a gap to close.
+2. **The depletion summaries are the only billing source**, and four of thirteen
+   months exist. Missing: Jul 2025 – Mar 2026, worth **$2,307.75** of 2025
+   commission plus **$1,020.53** across Jan–Mar 2026.
+
+The operator's own test still applies in the other direction: a venue with an
+`account sold` and no line in that month's depletion summary is worth
+questioning. Of the 8 rows inside the Apr–Jul 2026 window, 6 appear on the
+summary and **2 do not** — City Dog Cantina (30 Apr) and Star Liquors VII
+(26 May).
+
+**Method worth reusing:** the check that settled this was dividing money by
+something physical. A commission total alone is unfalsifiable; a commission
+implying $2,401 a bottle is obviously wrong. Same technique caught the gross-vs-
+commission ambiguity in D44.

@@ -602,7 +602,25 @@ Stage 3 unless that changes.
 
 **Ordered by what they cost. The first three block money figures.**
 
-### 1. Dame Mas `account sold` — 56 activities, the largest single gap
+### 1. Dame Mas depletion summaries — 9 months missing, $3,328 of commission
+
+**Resolved 18 Aug: `account sold` is NOT the billing basis (D51).** Tested
+across all 13 months of the invoice recaps — 11 do not reconcile, with implied
+unit prices up to $2,401 against real bottle prices of $123–$210.75. April
+proves it: the depletion summary has 10 venues and 59 bottles where HubSpot has
+3 account-sold events and 4 units. They record different things — a placement
+versus every bottle depleted that month.
+
+So those 56 activities stay unpriced by design, and **what is actually needed is
+the depletion summaries for Jul 2025 – Mar 2026**: $2,307.75 of 2025 commission
+plus $1,020.53 across Jan–Mar 2026. `import_bottle_sales.py` already reads that
+format; it needs the files and their section-to-month order.
+
+Still worth a look, from the operator's own test in the other direction: two
+in-window `account sold` rows have no line on the summary — City Dog Cantina
+(30 Apr) and Star Liquors VII (26 May).
+
+### 1b. Superseded — the original framing of the above
 
 The operator's rule: *"for Dame Mas, any place we don't have case sold but have
 account sold, the summary report should show that."* Checked, and the answer
