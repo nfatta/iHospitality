@@ -488,3 +488,41 @@ covers the group, and writing one line per photo forever does not scale.
 Staff browsing is month first, then a brand filter inside the month, matching
 how the activity table is meant to navigate. Clicking a photo through to its
 activity page is wanted but explicitly deferred by the operator.
+
+---
+
+**D27 — Expense-pipeline deals are flagged, and their attachments never reach the gallery.** ✅ operator-directed 18 Aug 2026
+
+Late but decisive instruction from the operator: *"we should not be taking
+photos that are listed on the expense pipeline."* HubSpot runs two deal
+pipelines — "Client Acquisition" (1,071 deals, the field work this portal
+exists to show) and **"Expense"** (id `890766181`, 5 deals). Attachments on
+expense deals are **receipts**: card digits, totals, unrelated line items.
+Internal financial paperwork, not proof of work.
+
+**This was caught before any damage, but only just.** All 5 expense deals were
+already loaded as activities, and the photo pipeline had no notion of a
+pipeline at all. The first live photo run happened to cover August while the
+expense deals fall in April and July, so nothing was imported — luck, not
+design. The full backfill would have pulled every receipt into brand-facing
+galleries.
+
+Built as `activities.is_expense`, derived at sync time from the `pipeline`
+property. Two deliberate choices:
+
+- **Flagged, not filtered out at import.** The expense rows are still real
+  activity ("44 North @ Prime Catch - prizes or contest") and discarding them
+  would lose the record. Only their *photos* are refused.
+- **Excluded in `fetch_activities()`'s SQL, not at the download step.** Filtering
+  at the source query means no later mistake in `sync_photos.py` can reach a
+  receipt: it is never listed, never downloaded, never optimised, never
+  uploaded.
+
+An unknown or missing pipeline resolves to `is_expense = false`, tested
+explicitly. That failure direction is deliberate: wrongly including a normal
+deal is visible in the gallery, wrongly excluding one is silent.
+
+**Still open for the operator:** those 5 expense activities remain visible to
+brands in the activity log, since the ruling covered photos only. "44 North @
+Prime Catch - prizes or contest" may be legitimate proof of work, or may be
+something billed to the brand and better hidden. Needs a ruling.
