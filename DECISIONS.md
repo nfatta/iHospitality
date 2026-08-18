@@ -378,3 +378,40 @@ notices, because every individual figure looks reasonable.
 Five types still await a ruling: `aspen_green_fresh_market_incentive` (9),
 `unclassified` (8), `promo_specialist` (1), `single_barrel_sale` (1),
 `5l_barrel` (1).
+
+---
+
+**D23 — The blank-brand deals are archived on purpose, and the portal is now the better record of them.** ✅ operator-explained 18 Aug 2026
+
+The backfill skipped 80 deals for having no `brand` property, 75 of which exist
+in the database with a correct brand carried over from the CSV exports. The
+worklist built to "fix" them in HubSpot was **the wrong recommendation** and is
+withdrawn.
+
+Operator's explanation: those deals were **archived in HubSpot, and the brand had
+to be removed from the deal before it could be archived.** The blank field is the
+consequence of a deliberate action, not a data-entry lapse. Refilling it would
+fight the archiving workflow — and the shape of the data agrees, since the
+affected deals cluster on brands that have gone quiet (Starr Rum's last activity
+is 17 Dec 2025, Heavens Door's 6 Aug 2025).
+
+**Three consequences worth stating.**
+
+1. **Do not refill those fields.** `hubspot_missing_brand_worklist.csv` should be
+   ignored for the 75 known rows. The 5 unknown ones are probably archived Starr
+   Rum deals on the same reasoning, and are the only entries still worth a look.
+
+2. **The portal now holds history HubSpot has deliberately discarded** — which is
+   the first concrete instance of the plan's stated goal, that this becomes
+   iHospitality's own system of record rather than a HubSpot mirror. The CSV
+   exports captured a brand attribution that the live API can no longer supply.
+
+3. **Those 75 rows are now irreplaceable and must be protected.** The sync only
+   inserts and updates, never deletes, so a normal run cannot harm them. But
+   `seed_from_csv.py --truncate` would wipe them and no re-run from the API could
+   restore them. **Treat `--truncate` as destructive from this point on**; it was
+   merely inconvenient before.
+
+Open question left with the operator: `brands.is_active` exists and every brand
+is currently `true`. Starr Rum and Heavens Door look dormant rather than active.
+Marking them would keep them out of admin pickers without deleting any history.
