@@ -627,6 +627,24 @@ real placements from mis-typed visits mechanically across the remaining 48 rows.
 `account sold` is being retired, so this is historical cleanup — but the 74 rows
 still need classifying before any Dame Mas revenue figure is trustworthy.
 
+**The workbooks the operator supplied at the close of 18 Aug (D53) close most of
+this.** `Dame Mas 2026.xlsx` has a sheet per month for **Aug 2025 – Jul 2026**
+with venue, quantity and activity type — the detail that was missing. Before
+importing, three faults in the file need fixing at source:
+
+- **DECEMBER is an exact copy of NOVEMBER**, so December 2025 is absent while the
+  invoice bills $377.65 for it.
+- **The 2025 sheets use a different column layout** (8 columns, not 6) with note
+  text where the activity type sits in the 2026 sheets.
+- **NOVEMBER's type column holds quantities**, not types.
+
+`Dame Mas 2025 Activity Report.xlsx` was locked open in Excel and could not be
+read.
+
+**Star Liquors VII is resolved:** its note says the owner *"committed to a case
+of each, to be bought tomorrow"* — a commitment logged as a sale before anything
+depleted. D52's method found it; the note explains it.
+
 ### 1b. Superseded — the original framing of the above
 
 The operator's rule: *"for Dame Mas, any place we don't have case sold but have

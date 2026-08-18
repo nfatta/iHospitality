@@ -1202,3 +1202,39 @@ Three things follow:
 3. **`account sold` is being retired** by the operator, so this is historical
    cleanup rather than an ongoing concern — but the 74 existing rows still need
    classifying before any Dame Mas revenue figure is trustworthy.
+
+---
+
+**D53 — The Dame Mas activity workbooks: what they close, and three problems in them.** 18 Aug 2026
+
+`Dame Mas 2026.xlsx` holds a sheet per month covering **Aug 2025 – Jul 2026** —
+most of the nine-month gap D51 identified. Columns are Date, Account, Notes,
+Qty, Opportunity, Images, and `Opportunity` carries the activity type. This is
+venue-and-type detail, which is exactly what was missing.
+
+**Star Liquors VII is confirmed, and the reason is better than "a mis-typed
+visit".** Its note reads: *"Met with Amish, Owner… He has committed to a case of
+each, **to be bought tomorrow**."* So it was a **commitment, not a completed
+sale** — logged as `account sold` before anything depleted, which is precisely
+why it appears on no depletion summary. D52's method found it; the note explains
+it. Whether it should be reclassified as a visit or as a sale in a later month
+is the operator's call, but it does not belong in May's revenue.
+
+**Three problems to fix in the workbook itself, none of them ours:**
+
+1. **The DECEMBER sheet is a byte-identical copy of NOVEMBER** — same 13 rows,
+   dated 4–20 Nov. December 2025 is therefore absent, yet the invoice recap bills
+   **$377.65** of commission for it. Real activity is missing from the file.
+2. **The 2025 sheets (AUGUST, SEPTEMBER, OCTOBER) use a different layout** — 8
+   columns rather than 6, with the column that holds the activity type in the
+   2026 sheets instead holding note text. Any importer must detect the layout per
+   sheet rather than assume one shape; reading them positionally would file long
+   sentences as activity types.
+3. **NOVEMBER's type column holds `1` and `2`** — quantities, not types. That
+   sheet carries no activity type at all.
+
+Casing is inconsistent throughout (`account sold` / `Account Sold`, `Account
+Visit` / `account visit`), which `normalize_activity_type` already handles.
+
+`Dame Mas 2025 Activity Report.xlsx` could not be read — the file is open in
+Excel and locked. Nothing was inferred from it.
