@@ -235,6 +235,34 @@ real brands are onboarded**:
 **Repos.** Website repo is on branch `portal-v1`, 8 commits ahead of `main`,
 pushed. `Hubspot/portal_seed/` is a separate local repo, 2 commits, no remote.
 
+### Photo backfill ✅ 18 Aug 2026 — 406 photos, 87% smaller
+
+`python sync_photos.py --limit 2000 --apply` over every non-expense activity.
+
+| | |
+|---|---|
+| activities scanned | 1,065 (1,070 less the 5 expense) |
+| attachments found | 425 |
+| loaded | **406** |
+| bytes before → after | **934 MB → 119 MB (87.3% saved)** |
+| duplicate images skipped | 12 |
+| undecodable | 6 |
+
+Every attachment is accounted for: 406 + 12 + 6 = 424, plus one duplicate
+removed by hand during the content-hash backfill.
+
+**The 6 failures are `.heic` — iPhone photos.** Pillow cannot decode HEIC
+without `pillow-heif`. These are real photos that did not import, and the
+problem grows as more people shoot on iPhones. Adding that dependency is the
+fix; not yet done, awaiting the operator.
+
+Idempotency confirmed after the fact: a full dry run reports 407 already
+present and 0 to download.
+
+`sync.py` now wraps both steps into one command — see D31.
+
+---
+
 ### Full backfill, June 2025 → August 2026 ✅ 18 Aug 2026 — operator-approved
 
 15 months synced month by month. **942 → 1,070 activities, 297 → 349 venues**,
