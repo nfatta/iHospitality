@@ -235,6 +235,27 @@ real brands are onboarded**:
 **Repos.** Website repo is on branch `portal-v1`, 8 commits ahead of `main`,
 pushed. `Hubspot/portal_seed/` is a separate local repo, 2 commits, no remote.
 
+### Stage 1a run against Supabase ✅ 18 Aug 2026 — operator-approved
+
+`python sync_hubspot.py --month 2026-06 --apply` against production.
+
+**Result: 0 inserted, 103 updated.** Every June deal matched an existing row by
+`hubspot_deal_id`. Totals before and after are identical — 942 activities, 297
+venues, 11 brands, 103 in June — with 0 duplicate deal ids and exactly 103 rows
+carrying a new `updated_at`. The 508 seed-loaded `notes` survived untouched,
+which is the check that proves a deals-only slice does not clobber the CSV
+path's work, and `brand_visible_summary` is still 0 rows (D17).
+
+This is the strongest form of the reconciliation: the API and the CSV export
+independently produced the same 103 activities with the same per-brand split.
+
+One visible effect worth knowing: the sync also updates `activity_type_id` from
+HubSpot's current value, so one activity moved from `tap_with_labor` to
+`tap_cocktail` — a stale CSV value corrected by the live source. That is the
+intended direction of authority while HubSpot remains the system of record.
+
+---
+
 ### Stage 1a — deal sync ✅ 18 Aug 2026
 
 `Hubspot/portal_seed/sync_hubspot.py` (+ `test_sync.py`, 27 tests). Commit
