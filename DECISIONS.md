@@ -415,3 +415,76 @@ is 17 Dec 2025, Heavens Door's 6 Aug 2025).
 Open question left with the operator: `brands.is_active` exists and every brand
 is currently `true`. Starr Rum and Heavens Door look dormant rather than active.
 Marking them would keep them out of admin pickers without deleting any history.
+
+---
+
+**D24 — The HubSpot deal name is the brand-facing summary.** ✅ operator-ruled 18 Aug 2026
+
+`brand_visible_summary` was empty on all 1,070 activities, leaving the activity
+log's Notes column blank and giving photos no context. The plan was a Phase 5
+screen for writing summaries by hand. The operator's ruling removes the need:
+**the deal name already says what happened** — "sold in a case of 44 North to
+liquor store" needs no second sentence written on top of it.
+
+The deal name was being requested from the API and thrown away; `activities` had
+no column for it. Added `activities.title`, populated by the sync, and
+`v_brand_activity_log.summary` is now
+`coalesce(brand_visible_summary, title)` — so a hand-written summary still wins
+where one exists, and the portal does not need to know which it got.
+
+**Audited before adopting it**, because this puts internal text in front of
+clients: 400 names from 2026 — none blank, none mentioning price, comps or
+discounts, none negative, mean length 31 characters. Ten name a person at the
+account ("Account Visit w/ Hunter BM"), flagged to the operator as their call.
+
+The distinction that makes this safe: a deal **name** is written to be read by
+whoever opens the record, while a note **body** is written candidly. Only the
+former is safe to publish. `notes` stays internal (D17).
+
+Coverage is 995 of 1,070. The 75 without a title are exactly the archived deals
+from D23, which independently confirms that finding. Their names do exist in the
+CSV exports if backfilling them is ever wanted.
+
+---
+
+**D25 — Photos are deduplicated by content hash, scoped per activity.** ✅ operator-approved 18 Aug 2026
+
+`hubspot_file_id` stops one file importing twice but cannot stop the same
+photograph being uploaded to HubSpot as two files and attached to two notes on
+one deal. That is not hypothetical: of the first five photos imported, **only
+four were distinct images**.
+
+`photos.content_hash` holds a SHA-256 of the **optimized** bytes, not the
+original — two HubSpot files can differ byte-for-byte while being the same
+photograph, and optimisation normalises them to identical output, so hashing the
+source would miss exactly the duplicates worth catching.
+
+The unique index is on `(activity_id, content_hash)` rather than the hash alone:
+two different activities legitimately sharing an image (a product shot used at
+two venues) is not an error, while the same image twice on one activity always
+is. Backfilling the hash over the existing five rows made the index reject the
+duplicate immediately; that row and its storage object were removed.
+
+---
+
+**D26 — Photos are organised by activity, never as an undifferentiated wall.** ✅ operator-directed 18 Aug 2026
+
+Operator: *"I don't want all the photos just there without any kind of reason
+behind them."* Three defects underneath that instinct, all confirmed:
+
+1. **The gallery sorts by a column that is always empty.** `photos.html` orders
+   by `taken_at`, and every HubSpot photo has `taken_at` NULL — HubSpot's file
+   tool strips EXIF on ingest, so the shutter time is gone before we see it
+   (every sampled photo came back exactly 1200×1600 with no metadata). The order
+   is therefore arbitrary. It must sort by the activity's date.
+2. **Duplicates would appear** — fixed by D25.
+3. **Nothing supplied the reason** — fixed by D24; a photo's context is its
+   activity's title, date, venue and type.
+
+Agreed shape: photos group under their activity, headed by date · venue ·
+activity type and the title. **No per-photo captions** — one line per visit
+covers the group, and writing one line per photo forever does not scale.
+
+Staff browsing is month first, then a brand filter inside the month, matching
+how the activity table is meant to navigate. Clicking a photo through to its
+activity page is wanted but explicitly deferred by the operator.
