@@ -294,7 +294,7 @@ phase's content changes.
 
 ---
 
-**D20 — `consent_confirmed` gates the public gallery, not viewing inside the portal.** ⚠️ awaiting operator ruling
+**D20 — `consent_confirmed` gates the public gallery, not viewing inside the portal.** ✅ operator-confirmed 18 Aug 2026
 
 Neither the `photos_select` RLS policy nor `photos.html` filters on
 `consent_confirmed`, which defaults to `false`. That is harmless at zero photos
@@ -305,6 +305,76 @@ photo of its own activation is not publication. The constraint carried over from
 `GALLERY_PLAN.md` is about publishing identifiable people to the **public**
 gallery, which is what `consent_confirmed` should gate.
 
-Recorded as an assumption rather than a decision because it concerns
-identifiable people. If the operator rules the other way, the fix is a `where
-consent_confirmed` in the policy, not in the JavaScript.
+**Operator ruling 18 Aug:** consent for every photo iHospitality uploads is
+already covered by the terms and agreement signed for events and by employees.
+So the portal needs no consent gate, and the sync sets `consent_confirmed = true`
+on import rather than leaving the column's `false` default to be cleared by hand
+on thousands of rows.
+
+The column stays, with its meaning inverted in practice: `true` is the normal
+state, and setting one to `false` is how a specific photo gets held back from
+the public gallery — a bad shot, or someone who objects after the fact. That is
+worth keeping, because it is the only per-photo control there is.
+
+One case the blanket agreement does not obviously cover is a member of the
+public caught in the background of an event photo, who signed nothing. That is
+the operator's call to make, not a technical constraint; noting it here so the
+question is on the record rather than assumed away.
+
+---
+
+**D21 — `recurring_case` is a reorder, and it was silently excluded from every units figure.** ✅ operator-ruled 18 Aug 2026
+
+Asked what `recurring_case` was, the operator answered: **the venue reordered a
+case; `case_sale` is the initial sale.** So the two are genuinely distinct and
+must not be merged — the difference between winning an account and keeping one
+is the most commercially meaningful distinction in the dataset.
+
+The data did not reflect that. `case_sale` carried `is_depletion = true` and
+`recurring_case` carried `false`. `v_brand_monthly_summary` computes
+`units_moved` as `sum(quantity) filter (where t.is_depletion)`, so **51 reorders
+— 5% of all activity, and the repeat business — were excluded from every
+units-moved figure the portal has ever shown.** Corrected to `true`, and the
+label changed from the auto-generated "Recurring Case" to "Case Reorder".
+
+Measured effect on the live database: `units_moved` across all months went
+**375 → 466**. The 91 units break down as 89 from the 51 reorders and 2 from the
+tap merge below.
+
+**Left undone deliberately.** `sync_brand_venue_status()` advances a venue to
+`placed` on any depletion activity, so a reorder now advances it to `placed`
+rather than to `reordering` — and `account_status_enum` has had a `reordering`
+value sitting unused since Phase 1. Making reorders drive it is the obvious
+next step and it changes D7's trigger, so it waits for a ruling rather than
+being slipped in alongside a taxonomy fix.
+
+---
+
+**D22 — Five activity types merged; the vocabulary is now 21 active, not 26.** ✅ operator-ruled 18 Aug 2026
+
+The exports carried near-duplicate types that would have quietly skewed every
+Stage 2 pivot — "how many tasting events" answered 35 when the true figure was
+37. Operator ruling: `tap_maintenance` is a genuinely different activity, the
+other three tap types are one thing, and the remaining pairs are duplicates.
+
+| merged | into | activities moved |
+|---|---|---|
+| `tasting_event_split` | `tasting_event` | 2 |
+| `day_buy_out_comp` | `day_buyout` | 1 |
+| `barrel_prep_charge` | `barrel_prep` | 1 |
+| `tap_cocktail` | `tap_placement` | 2 |
+| `tap_with_labor` | `tap_placement` | 0 |
+
+Run through `merge_activity_type()`, which moves the activities *and* the
+aliases and then retires the source rather than deleting it — so re-importing an
+old HubSpot spelling follows the merge instead of resurrecting the type, and the
+foreign keys never break. Verified after: 942 activities unchanged, 0 orphans,
+review queue down from 11 to 5.
+
+**Done before Stage 2, not after, and that ordering is the point.** Analysis
+built on an unmerged taxonomy produces numbers that are wrong in a way nobody
+notices, because every individual figure looks reasonable.
+
+Five types still await a ruling: `aspen_green_fresh_market_incentive` (9),
+`unclassified` (8), `promo_specialist` (1), `single_barrel_sale` (1),
+`5l_barrel` (1).

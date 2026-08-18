@@ -235,6 +235,25 @@ real brands are onboarded**:
 **Repos.** Website repo is on branch `portal-v1`, 8 commits ahead of `main`,
 pushed. `Hubspot/portal_seed/` is a separate local repo, 2 commits, no remote.
 
+### Taxonomy cleanup ✅ 18 Aug 2026 — done before Stage 2, deliberately
+
+Five merges run against the live database (D22), and `recurring_case` corrected
+rather than merged (D21). Active activity types **26 → 21**; review queue
+**11 → 5**; activities unchanged at 942 with 0 orphans.
+
+**The headline number changed.** `recurring_case` is a *reorder*, and its
+`is_depletion = false` had been excluding 51 activities from every units figure
+the portal shows. `units_moved` across all months: **375 → 466**, of which 89
+units are the reorders and 2 the tap merge.
+
+Still flagged, awaiting a ruling: `aspen_green_fresh_market_incentive` (9),
+`unclassified` (8), `promo_specialist` (1), `single_barrel_sale` (1),
+`5l_barrel` (1). The 8 unclassified are blank Activity Type cells in HubSpot;
+the plan is to fill them in HubSpot and re-sync, as a live test that the
+HubSpot→portal loop closes.
+
+---
+
 ### Stage 1a run against Supabase ✅ 18 Aug 2026 — operator-approved
 
 `python sync_hubspot.py --month 2026-06 --apply` against production.
