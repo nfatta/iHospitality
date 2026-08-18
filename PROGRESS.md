@@ -7,15 +7,30 @@ portal works end to end** against the live Supabase project — a brand logs in
 and sees only their own activity, venues and dashboard. 942 activities across 11
 brands and 297 venues are loaded.
 
-**As of 18 Aug 2026 the build order is resequenced (D19): all data in, then the
-analysis views, then presentation.** Work in flight is Stage 1 — Phase 3's sync,
-starting with deals.
+**Build order was resequenced 18 Aug (D19): all data in, then analysis, then
+presentation.** Stages 1 and 2 are complete; Stage 3 is most of the way there.
 
 | Stage | What | State |
 |---|---|---|
-| 1 — Everything in | sync deals, notes, photos + optimizer, city/market, reconcile vs HubSpot | in progress |
-| 2 — Analysis | purpose-built views for the questions asked monthly | needs the operator's list of questions |
-| 3 — Presentation | staff brand column, sorting, clickable rows, drop empty columns | not started |
+| 1 — Everything in | deals, taxonomy, titles, photos, cities, expense exclusion | ✅ done |
+| 2 — Analysis | activity mix, venue performance, city summary, money views | ✅ done |
+| 3 — Presentation | dashboard, activity, venues, gallery, business page | mostly done — program summary outstanding |
+
+**Live as of end of 18 Aug 2026:** 1,088 activities · 353 venues · 412 photos ·
+11 brands (5 active) · 353 rate-card rows · cities on 317 venues.
+
+Everything is pushed to `portal-v1`. **`ihospitality.vip` is still untouched** —
+only merging [PR #1](https://github.com/nfatta/iHospitality/pull/1) changes that.
+
+### Pick this up here
+
+Run `python sync.py --apply` in `Hubspot/portal_seed/` to bring HubSpot in.
+Then read D42–D50 in `DECISIONS.md` — the money model is the newest and least
+settled part of the build.
+
+**The one number to trust as a canary:** Dame Mas commission reconciles to the
+operator's invoice recap for all four months of Apr–Jul 2026 (April by a cent,
+per-row rounding). If that stops matching, something upstream broke.
 
 Not yet done: Phase 3 (the HubSpot sync script — the data is currently a
 one-time seed), Phase 5 (Streamlit admin), Phase 6 (field entry and cutover).
@@ -234,6 +249,76 @@ real brands are onboarded**:
 
 **Repos.** Website repo is on branch `portal-v1`, 8 commits ahead of `main`,
 pushed. `Hubspot/portal_seed/` is a separate local repo, 2 commits, no remote.
+
+### Stage 3 + the money model ✅ 18 Aug 2026 — the long afternoon
+
+Six pieces, in the order they happened. Full reasoning in D29–D50.
+
+**Presentation.** The staff dashboard showed August as "3 activities" when it
+was 29 — one row per (brand, month) with no brand column. `v_monthly_summary`
+groups by month alone and serves both audiences through `security_invoker`
+(D29). Tables sort, months drill into the activity log, and the gallery was
+rebuilt around the activity that produced each photo (D26/D32) — it had been
+sorting on `taken_at`, which is NULL for all 412 photos.
+
+**Cities without markets (D33).** The operator's call: *"it shouldn't matter if
+in or out of market. We are in the midst of expanding so let's not cap
+ourselves."* 317 venues have a city; `market` is NULL everywhere and the enum is
+left unused. 64 venues sit in cities the old two-market rule would have thrown
+away.
+
+**The taxonomy/billing conflict (D34, D22, source_activity_type).** The rate card
+prices distinctions the taxonomy deliberately collapses — "tasting event",
+"tasting event N/C" and "Tasting Event Split" are $150, $0 and $100 but all
+resolve to `tasting_event`. Solved by storing the raw HubSpot string alongside
+the resolved type: analysis groups by the type, billing joins on the string.
+
+**The rate card (D42).** Two rates per line — `charge_rate` and `pay_rate` —
+because 44 North reorders bill the brand nothing yet still cost a contractor
+payment. Plus `charge_pct`/`pay_pct` for percentage deals. Staff-only, verified:
+a brand login sees 0 rows.
+
+**Dame Mas economics (D44).** `amount` is gross sales. iHospitality takes 10%,
+the contractor 80% of that (8% of sales), 2% is kept. Verified live at exactly
+10.00 / 8.00 / 2.00.
+
+**Bottle sales (D38/D41/D48).** 18 rows, 100 bottles, $16,577.30, imported
+through `import_bottle_sales.py` — the first data in the portal that never came
+from HubSpot, keyed on the new `activities.external_ref`.
+
+#### Where the money stands
+
+Current brands only:
+
+| brand | activities | unpriced | charged | cost | margin |
+|---|---|---|---|---|---|
+| 44 North | 344 | 13 | $10,357.10 | $5,470.00 | **$4,887.10** |
+| Wodka | 192 | 3 | $2,637.00 | $2,080.00 | **$557.00** |
+| Aspen Green | 62 | 5 | $1,185.00 | $385.00 | **$800.00** |
+| Dame Mas | 196 | 76 | $1,657.75 | $1,736.18 | **−$78.43** |
+| iHospitality | 19 | 3 | $0.00 | $160.00 | −$160.00 |
+
+Dame Mas reads negative only because 76 of its activities are unpriced — 56 of
+them `account sold`. It is a data gap, not a loss.
+
+#### Bugs this session, and how each was caught
+
+None came from a failing test. All five came from reading numbers.
+
+1. **The month boundary** — `closedate LTE '2026-06-30'` dropped every deal that
+   closed *during* the last day, 91 returned instead of 103. A subagent reported
+   it as "live drift"; it was not.
+2. **Supabase Storage returns HTTP 400 with the real status in the body** —
+   `"statusCode":"403"` for auth, `"409"` for a duplicate. Broke uploads, then
+   broke the resume path.
+3. **The single rate lookup** discarded every contractor pay rate, so cost read
+   $0 for all five brands that had charges and margin equalled revenue.
+4. **An upsert missing a column in its UPDATE half** — `source_activity_type`
+   stayed NULL through a run reporting "14 updated".
+5. **`create or replace view` matches columns by POSITION** — hit three separate
+   times; new columns must go at the tail, never mid-list.
+
+---
 
 ### Photo backfill ✅ 18 Aug 2026 — 406 photos, 87% smaller
 
@@ -514,6 +599,75 @@ Stage 3 unless that changes.
 ---
 
 ## Open items for the operator
+
+**Ordered by what they cost. The first three block money figures.**
+
+### 1. Dame Mas `account sold` — 56 activities, the largest single gap
+
+The operator's rule: *"for Dame Mas, any place we don't have case sold but have
+account sold, the summary report should show that."* Checked, and the answer
+splits by date:
+
+- **Inside the Apr–Jul 2026 summary window there are only 8.** Six are on the
+  bottle summary and so are already billed through the 10% commission — pricing
+  them again would double-count. **Two are not:** City Dog Cantina (30 Apr,
+  "Dame Mas Repo reorder at City Dog Cantina") and Star Liquors VII (26 May).
+  Those two are the candidates for being account visits.
+- **48 fall outside the window** and cannot be judged from the file at all.
+
+Note also: the summary lists "City Dog Cantina #2" while the account-sold row is
+against a plain "City Dog Cantina". Those may be two records for one venue.
+
+### 2. Dame Mas 2025 — $2,307.75 of commission the portal cannot see
+
+The 2025 recap gives monthly commission from July to December; the portal holds
+**no venue-level bottle data before April 2026**.
+
+| | Jul | Aug | Sep | Oct | Nov | Dec | total |
+|---|---|---|---|---|---|---|---|
+| commission | 375.90 | 375.75 | 175.65 | 653.30 | 349.50 | 377.65 | **$2,307.75** |
+| implied gross | 3,759 | 3,758 | 1,757 | 6,533 | 3,495 | 3,777 | **$23,077.50** |
+
+The 48 `account sold` rows in that period are almost certainly those same
+placements, recorded without the depletion numbers behind them. **The monthly
+account-sold summaries for Jul 2025 – Mar 2026 would close this**, and
+`import_bottle_sales.py` already reads that format — it needs the files and
+their section-to-month order.
+
+### 3. Rates still missing
+
+- **Starr Rum (63 activities)** — no rate card. To be archived, so possibly moot.
+- **`account sold` for the other four brands** — 18 activities across 44 North,
+  Blue Run, Wodka and Barmen 1873. They look like ordinary case sales.
+- **Contractor pay** exists for 7 activity types only. Anything else shows cost
+  $0, which understates it.
+- **Monthly retainers** ($975–$1,850, and $750 for Dame Mas) stay on the invoice
+  by decision — they are the largest revenue line and are absent from every
+  figure the portal shows.
+
+### 4. Smaller, and none of them blocking
+
+- **Password reset** (D18) still gates real brand logins. Static HTML, small.
+- **The 8 blank activity types** in HubSpot fix themselves on the next sync.
+- **The two test logins** — delete before onboarding real brands.
+- **`reordering` status** (D21): a reorder currently moves a venue to `placed`;
+  `account_status_enum` has had `reordering` unused since Phase 1.
+- **Merge PR #1** when the portal should go live.
+- **The Rusteak question** — Thornton Park was mapped onto "RusTeak - Managerie"
+  on the operator's word; if they are different locations, split them.
+
+### 5. Next build step
+
+The **program summary** — Activity / QTY / Rate / Total per brand per month, in
+the shape of the operator's spreadsheet. Deliberately paused: *"I want to ensure
+I have the data of everything I want to see."* It is a straightforward read off
+`v_activity_money` once the gaps above are settled.
+
+---
+
+## Superseded — resolved during 18 Aug
+
+
 
 1. ~~Delete the two test logins.~~ **Deferred 18 Aug** — they are the only way
    to re-verify RLS in a browser, so they stay until Stage 1 is verified. Still
