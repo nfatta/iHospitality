@@ -526,3 +526,16 @@ deal is visible in the gallery, wrongly excluding one is silent.
 brands in the activity log, since the ruling covered photos only. "44 North @
 Prime Catch - prizes or contest" may be legitimate proof of work, or may be
 something billed to the brand and better hidden. Needs a ruling.
+
+---
+
+**D28 — Expense activities stay visible to brands; only their photos are withheld.** ✅ operator-ruled 18 Aug 2026
+
+Follow-up to D27. The five expense-pipeline activities remain in the brand-facing
+activity log — "44 North @ Prime Catch - prizes or contest" is real work done for
+the brand and worth showing. It is only the **attachments** that are refused,
+because those are receipts.
+
+This is why D27 built `is_expense` as a flag rather than filtering the rows away
+at import: the ruling landed on the side the flag already supported, and no
+re-import was needed to honour it.
