@@ -783,3 +783,59 @@ Three things the rebuild fixed or avoided:
 
 Days-quiet is colour-coded at 90 and 180 days, and sorts on the raw day count so
 "412 days" outranks "90 days" instead of sorting as text.
+
+---
+
+**D37 — Five brands marked inactive; the flag is currently a label, not a behaviour.** ✅ operator-directed 18 Aug 2026
+
+`is_active = false` on **Blue Run, Barmen 1873, Starr Rum, Five Trail, Heavens
+Door**. The activity data agrees with the call — last activity 15 Mar, 26 Feb,
+17 Dec 2025, 7 Mar and 6 Aug 2025 respectively, against 13 Aug 2026 for the
+four that remain active.
+
+Still active: 44 North, Wodka, Dame Mas, Aspen Green, plus `All Brands` and
+`iHospitality`, which are the two non-client rows nobody has ruled on yet.
+
+**Stated plainly because it would otherwise be assumed:** nothing reads
+`brands.is_active`. No view, no RLS policy, no portal page filters on it, so
+these five brands still appear everywhere they did before. The column is a
+record of a decision, not an enforcement of one. Deliberately not wired into the
+portal without a ruling: hiding a dormant brand's history from a staff view is
+the kind of "helpful" change that loses data in front of someone.
+
+No brand matching "Coors" or "Molson" exists in the database. Barmen 1873 and
+Five Trail are both Molson Coors whiskeys, so the operator's phrasing is read as
+describing them rather than naming a twelfth brand.
+
+---
+
+**D38 — Dame Mas bottle sales exist outside HubSpot and are NOT imported yet.** ⚠️ awaiting operator input
+
+`Ihospitality/Dame Mas/Dame Mas 2026 - Account Sold Summary.csv` — 18 venue
+rows, **100 bottles, $16,577.30**. The operator: Dame Mas reorders sometimes
+never reach HubSpot "because of how the reporting is sent to us".
+
+This is the concrete instance of D35's open question. Dame Mas sells by the
+bottle, `recurring_case` is a case-shaped word for a case-shaped fact, and so
+Dame Mas shows 62 case sales and zero reorders while genuinely reordering.
+
+**Deliberately not imported**, because four things cannot be resolved from the
+file:
+
+1. **Three of the four sections have no month.** Section 1 is headed "April";
+   sections 2, 3 and 4 are headed "Accounts". Every activity needs a date, and
+   guessing which months these are would put invented dates in front of a
+   client.
+2. **What "Pods" counts is unknown** — it sits between Bottles and Total and is
+   usually 1 or 2.
+3. **No activity type fits.** Loading bottles as `case_sale` would corrupt both
+   the unit counts and the case/reorder distinction that D21 established.
+4. **One cell is visibly corrupted**: SECOND RODEO reads bottles 12, pods
+   "1,967", total $1,966.50 — the total has spilled into the Pods column.
+
+**Venue matching is 10 of 18, and two of those ten are suspect.** "EXECUTIVE
+CIGAR SHOP & LOUNGE, SANFORD" matched an existing "Executive Cigar" in
+*Melbourne*, and the same file separately lists "Executive Cigar, Melbourne" —
+so those are two locations, not one. "CITY DOG CANTINA #11529" matched "City Dog
+Cantina #2". Both are exactly the wrong merge `normalize.py` refuses to make
+automatically; they need a human, not a fuzzy matcher.
