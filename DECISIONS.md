@@ -1057,3 +1057,60 @@ Three deliberate choices:
   The money comes from `rate_card`, whose RLS is staff-only, so a brand user
   reaching the URL reads nulls. Verified: a brand login sees 91 of its own
   activity rows with 0 charges and 0 costs, and 0 rate-card rows.
+
+---
+
+**D48 — The four Dame Mas venues created; every month now reconciles to the invoice.** ✅ operator-approved 18 Aug 2026
+
+*"All those locations for Dame Mas are what we charged for so I guess add."*
+Created O-Ku, Pescado Seafood Grill, Eden Lounge and Rachels World Class Mens
+Club, and imported their rows — the last of the 18.
+
+| month | portal | invoice |
+|---|---|---|
+| April | $960.61 | $960.60 |
+| May | $266.93 | $266.93 |
+| June | $409.13 | $409.13 |
+| July | $21.08 | $21.08 |
+
+**April is one cent high, and that is left visible rather than forced.** Each
+row's 10% is rounded to cents before summing, so fourteen roundings drift a
+penny. Rounding once at the end would match the invoice exactly but would
+misstate every individual row; the per-row figure is what an account manager
+reads. A penny of documented drift beats a hidden reconciliation.
+
+Holding these venues back until the operator identified them was the right call
+in the end — three of the first eight unmatched names turned out to exist under
+another spelling, and Rachels genuinely was missing from a system it should have
+been in.
+
+---
+
+**D49 — Aspen Green's fresh-market incentive is $100 each, and stays priced although the programme ended.** ✅ operator-ruled 18 Aug 2026
+
+Earlier ruled "ignore these", then corrected: $100 apiece, nine activities, and
+the programme no longer exists. Priced anyway — history does not stop being true
+when a programme stops running, and a margin that silently omits $900 of real
+revenue is wrong in the direction that flatters nobody.
+
+Aspen Green moves from **−$385 to +$800**.
+
+---
+
+**D50 — `All Brands` retired; `iHospitality` and the archived brands left alone.** ✅ operator-directed 18 Aug 2026
+
+- **All Brands** was a device for grouping brands to make reporting easier, and
+  nothing under it was ever chargeable — mostly account visits and drink
+  development. Marked inactive, so the business page's "current brands" view
+  drops it and its 21 unpriced activities stop reading as a gap.
+- **Starr Rum and Heavens Door** — to be archived; already inactive (D37). Their
+  75 unpriced activities are expected and need no rates.
+- **iHospitality** is the internal brand, for charging work back to the company.
+  Out of scope for now, by instruction.
+
+Left as-is: `account sold`, 74 activities. **56 of them are Dame Mas**, and
+their deal names read as placements and reorders ("Dame Mas Repo reorder at City
+Dog Cantina"). If those are what the depletion report bills, charging them
+separately would double-count against the 10% commission — so they stay unpriced
+until the operator rules, which is the safe direction. The other 18, across four
+brands, look like ordinary case sales.
