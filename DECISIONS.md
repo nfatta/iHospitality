@@ -1546,3 +1546,137 @@ change — it was correct all along and simply had nothing to match against.
 **The general lesson, worth more than the fix:** a constraint that has never
 fired looks identical to a constraint that is working. This one had been dead
 since Phase 1 and the only symptom was a row count nobody had reason to check.
+
+---
+
+**D63 — The admin is a laptop tool. Its access control is that it is not reachable; Phil gets analysis through the portal instead.** ✅ 19 Aug 2026
+
+`HANDOFF.md` framed the next job as "add authentication to the admin", on the
+assumption that Phil needed to reach it. He does not. **Cleanup is the
+operator's job, done at his own machine; what Phil wants is the analysis.** Once
+that was said out loud the problem changed shape, and most of the planned work
+evaporated.
+
+**What was considered.** Streamlit's `st.login()` OIDC against Google; a
+Tailscale tailnet; an always-on cloud VM (~$5/mo) inside that tailnet; and
+rebuilding the whole admin on the website with Netlify Functions holding
+`service_role` server-side. That last one is genuinely possible — Netlify
+Functions are not static files — and it was rejected on cost, not feasibility:
+~1,439 lines of Python become ~3,000 lines of hand-written JS, and, more
+importantly, **it converts a structural guarantee into a code guarantee.** Today
+there is no path from the internet to a write. That is worth more than a single
+sign-on.
+
+**What was chosen — split by what is dangerous:**
+
+- **Analysis → the website**, under the operator's existing portal login. This
+  needs *no new backend*: `is_staff()` is already in every SELECT policy, and
+  `rate_card`, `invoice_recap` and `classification_signals` already carry
+  staff-only policies. `create_portal_user.py --staff` already creates the
+  account. Phil reads every brand and can write nothing.
+- **Cleanup → stays Streamlit, on the laptop.** No VM, no Tailscale, no hosting
+  bill, no second deploy target.
+
+**The one real problem this surfaced.** Streamlit binds to *all* interfaces by
+default — that is what the "Network URL" in its banner means. The admin has no
+login and shows every brand's rate card, commission and invoice recap side by
+side, so on any untrusted network (hotel, coffee shop, a client's wifi) all of
+it was readable by anyone on that LAN. Verified before the fix; `netstat` now
+shows `127.0.0.1:8501` rather than `0.0.0.0:8501`, and the banner no longer
+advertises a network address.
+
+Fixed with `.streamlit/config.toml` setting `server.address = "127.0.0.1"`.
+
+**And a guard, because that file alone is not enough.** Streamlit resolves
+config against the *working directory*, so launching from anywhere but
+`portal_seed/` silently drops the setting and re-publishes everything.
+`lib._require_loopback()` re-reads the live value on every page and refuses to
+render if it is not loopback — `None`, Streamlit's default, fails the check.
+**This is D62's lesson applied rather than re-learned:** a protection that
+silently does not apply looks exactly like one that works. This one fails loudly,
+in the browser, with the correct command to run.
+
+**The trade being accepted, stated plainly:** Phil can see a data problem but
+cannot fix it, and nothing gets cleaned while the operator is away. That matches
+how the two of them actually work. If it ever stops matching — if someone else
+must reach this app — it needs **real authentication first**, not a firewall
+rule and not a wider bind address.
+
+---
+
+**D64 — HubSpot lands in a staging zone and is PROMOTED by a person. Cleanup is durable; deletion is permanent.** ✅ operator-confirmed 19 Aug 2026
+
+**The bug this fixes had never fired, because the sync has never run in anger.**
+`sync_hubspot.py` wrote straight into `activities` with `on conflict
+(hubspot_deal_id) do update set …` across nine columns — `brand_id`, `title`,
+`is_expense`, `source_activity_type`, `activity_date`, `quantity`, `amount`,
+`venue_id`, `activity_type_id`. Every one of those is something a person fixes
+in the admin. The first real sync would have silently reverted the lot, with no
+warning and no record that anything had been undone. Three columns survived by
+accident (`notes`, `brand_visible_summary`, `pods`) because nobody added them to
+the list. Venue `city` was already protected on purpose with `coalesce`, so the
+problem was understood for cities and never generalised.
+
+**The operator proposed the fix and it is better than what was on the table.**
+The alternative under discussion was per-column protection: an `edited_fields
+text[]` on `activities`, with the sync skipping any column named in it. That
+works, but it defends the data field by field and turns every upstream edit into
+a silent, permanent divergence nobody is told about.
+
+**Chosen instead: separate the LANDING ZONE from the CLEAN ZONE.** HubSpot lands
+raw in `staging.hubspot_deals`. A person reviews and PROMOTES into `activities`,
+which is then ours. Cleanup is durable because the sync has nothing to overwrite
+— not because we defended each column from it.
+
+**Five states, derived in `staging.v_review_queue` rather than stored, so the
+sync and the admin cannot disagree about what needs a person:**
+
+| state | meaning |
+|---|---|
+| `new` | never promoted — needs first review |
+| `in_sync` | `promoted_hash = content_hash`, nothing to do |
+| `rejected` | `rejected_hash = content_hash` — dismissed, stay quiet |
+| `conflict` | HubSpot moved **and** the row was hand-edited — ask |
+| `auto` | HubSpot moved and nobody had touched it — apply it |
+
+**`auto` is what keeps D59 alive.** The ruling that duplicates get *"fixed in
+HubSpot, let the sync carry it through"* requires updates to actually flow. The
+operator's first instinct — skip any id already imported — would have frozen
+every promoted row forever and quietly killed that. Rows nobody has edited still
+take HubSpot's corrections automatically; only edited rows stop and ask.
+
+**Rejection records the VALUE, not the fact.** Declining a change stores the
+hash declined, so the same change never asks twice but a *new* change still
+does. A boolean `rejected` would silence the row permanently — which is how a
+review queue becomes noise people learn to scroll past.
+
+**Answering a conflict never deletes anything.** Three distinct actions, and the
+operator confirmed this reading: *accept* replaces the local value and resumes
+auto-updating; *keep mine* leaves the row alone and dismisses the prompt;
+*delete* is a separate deliberate act for duplicates.
+
+**Tombstones cannot live on `activities`.** `hubspot_deal_id` is a column ON the
+row, so deleting a duplicate takes the id with it and the next sync re-imports it
+as though it were new. The id has to outlive the row:
+`staging.hubspot_suppressed (deal_id, reason, suppressed_at, suppressed_by)`.
+
+**Two things Postgres decided for us:**
+
+1. `content_hash` was written as a GENERATED column and rejected — *"generation
+   expression is not immutable"*. Casting a date to text depends on `DateStyle`,
+   which makes the expression STABLE, not IMMUTABLE. It is a `before insert or
+   update` trigger instead, using `to_char(…, 'YYYY-MM-DD')` so the hash cannot
+   move if the setting does.
+2. The local suite applied the generated column happily and only Supabase
+   refused it — **the same class of gap as D6, in the opposite direction.** Local
+   Postgres is still not Supabase; the live apply is the one that counts.
+
+**`staging` is locked down explicitly rather than by inheritance.** Supabase's
+default grant of ALL on new `public` objects is scoped to `public`, so a new
+schema should not inherit it — but "should not" is exactly the assumption that
+hid D6. Verified after apply: **0 grants to `anon` or `authenticated`**, RLS on
+both tables with no policies, writes via `service_role` only.
+
+**The trade the operator accepted:** work landing in staging is not in the portal
+until promoted, so a brand sees nothing until a person has looked at it. That is
+the point — it is the same reason the admin exists.
