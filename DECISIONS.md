@@ -1238,3 +1238,225 @@ Visit` / `account visit`), which `normalize_activity_type` already handles.
 
 `Dame Mas 2025 Activity Report.xlsx` could not be read — the file is open in
 Excel and locked. Nothing was inferred from it.
+
+---
+
+**D54 — The two Dame Mas bottle prices, and which SKU each belongs to.** ✅ operator-confirmed 19 Aug 2026
+
+| SKU | price |
+|---|---|
+| Reposado | **$123.00** |
+| Extra Añejo | **$210.75** |
+
+*"Reposado is the cheaper of the two"* (operator, 19 Aug 2026). D51 recorded both
+figures but not which was which, which left every mixed-SKU line ambiguous.
+
+The Account Sold Summary corroborates it independently: Geronimo's 2 bottles bill
+$333.75, which is $123.00 + $210.75 and so is one of each; Black Hawk's 2 bottles
+bill $246.00, which is two Reposado.
+
+**One line does not decompose.** Eden Lounge, 13 bottles, $2,458.50. Solving
+$210.75x + $123.00(13−x) = $2,458.50 gives x = 9.795 — not a whole number of
+bottles at either price. Flagged, not resolved; it is one line and does not block
+anything.
+
+---
+
+**D55 — `account sold` classified from the rep's own note, not from the depletion report.** 19 Aug 2026
+
+D52 separated real placements from mis-typed visits by matching against monthly
+depletion summaries. That method is sound but only reaches months where a
+depletion report exists — four of thirteen. **The workbook note exists for every
+row**, so `classify_account_sold.py` reads that instead.
+
+Of 61 Dame Mas `account sold` rows: **46 confirmed sales, 4 mis-typed visits, 11
+needing an operator call.**
+
+**The rule is tense-sensitive, and that is the whole trick.** A keyword match on
+"bought" or "sold" gets Star Liquors VII wrong — *"committed to a case of each,
+**to be bought tomorrow**"* contains "bought" and is not a sale. So a
+future-tense marker appearing *before* the sale verb demotes the row. The four it
+catches:
+
+| date | venue | why |
+|---|---|---|
+| 13 Oct 2025 | Sip Tequila | note is "SIP Meeting" |
+| 16 Mar 2026 | Geronimo | "walked in to set an appointment" — the sale landed 18 Mar as its own row |
+| 21 May 2026 | Gleneagle Country Club | "they will be bringing it in" |
+| 26 May 2026 | Star Liquors VII | the D52/D53 row, found again by a different method |
+
+**Two methods, independently agreeing on Star Liquors VII, is the result worth
+trusting.** D52 found it by absence from a depletion report; this found it from
+the note. Neither knew about the other.
+
+The 11 unresolved rows are left as `account sold` rather than guessed. Nine read
+like placements ("New Dame Mas xAnejo at Chatham's Place") but carry no verb, and
+two have no note at all. Inventing revenue for a client from a noun phrase is
+precisely what D51 warned against.
+
+---
+
+**D56 — `activities.quantity` holds SKUs, not bottles. A records fault, not a billing one.** ✅ operator-corrected 19 Aug 2026
+
+Found while reading the notes for D55. The stored quantity is mostly the number
+of SKUs touched, while the note states the bottles that actually moved:
+
+| date | venue | portal | the note says |
+|---|---|---|---|
+| 26 Feb 2026 | Golden Ox — Warehouse | 2 | "3b Repo/3b Anejo" = 6 |
+| 26 Feb 2026 | Golden Ox — Clermont | 2 | 6 |
+| 26 Feb 2026 | Golden Ox — Groveland | 2 | 6 |
+| 19 Feb 2026 | City Dog Cantina | 1 | "Sold in 4b of the Repo" |
+| 21 Aug 2025 | Secrets Hideaway | 1 | "x2b of Extra Anejo for both bars" = 4 |
+
+Across the 12 rows where the note states a count, the portal holds **18 bottles
+against 44 stated.**
+
+**An earlier draft of this entry called that 26 bottles "unbilled" and put a
+$3,198–$5,479 figure on it. That was wrong, and the operator corrected it the
+same day:** *"everything we billed was correct, that is based on depletion
+reports from the distributor. If anything is wrong it is our records. But the
+billing is the truth."*
+
+So the direction of the error was backwards. **Commission is billed off the
+distributor's depletion report**, which counts every bottle that actually moved —
+it never depended on `activities.quantity`. The invoice was right. What is wrong
+is the portal's own record of how much product moved, which matters for what a
+brand SEES on the venue and activity pages, not for what anyone was charged.
+
+**This is the standing rule, and it outranks any reconstruction from our own
+notes: the distributor's depletion report is the source of truth for what sold,
+and the invoice built on it is correct by definition.** Where a note, a HubSpot
+quantity or a workbook row disagrees with it, the note is the thing to fix.
+
+**Not written back.** The reading is a regex over free text and two rows collapse
+where a venue has one row per SKU on the same date. `--show-quantity-gap` reports
+it so the portal's display can be corrected toward the depletion reports — never
+the other way round.
+
+---
+
+**D57 — A later reorder proves an earlier placement. 11 unresolved rows became 3.** ✅ 19 Aug 2026
+
+D55 left 11 `account sold` rows that its note-reading could not judge, mostly
+noun phrases with no verb: *"New Dame Mas xAnejo at Chatham's Place"*. Applying
+the operator's own standard from D56 — the distributor's record is the truth,
+our prose is not — gives a better test than parsing the sentence.
+
+**You cannot reorder what was never placed.** So for any row the note cannot
+settle, look at the venue's later history: a subsequent depletion at the same
+venue means product was there to run out, and the placement happened.
+
+Eight of the eleven resolve on that basis, and three of them are corroborated by
+the distributor's own summary rather than by our notes at all:
+
+| row | what settles it |
+|---|---|
+| Agave Bandido, 7 Aug 2025 | bottle reorder 31 May 2026, from the distributor's summary |
+| Mullets Cigar and Bar, 6 Oct 2025 | bottle reorder 30 Apr 2026, same source |
+| Executive Cigar, 4 Mar 2026 *(blank note)* | bottle reorder 31 Jul 2026, same source |
+| Chatham's Place, 7 Aug 2025 | reordered 10 Feb 2026 |
+| Roasted Spirits, 15 Aug 2025 | reordered 11 Sep 2025 and 16 Feb 2026 |
+| KAVAS at the Point, 21 Aug 2025 | new placements 8 Sep 2025, reorders after |
+| Cuba Libre, 27 Jan 2026 | case sale 18 Dec 2025 precedes it |
+| Campi, 30 Mar 2026 *(blank note)* | 26 May 2026 visit "to check on Dame Mas" — it was there |
+
+**Two blank-note rows were settled without reading anything**, which is the point:
+the venue's history is evidence where the note is silent.
+
+**Three remain, and they stay `account sold`.** Copper Rocket (26 Aug 2025) has
+no later depletion, only a staff training. Executive Cigar and Campi are resolved
+above; the residue is Copper Rocket plus two rows whose venue history is a single
+event. Guessing them buys nothing.
+
+**One is not a classification question at all.** `Tequila Dame Más`, 18 Jul 2025 —
+the venue slot holds the brand name. `normalize.py` keeps
+`BRAND_NAMES_NOT_VENUES` for exactly this, and the row escaped it because
+`venue_key` compared accented text: "Más" and "Mas" were different strings to the
+regex. Both tools now fold accents before matching.
+
+---
+
+**D58 — Three double-entered events, reported and not merged.** 19 Aug 2026
+
+The same field event is sometimes written down twice, once in HubSpot and once
+in the workbook, a day apart:
+
+| venue | dates | note |
+|---|---|---|
+| Chatham's Place | 7 Aug 2025, twice | "New Dame Mas xAnejo at Chatham's Place" / "…x Anejo at Chatham Place" |
+| Chatham's Place | 10 and 11 Feb 2026 | "Reorder for backbar", identical |
+| Capital Grille I Drive | 20 and 21 Jan 2026 | "Sold in new bottles both repo/xAnejo" / "new placemts" |
+
+**Reported, never auto-merged.** A wrong merge deletes a real sale, and these are
+distinguishable at a glance by a human who was there. They do not affect billing
+— per D56 that comes off the depletion report — but they do double what a brand
+sees on its own venue page.
+
+---
+
+**D59 — The workbook import was rolled back. Its dedupe was wrong in a way worth keeping.** ✅ operator-directed 19 Aug 2026
+
+29 rows were imported from the Dame Mas activity workbooks against the operator's
+actual intent (*"I dont mean import the workbooks, my bad"*). All 29 were deleted
+by `external_ref like 'workbook:%'`; Dame Mas returned to exactly 196 activities
+and the invoice canary re-tied. No photos were attached to any of them.
+
+**Nine of the 29 were duplicates, and the reason generalises.** The importer
+deduped on an exact date match. But the two systems date the same event
+differently — **the workbook records the day the rep did the work, HubSpot
+records the day the deal was entered, consistently one day later**:
+
+| venue | workbook | HubSpot |
+|---|---|---|
+| Barrel & Blend | 29 Oct 2025 | 30 Oct 2025 |
+| Capital Grille I Drive | 20 Jan 2026 | 21 Jan 2026 |
+| KAVAS at the Point | 20 Jan 2026 | 21 Jan 2026 |
+| Chatham's Place | 10 Feb 2026 | 11 Feb 2026 |
+| MARU | 14 May 2026 | 15 May 2026 |
+
+**Any future reconciliation between the workbook and HubSpot must match on a date
+WINDOW, not a date.** Exact-date matching will silently double every row. This is
+the fact worth carrying forward from a change that was otherwise reverted.
+
+Two of the three "double entries" reported in D58 were created by this import,
+not found in the data. Only Chatham's Place 7 Aug 2025 is genuine — two distinct
+HubSpot deals (`41554360913`, `41559850771`) on one date.
+
+**Ruling on genuine HubSpot duplicates: flag, never delete.** The portal reports
+them; the operator corrects HubSpot; the next sync carries the fix through.
+HubSpot stays authoritative and the two systems never diverge.
+
+---
+
+**D60 — No hardcoded business data. The classifier's rules moved to the database.** ✅ operator-ruled 19 Aug 2026
+
+*"I want to make sure none of this stuff with the data is hard coded in and is
+being pulled from the database. I dont want any shortcuts."*
+
+An audit of the tooling found three tiers, and only the first was actually fine:
+
+1. **Runtime is already clean.** Every view reads a table; `resolve_activity_type()`
+   reads `activity_type_aliases`; `v_activity_money` reads `rate_card`. No
+   hardcoded business data reaches a brand's browser.
+2. **The seeding scripts hold the source of record in Python.**
+   `load_rate_card.py` carries eleven dicts — `CHARGE_BY_BRAND`,
+   `PAY_PCT_BY_BRAND`, `GLOBAL_CHARGE` and the rest — and writes them into
+   `rate_card`. The database ends up correct, but **the only way to change a rate
+   is to edit a file and re-run a script.** `normalize.py` holds
+   `BRAND_CANONICAL` / `BRAND_NAMES_NOT_VENUES`; `import_bottle_sales.py` holds
+   `NAME_MAP` and `SECTION_MONTHS`.
+3. **`classify_account_sold.py` was worse than both** — its rules were read from
+   Python constants at runtime and stored nowhere at all.
+
+**Tier 3 is fixed now.** `classification_signals` holds the sale / visit / future
+phrases with a `rationale` column, staff-only RLS, seeded from the working
+version. The tool loads them per run. Verified by inserting a phrase with SQL
+alone and watching the classification change with no code touched.
+
+The hardcoded Dame Mas workbook paths went too — `--workbook` is explicit, and a
+run without it falls back to the notes already in the database.
+
+**Tier 2 is the next real piece of work**, and it is the same work as the admin
+back end: a rate the operator can edit is a rate that lives in a table with a UI
+in front of it, not a dict in a repo they do not deploy from.

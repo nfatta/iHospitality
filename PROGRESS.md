@@ -24,16 +24,40 @@ only merging [PR #1](https://github.com/nfatta/iHospitality/pull/1) changes that
 
 ### Pick this up here
 
-Run `python sync.py --apply` in `Hubspot/portal_seed/` to bring HubSpot in.
-Then read D42–D50 in `DECISIONS.md` — the money model is the newest and least
-settled part of the build.
+**The next build is the admin / staff back end, and the programme summary is
+dropped.** Operator direction, 19 Aug 2026: *"I really want to get the admin/staff
+side figured out. The analysis tables but also everything we are doing now, I want
+this to be able to be done on the back end. Like when stuff is imported I can
+clean up the data myself... Lets get what we have rock solid first."*
+
+So Phase 5 moves ahead of any new brand-facing feature, and its scope is wider
+than "a Streamlit admin" — it is **the place data gets cleaned after import**:
+
+| the admin must let staff | today that means |
+|---|---|
+| edit rate cards | editing eleven dicts in `load_rate_card.py` and re-running it (D60 tier 2) |
+| merge duplicate venues | no tool exists; `import_bottle_sales.py` skips unknown names instead |
+| resolve flagged activity types | 7 sit at `needs_review`; only SQL touches them |
+| classify ambiguous activities | `classify_account_sold.py`, CLI only |
+| review duplicate activities | detection exists in that tool; flag-only by D59 |
+| fix a venue that holds a brand name | one row known (`Tequila Dame Más`) |
+
+**The standing rule for all of it (D60): no hardcoded business data.** Runtime is
+already clean — views read tables. The gap is that the *source of record* for
+rates and name mappings is Python in a repo the operator does not deploy from.
+Closing that gap IS the admin back end; they are not two jobs.
 
 **The one number to trust as a canary:** Dame Mas commission reconciles to the
 operator's invoice recap for all four months of Apr–Jul 2026 (April by a cent,
-per-row rounding). If that stops matching, something upstream broke.
+per-row rounding). Re-checked after every change on 19 Aug and still ties. If it
+stops matching, something upstream broke.
 
-Not yet done: Phase 3 (the HubSpot sync script — the data is currently a
-one-time seed), Phase 5 (Streamlit admin), Phase 6 (field entry and cutover).
+**And the rule that outranks it (D56): the distributor's depletion report is the
+truth.** Our notes and quantities are what get corrected when they disagree —
+never the invoice.
+
+Not yet done: Phase 3 (the HubSpot sync script — the data is currently a one-time
+seed), Phase 5 (admin, now next), Phase 6 (field entry and cutover).
 
 **Nothing is on `ihospitality.vip` yet.** The work sits on branch `portal-v1`
 with [PR #1](https://github.com/nfatta/iHospitality/pull/1) open, which gives a
