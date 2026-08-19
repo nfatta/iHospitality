@@ -90,8 +90,8 @@ Paste this to pick up exactly where we stopped:
 
 | repo | branch | latest |
 |---|---|---|
-| website (`…/ihospitality/`) | `portal-v1` | `35cb8d5` — 3 commits unpushed |
-| `Hubspot/portal_seed/` | `main` | `1a29694` — local only, no remote by design |
+| website (`…/ihospitality/`) | `portal-v1` | `15cc482` — 5 commits unpushed |
+| `Hubspot/portal_seed/` | `main` | `ccd3176` — local only, no remote by design |
 
 **Verified at close:** 73 pytest pass · offline schema/RLS/staging suite passes,
 including all seven staging assertions · 0 grants to `anon`, 0 write grants to
