@@ -1509,3 +1509,40 @@ importer. Money columns are `numeric(14,4)` and rounding happens at display.
 
 **17 duplicate venue clusters and 12 duplicate activity pairs** are now visible
 that nobody had counted before.
+
+---
+
+**D62 — `rate_card` uniqueness was never enforced on shared lines. 46 duplicate rows removed.** ✅ 19 Aug 2026
+
+Found while checking whether an accidental re-run of `load_rate_card.py` had
+done damage. It had not — but it exposed something older.
+
+The constraint was `unique (brand_id, source_activity_type, effective_from)`.
+**In Postgres a UNIQUE constraint treats NULL as distinct from every other
+NULL**, so it never applied to the shared lines — the ones with `brand_id NULL`,
+which is exactly how contractor pay is stored.
+
+The effect was invisible and cumulative. Every run of `load_rate_card.py`
+inserted **another** copy of every shared line, because `on conflict` had no
+conflict to find. Seven runs left seven identical copies of `staff training`,
+`recurring case`, `1st case sale` and six more — **55 rows standing in for 9**,
+and 278 lines where 232 was the truth.
+
+**Money was never wrong, which is why nobody noticed.** `v_activity_money`
+resolves each side with `order by … limit 1`, so it picked one copy and ignored
+the rest. Charge and cost are byte-identical before and after the fix:
+$14,346.85 and $9,061.18 across active brands.
+
+**What it did break is editing** — and that only mattered from today. Changing a
+rate in the admin would have updated one copy of seven and appeared to do
+nothing at all. The bug had been harmless for as long as rates were only ever
+written by a script that rewrote all of them.
+
+Fixed by deduplicating to the lowest id per group and rebuilding the constraint
+as `unique nulls not distinct (…)` (Postgres 15+; this project is on 17.6), so
+it now means what it always read as. The admin's `on conflict` clause needed no
+change — it was correct all along and simply had nothing to match against.
+
+**The general lesson, worth more than the fix:** a constraint that has never
+fired looks identical to a constraint that is working. This one had been dead
+since Phase 1 and the only symptom was a row count nobody had reason to check.

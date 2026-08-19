@@ -1,6 +1,7 @@
 # CLAUDE.md — standing instructions
 
-Read these before doing anything: `PROGRESS.md` (where the build is),
+Read these before doing anything: **`HANDOFF.md` (start here — where we
+stopped and the next prompt)**, `PROGRESS.md` (where the build is),
 `DECISIONS.md` (judgment calls already made and why), `PORTAL_PLAN.md` (the WHAT
 — its locked decisions are final). `BUILD-PLAYBOOK.md` is the HOW.
 
@@ -36,6 +37,7 @@ Live on Supabase (Postgres 17.6), seeded. Everything reads `DATABASE_URL` from
 
 ```bash
 cd ../../Hubspot/portal_seed
+python -m streamlit run admin/app.py   # THE STAFF ADMIN — analysis + data cleanup
 python verify_live.py                  # read-only health check
 python apply_schema.py --apply         # re-apply db/schema.sql (idempotent)
 python seed_from_csv.py                # dry run; --apply to load
@@ -69,7 +71,16 @@ reproduces it; keep it that way.
   `portal.js`). Venue names come from HubSpot and are untrusted.
 - The portal is **read-only by construction**: RLS has SELECT policies only, and
   `authenticated` holds no write grants. Writes go through `service_role` in the
-  Python tooling.
+  Python tooling. **The staff admin is a separate Streamlit app for this reason**
+  — it connects from Python with `DATABASE_URL`, where the credential never
+  reaches a browser. Do not add write grants to `authenticated` to save building
+  a page; that would dissolve the guarantee for brand logins too (D61).
+- **No hardcoded business data** (D60). Rates, classification rules, activity
+  aliases and invoice figures live in tables the admin edits at runtime. A rule
+  compiled into a script is a rule the operator cannot reach. `load_rate_card.py`
+  is retired and its write path deleted — do not revive it.
+- **The billing is the truth** (D56). Commission comes off the distributor's
+  depletion report. Where the portal disagrees, investigate the portal.
 
 ## Where things are
 
@@ -78,5 +89,7 @@ reproduces it; keep it that way.
 | `portal/` | The five portal pages, `portal.css`, `portal.js`. Servable files only. |
 | `css/site.css` | Shared tokens, nav, buttons, section base, footer, mobile nav. |
 | `PORTAL_PLAN.md` | Architecture doc — phases, locked decisions. |
+| `HANDOFF.md` | Where the last session stopped, and the next prompt. |
+| `../../Hubspot/portal_seed/admin/` | The staff admin (Streamlit). Analysis + data cleanup. |
 | `../../Hubspot/portal_seed/` | Python tooling + `db/schema.sql`. Separate repo. |
 | `../../Hubspot/.env` | HubSpot token, Supabase keys, `DATABASE_URL`. Not in git. |

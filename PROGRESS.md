@@ -2,25 +2,25 @@
 
 Build log for the brand portal. Phases are from `PORTAL_PLAN.md`.
 
-**Current position:** Phases 0, 1, 2 and 4 are complete. **v1 of the brand
-portal works end to end** against the live Supabase project — a brand logs in
-and sees only their own activity, venues and dashboard. 942 activities across 11
-brands and 297 venues are loaded.
-
-**Build order was resequenced 18 Aug (D19): all data in, then analysis, then
-presentation.** Stages 1 and 2 are complete; Stage 3 is most of the way there.
+**Current position:** Phases 0, 1, 2 and 4 are complete, and **Phase 5 — the
+staff admin — was built on 19 Aug 2026.** A brand logs in and sees only their
+own activity, venues and dashboard; staff run a separate Streamlit app to
+analyse the business and clean the data.
 
 | Stage | What | State |
 |---|---|---|
 | 1 — Everything in | deals, taxonomy, titles, photos, cities, expense exclusion | ✅ done |
 | 2 — Analysis | activity mix, venue performance, city summary, money views | ✅ done |
-| 3 — Presentation | dashboard, activity, venues, gallery, business page | mostly done — program summary outstanding |
+| 3 — Presentation | dashboard, activity, venues, gallery, business page | ✅ done — programme summary dropped by the operator |
+| 5 — Staff admin | analysis + data cleanup, 7 pages | ✅ v1 works |
 
-**Live as of end of 18 Aug 2026:** 1,088 activities · 353 venues · 412 photos ·
-11 brands (5 active) · 353 rate-card rows · cities on 317 venues.
+**Live as of end of 19 Aug 2026:** 1,088 activities · 353 venues · 412 photos ·
+11 brands (5 active) · 232 rate-card lines · 38 classification rules · 7 months
+of invoice recap.
 
-Everything is pushed to `portal-v1`. **`ihospitality.vip` is still untouched** —
-only merging [PR #1](https://github.com/nfatta/iHospitality/pull/1) changes that.
+Everything is committed. **`ihospitality.vip` is still untouched** — only merging
+[PR #1](https://github.com/nfatta/iHospitality/pull/1) changes that, and the two
+newest website commits are not yet pushed.
 
 ### Pick this up here
 
