@@ -1680,3 +1680,83 @@ both tables with no policies, writes via `service_role` only.
 **The trade the operator accepted:** work landing in staging is not in the portal
 until promoted, so a brand sees nothing until a person has looked at it. That is
 the point — it is the same reason the admin exists.
+
+---
+
+**D65 — `quantity` is ALWAYS the activity multiplier. The rate card says otherwise on 211 of 232 lines, and the portal is understating revenue by $5,540.** ⏳ agreed 19 Aug 2026, not yet applied
+
+Found by the operator looking at the new edit grid: two 44 North case sales,
+quantity 3, showing **$50 charge and $25 cost** — the rate for one case, not
+three. *"In this example we bring in $150 because it's 3 times 50 and pay out
+75."*
+
+**The mechanism was right and the data was wrong.** `v_activity_money` already
+handles four bases — flat, per_unit, percent, unpriced — and `per_unit`
+correctly multiplies by `activities.quantity`. Only **21 of 232** rate lines
+carry the flag, and they are all mileage, hourly labour and the incentives.
+Every case-sale line except Aspen Green's is flat, so a six-case sale bills as
+one.
+
+**Operator ruling, which settles a question the schema had left open:**
+*"Even if it's 3 expressions it's still 3 cases. The quantity is always the
+activity multiplier."* The schema comment on `per_unit` had reasoned the other
+way for events — *"a tasting event is one fee however long it ran"* — and that
+reading is now retired. It also supersedes the worry carried from D56 that
+`quantity` is SKU count rather than bottles: SKU count or case count, it
+multiplies the activity either way.
+
+**What it is worth, with quantity always multiplying:**
+
+| brand | portal today | corrected | difference |
+|---|---|---|---|
+| 44 North | $10,357.10 | **$13,257.10** | +$2,900 |
+| Blue Run | $5,007.50 | $6,487.50 | +$1,480 |
+| Wodka | $2,617.00 | $3,477.00 | +$860 |
+| Barmen 1873 | $3,045.00 | $3,225.00 | +$180 |
+| Five Trail | $885.00 | $1,005.00 | +$120 |
+| **total** | **$24,754.35** | **$30,294.35** | **+$5,540** |
+
+Dame Mas and Aspen Green are unaffected — they price on `charge_pct`, which
+applies to `amount` and never touched `quantity`.
+
+**None of this was under-billed.** QuickBooks invoices retainer and commission
+separately (see D64's neighbours and the QuickBooks findings of 19 Aug), so the
+money that left the client was correct. What was wrong is what the portal
+reports — the figure a brand sees, and every margin number on the Analysis page.
+
+**THE TRAP, and it is the important half of this entry.** The view multiplies by
+`coalesce(a.quantity, 0)`. Flipping `per_unit` on without touching that would
+have turned every NULL-quantity row into **$0** and silently deleted $1,065 of
+revenue. It must become `coalesce(a.quantity, 1)` — one activity of unstated
+quantity is one, not none — on the charge *and* cost branches.
+
+61 rows carry NULL quantity, which the operator explained immediately:
+**`quantity` was added to the workflow later**, so the older rows predate it.
+51 of the 61 are account visits charging $0 and are unaffected either way; the
+exposure is 10 rows and $1,065:
+
+    aspen green fresh market incentive   4   $400
+    tasting event                        2   $300
+    drink list 1                         1   $160
+    1st case sale                        2   $120
+    staff training                       1    $85
+
+**Two outliers surfaced on the way, and neither changes the ruling.**
+
+*Meg O'Malley's, 10 Dec 2025, `drink list 1`, quantity 6* — the other 34 drink
+list rows are all quantity 1, including one whose own title says *"x2
+cocktails"*. **Operator: it should be 1.** The 6 came from HubSpot deal
+**51628024207** and was copied faithfully by the seed. Per D59 it is corrected
+in HubSpot, not here — and under D64 that correction now flows on its own,
+because nobody has hand-edited the row, so the next sync sees state `auto`.
+
+*That same row has no venue*, and not through a matching failure: the deal
+carries no company association in HubSpot at all. Seven 44 North activities are
+in that state with the venue named in the title. Separately, **Meg O'Malley's
+exists twice** — one copy with a city and a HubSpot id, one with neither — which
+is one of the 17 duplicate clusters and exactly the shape that makes a repeat
+account read as two one-timers.
+
+**Applying this is two changes, and doing one without the other is worse than
+doing neither:** set `per_unit` on the flat lines (rate-card data, editable in
+the admin, D60 — no code) *and* change the coalesce in `v_activity_money`.

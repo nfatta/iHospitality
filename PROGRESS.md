@@ -2,10 +2,22 @@
 
 Build log for the brand portal. Phases are from `PORTAL_PLAN.md`.
 
-**Current position:** Phases 0, 1, 2 and 4 are complete, and **Phase 5 — the
-staff admin — was built on 19 Aug 2026.** A brand logs in and sees only their
-own activity, venues and dashboard; staff run a separate Streamlit app to
-analyse the business and clean the data.
+**Current position:** Phases 0, 1, 2 and 4 are complete; **Phase 5 — the staff
+admin — was built on 19 Aug 2026**, and later the same day gained a **staging
+zone** so that cleaning data survives a HubSpot re-sync (D64). A brand logs in
+and sees only their own activity, venues and dashboard; staff run a separate
+Streamlit app to analyse the business, review what HubSpot has sent, and clean
+it before it becomes real.
+
+> **Read this before trusting any revenue figure here.** Comparing the portal
+> against QuickBooks on 19 Aug showed the portal carries roughly **13%** of what
+> the business actually bills — $24,754 against **$194,231** (Jan 2025–Aug 2026,
+> 11 customers). Three causes, none of them a billing error: every brand pays a
+> **monthly retainer the schema cannot represent**, `invoice_recap` is loaded
+> from spreadsheets that disagree with the invoices, and `quantity` is not
+> multiplied where it should be (**D65**, +$5,540). Margin per brand is not a
+> meaningful number until those are fixed — the Dame Mas account read as
+> *negative* until the retainer was found.
 
 | Stage | What | State |
 |---|---|---|
@@ -772,10 +784,26 @@ I have the data of everything I want to see."* It is a straightforward read off
 
 ## Not started
 
-- Phase 3 — sync script
-- Phase 4 — brand portal pages (v1 ships here)
-- Phase 5 — Streamlit admin
+- Phase 3 — sync script. **Written and rebuilt around the staging zone (D64),
+  but never run against live HubSpot.** That run is the real first test; use
+  `--month` on a single month and watch the review queue.
 - Phase 6 — field use and HubSpot cutover
+
+(Phases 4 and 5 are done — see the current position at the top of this file.)
+
+## Ahead of Phase 6, from the 19 Aug QuickBooks read
+
+- **Model the retainer.** Every brand is on one; `charge` comes from `rate_card`
+  pricing an *activity*, and a retainer is not an activity. ~65% of what Dame Mas
+  pays has nowhere to live.
+- **Load `invoice_recap` from QuickBooks rather than the workbooks**, which are a
+  lossy copy: Aug 2025 commission typed `375.75` where the invoice bills
+  `354.75`, June 2026 expenses $158 over, Oct 2025 $125 over, and a $455 Dame Mas
+  tasting invoice (3203) in neither the workbook nor the portal. Every QuickBooks
+  invoice carries an `ACTIVITY DATE` custom field naming the work month, so the
+  one-month billing lag needs no inference.
+- **Widen `lib.canary()`** — it compares only `invoice_recap.commission`, so it
+  reports "4 months tying" truthfully while ignoring most of the invoice.
 
 ---
 
