@@ -1460,3 +1460,52 @@ run without it falls back to the notes already in the database.
 **Tier 2 is the next real piece of work**, and it is the same work as the admin
 back end: a rate the operator can edit is a rate that lives in a table with a UI
 in front of it, not a dict in a repo they do not deploy from.
+
+---
+
+**D61 — The staff admin is built, and it stays a separate Python app.** ✅ 19 Aug 2026
+
+*"Lets build the admin portal. This would be where Phil and I can do our
+business analysis but also where I would clean the data."*
+
+Six pages under `Hubspot/portal_seed/admin/`, run with
+`streamlit run admin/app.py`:
+
+| page | what it does |
+|---|---|
+| **Health** | the invoice reconciliation, the work queue, and the size of everything |
+| **Analysis** | money by month, venues, activity mix, cities, and every row behind them |
+| **Activity types** | the review queue — rename, retype, merge |
+| **Account sold** | this session's classification work, per row, plus the rules behind it |
+| **Duplicates** | one event recorded twice, side by side |
+| **Venues** | merge duplicates, fix rows that are not venues |
+| **Rate card** | what is unpriced, and add or supersede a rate |
+
+**It is a separate app rather than pages in the brand portal, and that is a
+security property rather than a preference.** The portal is read-only by
+construction: RLS carries SELECT policies only and `authenticated` holds no
+write grants, so a browser that cannot write cannot be tricked into writing.
+Granting staff writes to a browser role would dissolve that for **every** user,
+brand logins included. The admin connects from Python with `DATABASE_URL`,
+server-side, where the credential never reaches a browser. `verify_live.py`
+still reports 0 anon grants and 0 write grants to `authenticated`.
+
+**Three things the build found that reading would not have:**
+
+1. **The canary was hiding a gap.** Driving it from `invoice_recap` instead of
+   four figures pasted into a script immediately surfaced Jan–Mar 2026: $1,020.53
+   billed against nothing in the portal. A LEFT JOIN *from the invoice* is what
+   makes a missing month visible — joining the other way silently drops it.
+2. **A row could corroborate itself.** The account-sold page excluded "the same
+   date" rather than "this row", so a venue's only depletion — the row being
+   judged — appeared as evidence for it. Now keyed by activity id.
+3. **`market` is deliberately unused**, so a "353 venues outside both markets"
+   metric dressed a design decision up as a data fault. Replaced with a city
+   count, which is the geography the business actually uses.
+
+**Also fixed on the way:** `import_invoice_recap.py` rounded 409.125 to 409.12
+against an invoice billing 409.13 — a one-cent disagreement invented by the
+importer. Money columns are `numeric(14,4)` and rounding happens at display.
+
+**17 duplicate venue clusters and 12 duplicate activity pairs** are now visible
+that nobody had counted before.
