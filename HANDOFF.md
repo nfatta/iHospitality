@@ -2,7 +2,7 @@
 
 Written at the close of **21 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65, D66 and D67**.
+they are. Read this first, then **D65 through D69**.
 
 ---
 
@@ -24,7 +24,7 @@ figure is still too high and must not be quoted.**
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D67 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D69 in `DECISIONS.md`.
 >
 > **1. Enter the contractors.** Nobody is on file, so base pay is $0 in every
 > total and margin is overstated. I will give you names, base pay and cadence.
@@ -90,7 +90,7 @@ python -m http.server 8123                    # portal at /portal/login.html
 
 | repo | branch | latest |
 |---|---|---|
-| website (`…/ihospitality/`) | `portal-v1` | `e907095` + this handoff — 7 commits unpushed |
+| website (`…/ihospitality/`) | `portal-v1` | `f3928d9` — 45 commits unpushed |
 | `Hubspot/portal_seed/` | `main` | `f0cba62` — local only, no remote by design |
 
 **Verified at close:** 73 pytest pass · offline schema/RLS/staging/**retainer**
