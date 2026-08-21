@@ -2332,3 +2332,56 @@ placeholder whenever parameters are passed. That is exactly what broke the
 Venues page, and `lib`'s `params or None` fix only rescues the *no-params* case
 — which this is not. The numbers come back raw and are formatted in pandas. **A
 page nobody has opened is not a page that works.**
+
+---
+
+**D75 — The two UI complaints had different causes, and one of them was that the page was not doing what it appeared to be doing.** ✅ operator-reported 21 Aug 2026
+
+**Activity types.** *"I see 10 unclassified activities but then when I go to
+change that I have no idea how to."* Two causes, not one.
+
+Four of the five flagged types are simply **correct and want confirming** — and
+the way to confirm one was to untick *"Still needs review"* inside a tab, three
+clicks deep and phrased as a state rather than an action. There is a **"This
+type is correct"** button on the row now.
+
+The ten `unclassified` activities, though, **could not have been fixed from that
+page by any route.** Their `source_activity_type` is **NULL** — there is no raw
+string to alias or to merge — while every control on the page acted on a *type*
+and the count on the Health page counts *rows*. The operator was not missing
+something; the capability was absent.
+
+The page now lists the **activities** waiting, with their HubSpot deal name —
+which is where the meaning actually lives (*"44N drink development at
+Maxine's"*) — and a column to put the priced string into. Saving re-derives the
+type through `resolve_activity_type()` exactly as D74's grid does, so
+classifying and pricing stay one action. **98 rows, not 10:** an activity with a
+NULL source can never be priced whatever type it sits under, and all of them
+belong in the queue.
+
+**Venues.** *"I am not sure why it suggests merging these two as they are
+completely different places."* **It was not suggesting them.** Both dropdowns in
+the *Merge two venues* tab defaulted to the first two venues alphabetically, so
+the page opened reading *"merge 1881 Kissimmee into 24 Middleton"* beneath a
+warning that the two were unalike. Nothing was being proposed — two arbitrary
+defaults were, under a caution that read as a recommendation.
+
+> **A default that looks like a recommendation is a bug**, and the reasonable
+> reading of it — "the system thinks these are duplicates" — was the operator's.
+> Neither dropdown is pre-selected now, and the tab states that it suggests
+> nothing.
+
+The *Possible duplicates* tab genuinely does suggest, and now accepts **"these
+are different places"** for an answer, with a reason recorded. `Executive Cigar`
+and `Executive Cigar Sanford` were already the page's own worked example of a
+pair that must not be merged, and there had been no way to say so.
+
+**Keyed on the cluster's MEMBERSHIP, not its name.** If a third venue later
+normalises into a dismissed cluster, the stored set no longer matches and the
+cluster returns — nobody has judged the new one. Dismissing by name would
+swallow it silently. Reversible from an expander, because a judgement made in a
+hurry should not be permanent.
+
+**A suggestion that cannot be rejected is worse than no suggestion**: it returns
+every month and teaches the operator to ignore the page, which costs more than
+the duplicates it was meant to catch.
