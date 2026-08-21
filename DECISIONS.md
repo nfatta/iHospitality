@@ -2020,3 +2020,60 @@ rather than silently reverting the split.
 
 **21 rows became 127** (21 reassigned, 106 created). Activities 1,084 → 1,190,
 and the `All Brands` brand now holds none. The Dame Mas canary is unchanged.
+
+---
+
+**D70 — The invoice PDFs carry the line detail the API withholds. Every retainer month in range now matches the invoice exactly.** ✅ 21 Aug 2026
+
+The operator exported twelve months of invoices as `Invoice_year.pdf` — **74
+pages, 54 invoices** (34 single-page, 20 two-page), work months **Aug 2025
+through Jul 2026**. It carries exactly what the QuickBooks connector blanks: an
+explicit **`Retainer`** line, per invoice, with its amount and its `ACTIVITY
+DATE`. **50 of the 54 invoices carry one.**
+
+**This unblocks the line-by-line reconciliation** that D67 recorded as blocked.
+The PDF also separates `Expense Spend`, `Independent Commission`, `Case Sale`,
+`Drink List 1`, `Account Visit` and `Mileage` with quantity and rate — the
+per-activity detail needed for it.
+
+**WHERE THE FILE MUST NOT LIVE.** It was first saved into the *website* repo,
+whose root **is** the Netlify publish directory — one `git add -A` and twelve
+months of client invoices would have been served at
+`ihospitality.vip/Invoice_year.pdf`. It was untracked, so nothing was exposed.
+Moved to `Hubspot/` (not deployed), and **`*.pdf` is now in `.gitignore`**
+alongside `*.py` and `.env`. `_redirects` could not have hidden it (D12).
+
+**Two Molson Coors entities, and they are different customers.** "Coors Whiskey
+**Co**" is how **Blue Run** is billed (c/o Park Street Imports, Stephanie
+Gonzalez); "Coors Whiskey **Company**" is **Five Trail / Barmen** (Alex Drozd).
+Reading them as one would have merged two brands' retainers.
+
+**Four corrections, each straight off an invoice (D56):**
+
+| brand | was assumed | the invoices say |
+|---|---|---|
+| Wodka | from Nov 2025 | from **Dec 2025** (first is 3175) |
+| Starr Rum | to Dec 2025 | to **Oct 2025** (last is 3166) |
+| Blue Run | flat $975 to Feb 2026 | $975, **$950 for Jan 2026 only** (3177), $975 again Feb |
+| Blue Run | — | Feb 2026 **is** billed, at $975 |
+
+Blue Run's one-month dip to $950 is the kind of thing no assumption would ever
+produce, and it is why the periods had to come from the invoices rather than
+from activity spans.
+
+**Result: every brand-month between Aug 2025 and Jul 2026 matches the invoice to
+the dollar**, with one deliberate exception — **Aspen Green, Feb–May 2026**,
+which is *correct* precisely because it does NOT match: they paid by Zelle with
+no invoice raised until 3202 (D68). A reconciliation that forced those to tie
+would be deleting real revenue.
+
+**The QuickBooks month-by-month check improved from five ties to seven**, and
+what is left is now explained rather than mysterious: the **±$1,450 pairs**
+across Oct/Nov 2025 and Jan/Feb 2026 are exactly 44 North's rate cancelling
+between adjacent months — QuickBooks *transaction*-month bucketing, while the
+PDF proves the *work* months are right. The remaining +$500s are the Aspen Green
+Zelle months. Residual on the whole window: **+$1,050 on $71,125**.
+
+**Still outside the evidence:** Jun and Jul 2025 predate the PDF, and Aug 2026
+is not yet invoiced (arrears). Those months rest on the activity span, not on an
+invoice.
