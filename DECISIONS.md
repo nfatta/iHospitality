@@ -2139,3 +2139,76 @@ that no amount of inference would have:
 
 **What still rests on assumption rather than an invoice: nothing, except Aug
 2026** — which is not yet invoiced, because billing is in arrears.
+
+---
+
+**D72 — Line-by-line reconciliation: the activity data was NOT already correct, and the gap is concentrated in one brand.** ✅ 21 Aug 2026
+
+The operator asked, reasonably, whether the day's work had already made the
+activity data match the invoices. **It had not.** D65 changed how activities are
+*priced*; D66–D71 reconciled the **retainer only**. Account visits, case sales
+and bottle sales had never been compared to an invoice. This entry is that
+comparison.
+
+`reconcile_invoices.py` reads both invoice PDFs and compares **quantity per
+brand × work month × activity type**.
+
+**What ties exactly**, which is what says the method is sound rather than loose:
+staff training **17 = 17**, printed feature **28 = 28**, Aspen Green fresh
+market **9 = 9**, single barrel sale **1 = 1**. 133 brand-month-type
+combinations agree.
+
+**Case sales, the money line.** Combined across every case type, Jun 2025 –
+Jul 2026: the invoices billed **524 cases, $11,555**. The portal holds **394**.
+
+| brand | invoiced | portal | gap |
+|---|---|---|---|
+| **Aspen Green** | 199 | 57 | **+142** |
+| Starr Rum | 10 | 0 | +10 |
+| Blue Run | 33 | 26 | +7 |
+| Coors Whiskey | 34 | 29 | +5 |
+| 44 North | 98 | 104 | −6 |
+| Wodka | 150 | 169 | −19 |
+
+**Almost the entire gap is Aspen Green in two months** — invoice 3202 bills 75
+cases for Jun 2026 and 3210 bills 124 for Jul 2026, against 4 and 20 in the
+portal. Every other brand is within single figures. **Starr Rum's case sales
+were never logged at all.**
+
+**Account visits run 181 HIGHER in the portal than on the invoices**, and part
+of that is self-inflicted: D69 split each "All Brands" visit into one row per
+brand on retainer, while an invoice bills the visit once. No money moves — every
+account-visit rate is $0 — but the counts no longer correspond, and anyone
+comparing them should know why.
+
+**The expected non-matches are now encoded in the tool** rather than left to be
+rediscovered: 44 North reorders (**paid but never charged** — operator, 21 Aug),
+Aspen Green Feb–May 2026 (Zelle, D71), Dame Mas depletion rows (it bills a
+percentage of depletions, so `account sold` / `bottle sale` / `bottle reorder`
+are the detail behind a commission rather than invoice lines), anything `n/c`,
+and mileage (billed as miles × rate, not a count). **Forcing any of these to
+agree would delete real data** — the mistake made once already on Aspen Green.
+
+**Coors Whiskey is pooled with Five Trail + Barmen 1873** in the comparison. One
+customer, two brands (D68); without pooling, every line on both sides reads as a
+discrepancy.
+
+---
+
+**Operator UI feedback, 21 Aug 2026 — captured, NOT acted on.** The operator
+asked that the admin UI not be touched until it is discussed, and then named two
+concrete problems worth recording while they are fresh:
+
+- **Activity types page**: it reports "10 unclassified activities" but gives no
+  visible way to classify them. *"I see 10 unclassified activities but then when
+  I go to change that I have no idea how to."*
+- **Venues page**: it suggests merging two venues that are plainly different
+  premises, with **no way to say so and dismiss it**. A suggestion that cannot
+  be rejected reappears forever and trains the operator to ignore the page.
+- **The pattern he wants**, in his words: *"for all the tabs where I can clean
+  up data the easiest thing is to make the table editable and I can fix it
+  accordingly, or if there is no error I say no error."* An editable grid plus a
+  **"not an error" dismissal** that persists.
+
+The dismissal needs somewhere to live — a suggestion the operator has rejected
+has to be remembered, or the page will raise it again next week.
