@@ -2,7 +2,7 @@
 
 Written at the close of **21 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D69**.
+they are. Read this first, then **D65 through D70**.
 
 ---
 
@@ -24,17 +24,21 @@ figure is still too high and must not be quoted.**
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D69 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D70 in `DECISIONS.md`.
 >
 > **1. Enter the contractors.** Nobody is on file, so base pay is $0 in every
 > total and margin is overstated. I will give you names, base pay and cadence.
 > Base pay is a COMPANY cost (D67) — it must not land in any per-brand margin.
 >
-> **2. Six retainer months still disagree** and I stopped rather than
-> curve-fit: Jun 2025 (−$950), Oct 2025 (+$1,450), Nov (+$675), Dec (+$900),
-> Jan 2026 (+$1,475), Feb (−$950). Gin Lane ($1,600/mo, not a portal brand)
-> explains part. **Read D68's Aspen Green paragraph before touching these** —
-> forcing a tie against a source that cannot see the thing destroys real data.
+> **2. The retainers are DONE and tie to the invoices** (D70) for every month
+> Aug 2025 – Jul 2026. Do not "fix" the Aspen Green Feb–May 2026 gap: it is
+> correct that it does not tie, because they paid by Zelle with no invoice.
+> Only Jun/Jul 2025 (older than the PDF) and Aug 2026 (not yet invoiced) rest
+> on assumption.
+>
+> **The unblock for line-by-line reconciliation is `Hubspot/Invoice_year.pdf`** —
+> it carries the per-activity lines with quantity and rate that the QuickBooks
+> connector blanks. `scratchpad/parse_invoices.py` already extracts them.
 >
 > **3. Then mileage and expenses.** Ruled 21 Aug and not yet applied: mileage
 > EARNS and belongs in revenue with a cost behind it; itemised expenses are
@@ -172,8 +176,12 @@ per-brand margin; it lands in `v_month_business` instead.
 
 ## Things that will bite you if you don't know them
 
-- **THE QUICKBOOKS CONNECTOR BLANKS INVOICE SERVICE LINES.** This is the blocker
-  on line-by-line reconciliation and it is not a query problem. A $3,503 Five
+- **NEVER SAVE A PDF INTO THE WEBSITE REPO.** Its root IS the Netlify publish
+  directory, so a committed PDF is served at `ihospitality.vip/<name>`. Twelve
+  months of client invoices were briefly sitting there untracked on 21 Aug.
+  `*.pdf` is gitignored now; the invoices live at `Hubspot/Invoice_year.pdf`.
+- **THE QUICKBOOKS CONNECTOR BLANKS INVOICE SERVICE LINES**, but the invoice
+  PDFs do not (D70) — use them. This is not a query problem. A $3,503 Five
   Trail invoice comes back as **four empty line objects and a subtotal** — in a
   single-invoice fetch by document number as much as in a bulk one. Invoice
   *totals* are complete and correct (93 invoices summing to $194,414, matching
