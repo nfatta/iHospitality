@@ -1922,3 +1922,101 @@ iHospitality's. Reconciliation is to be **line by line against invoice lines**,
 not brand-month totals — which the connector's blanked service lines currently
 prevent. And the admin UI is **not to be touched** until it is discussed; the
 operator's word was *"counterintuitive"* rather than complicated.
+
+---
+
+**D68 — The retainers are loaded and reconciled month by month against QuickBooks. Five months tie exactly, and the misses are informative.** ✅ 21 Aug 2026
+
+The operator supplied the monthly retainer sheet: 44 North $1,450, Wodka
+$1,225, Heaven's Door $1,850, Gin Lane $1,600, Coors Whiskey $1,525, Blue Run
+$975, Dame Mas $750, Aspen Green $500 rising to $1,000, Starr Rum $900. **He had
+the amounts; nobody had the periods.** Those were derived from each brand's
+activity span and then corrected against QuickBooks, one work month at a time.
+
+**The method is the point.** `brand_retainer` and the QuickBooks retainer figure
+are independent, so a month that ties is real evidence — which is exactly why
+D66 refused to source revenue from `invoice_recap`. Billed in arrears, so the
+transaction month is shifted back one to compare like with like.
+
+**Five months tie to the dollar:** Jul, Aug and Sep 2025, and Jun and Jul 2026.
+That is strong confirmation of the amounts *and* of the arrears shift.
+
+**Corrections the reconciliation forced, each evidenced by an exact amount:**
+
+- *Blue Run and Coors Whiskey end at work month Feb 2026.* March 2026 was over
+  by exactly $975 + $1,525 + $500.
+- *Heaven's Door ends at work month Jul 2025.* August was over by exactly
+  $1,850 — and their **last invoice, 3119, carries work month July 2025**.
+  Documentary, not curve-fitting.
+- *Starr Rum at $900.* The reconciliation **predicted this before the operator
+  supplied it** — a steady −$900 across Jul–Sep 2025 with no brand to explain
+  it. He then confirmed "$900 a month."
+
+**THE CORRECTION THAT WAS WRONG, and it is the most useful entry here.** Aspen
+Green's period was first "corrected" from Feb 2026 to Jun 2026 because that made
+four months tie. It was wrong. The operator: *"we have not been billing Aspen
+Green through QuickBooks until recently — they were sending money via Zelle
+without an invoice."* Their first invoice is **3202, work month Jun 2026**.
+QuickBooks structurally could not see Aspen Green before that, so the tie was
+achieved by deleting real revenue to match a blind source. Restored to Feb 2026,
+and the +$500 deltas for Feb–May 2026 are now **expected and correct**.
+
+> **Tying to a source is only evidence if the source can see the thing.**
+> A reconciliation that forces agreement with an incomplete record does not find
+> the truth; it destroys it. This is D62's family — a check that cannot fail —
+> approached from the other side.
+
+**Coors Whiskey is now its own brand.** One QuickBooks customer, "Five Trail
+Whiskey / Barmen Bourbon," billed $1,525/mo. At the operator's request it is
+held under that name rather than attributed to either brand, so Coors Whiskey
+shows a retainer with no activity while Five Trail and Barmen 1873 show activity
+with no retainer. That is the billing as it actually happened, and it is the
+customer-above-brand layer surfacing again — it is not modelled, only named.
+
+**Residual, and it is small:** six months still disagree — Jun 2025 (−$950),
+Oct 2025 (+$1,450), Nov (+$675), Dec (+$900), Jan 2026 (+$1,475), Feb (−$950).
+Gin Lane ($1,600/mo) is not a portal brand and is deliberately excluded, which
+accounts for part of it. **Not curve-fitted any further on purpose** — the
+Aspen Green lesson above is exactly what over-fitting produces.
+
+**Heaven's Door is owed $16,361.08** across invoices 3099, 3106, 3111, 3114 and
+3119 — work months Mar–Jul 2025, none paid. The operator flagged it as a live
+problem. It is recorded here because the portal had no idea.
+
+---
+
+**D69 — The 21 "All Brands" activities are split into one activity per brand on retainer that month.** ✅ operator-ruled 21 Aug 2026
+
+Operator: *"those are generally account visits where we went to a place to
+represent all brands… it isn't a paid or charged activity. If you could break
+those up into individual activities for every brand that was active at that
+time."*
+
+**"Active at that time" is defined as a retainer running in that work month** —
+which is only possible because D68 loaded them, and is a better definition than
+`is_active` (a *current* flag that says nothing about last December). **Coors
+Whiskey expands to Five Trail and Barmen 1873**: it is a billing entity, not
+something represented at a bar.
+
+**Two risks were checked before anything was written.**
+
+*Would the copies be charged?* No. Every rate line for `account visit`,
+`account visit (pk)` and `day buy-out comp` charges **$0** across all brands.
+The one exception, Heaven's Door `account visit (pk)` at $20, is moot — they
+hold no retainer in any affected month. Confirmed after the fact: portal charge
+and cost are **unchanged** at $30,294.35 / $17,741.18. The split moved no money.
+
+*What happens to the HubSpot deal id?* All 21 rows carry one and the column is
+**unique**, so one deal cannot become N rows. The original row keeps the deal id
+and is reassigned to the first brand; the rest are new rows keyed on
+`external_ref` as `allbrands-split:{deal}:{brand}` — the same stable-idempotency
+pattern `import_activity_workbook.py` and `import_bottle_sales.py` already use,
+which is what makes re-running safe. **`external_ref` is unique too**, which the
+first attempt discovered by violating it; a single shared back-reference would
+not have worked.
+
+**Every row is marked `hand_edited`**, so under D64 the next sync stops and asks
+rather than silently reverting the split.
+
+**21 rows became 127** (21 reassigned, 106 created). Activities 1,084 → 1,190,
+and the `All Brands` brand now holds none. The Dame Mas canary is unchanged.
