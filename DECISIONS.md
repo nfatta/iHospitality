@@ -1683,7 +1683,7 @@ the point — it is the same reason the admin exists.
 
 ---
 
-**D65 — `quantity` is ALWAYS the activity multiplier. The rate card says otherwise on 211 of 232 lines, and the portal is understating revenue by $5,540.** ⏳ agreed 19 Aug 2026, not yet applied
+**D65 — `quantity` is ALWAYS the activity multiplier. The rate card said otherwise on 211 of 232 lines, and the portal was understating revenue by $5,540.** ✅ applied 21 Aug 2026 (agreed 19 Aug)
 
 Found by the operator looking at the new edit grid: two 44 North case sales,
 quantity 3, showing **$50 charge and $25 cost** — the rate for one case, not
@@ -1760,3 +1760,57 @@ account read as two one-timers.
 **Applying this is two changes, and doing one without the other is worse than
 doing neither:** set `per_unit` on the flat lines (rate-card data, editable in
 the admin, D60 — no code) *and* change the coalesce in `v_activity_money`.
+
+---
+
+**APPLIED 21 Aug 2026.** In that order, because the order is the safety: the
+schema went first (a coalesce of 1 changes nothing while `per_unit` is still
+false), then the data. The reverse would have opened the $1,065 hole for as
+long as it took to run the second command.
+
+**209 lines flipped, not 211.** Two of the 211 are pure-percent — no
+`charge_rate`, no `pay_rate` — and the view tests `charge_pct` before it tests
+`per_unit`, so the flag is dead on those rows. Setting it there would have been
+noise standing in for meaning. The update was
+`where not per_unit and (charge_rate is not null or pay_rate is not null)`.
+
+**The result ties to the prediction to the cent:** charge $24,754.35 →
+**$30,294.35**, every brand's delta exactly as tabled above. The apply script
+asserted that total before it committed, so a figure that had drifted would have
+rolled the transaction back rather than landed quietly.
+
+**The half this entry did not carry: cost moves too, and margin barely does.**
+Contractors are paid per case as well, so contractor cost goes $13,851.18 →
+**$17,741.18 (+$3,890)** and the real change in margin is **$10,903.17 →
+$12,553.17, +$1,650** — not the +$5,540 the charge column suggests on its own.
+Dame Mas is the instructive row: its *charge* is untouched because it prices on
+`charge_pct`, but its *cost* rises $175, because some of its pay lines are
+rate-based. Percent on one side does not mean percent on both.
+
+**The trap was real and slightly worse than measured:** the 10 exposed rows
+carry $1,065 of charge *and* $420 of cost. 66 activities now hold NULL quantity
+rather than the 61 counted on 19 Aug.
+
+**A third change, ruled by the operator when it was put to him: the defaults
+flip too.** Every rate-bearing line is now `per_unit`, but the column defaulted
+to `false` and the admin's "Multiply by quantity" box started unchecked — so the
+next rate line added would have quietly reproduced the exact bug this entry
+fixes, and nobody would have seen it until a revenue figure looked low. The
+column now defaults to `true` and the checkbox is pre-checked; unchecking it is
+the deliberate act. This is **D62's lesson taken rather than re-learned** for
+the third time: the wrong value of this flag is invisible, so the safe value has
+to be the one you get by doing nothing.
+
+**The data change is deliberately not in `schema.sql`.** That file is
+re-applied routinely and idempotently; a blanket `update rate_card set per_unit
+= true` living in it would re-flip any line the operator later turns off on
+purpose — a rule compiled into a script the operator cannot reach, which is
+what D60 forbids. Only the column default and the view are in the schema. The
+one-time update ran once, against the live card, and this entry is its record.
+
+**Verified after:** 73 pytest pass · offline schema/RLS/staging suite passes ·
+`verify_live.py` clean (1,084 activities, 0 anon grants, 0 write grants to
+`authenticated`) · the Dame Mas canary unchanged — 2026-04 +$0.01 (D48),
+2026-05/06/07 tying exactly, Jan–Mar still the known hole. Unchanged is the
+right answer there: Dame Mas prices on percent, so D65 could not touch it, and
+a canary that had moved would have meant something was wrong.

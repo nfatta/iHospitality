@@ -14,10 +14,12 @@ it before it becomes real.
 > the business actually bills — $24,754 against **$194,231** (Jan 2025–Aug 2026,
 > 11 customers). Three causes, none of them a billing error: every brand pays a
 > **monthly retainer the schema cannot represent**, `invoice_recap` is loaded
-> from spreadsheets that disagree with the invoices, and `quantity` is not
-> multiplied where it should be (**D65**, +$5,540). Margin per brand is not a
-> meaningful number until those are fixed — the Dame Mas account read as
-> *negative* until the retainer was found.
+> from spreadsheets that disagree with the invoices, and `quantity` was not
+> multiplied where it should be. **The third is fixed — D65 applied 21 Aug**,
+> taking charge to **$30,294.35** and contractor cost to $17,741.18, so margin
+> moved $10,903 → **$12,553**. The other two stand, and the retainer is the big
+> one: margin per brand is still not a meaningful number, and the Dame Mas
+> account read as *negative* until the retainer was found.
 
 | Stage | What | State |
 |---|---|---|
@@ -795,7 +797,8 @@ I have the data of everything I want to see."* It is a straightforward read off
 
 - **Model the retainer.** Every brand is on one; `charge` comes from `rate_card`
   pricing an *activity*, and a retainer is not an activity. ~65% of what Dame Mas
-  pays has nowhere to live.
+  pays has nowhere to live. **This is now the largest single gap** — D65 closed
+  the quantity one on 21 Aug.
 - **Load `invoice_recap` from QuickBooks rather than the workbooks**, which are a
   lossy copy: Aug 2025 commission typed `375.75` where the invoice bills
   `354.75`, June 2026 expenses $158 over, Oct 2025 $125 over, and a $455 Dame Mas
@@ -804,6 +807,40 @@ I have the data of everything I want to see."* It is a straightforward read off
   one-month billing lag needs no inference.
 - **Widen `lib.canary()`** — it compares only `invoice_recap.commission`, so it
   reports "4 months tying" truthfully while ignoring most of the invoice.
+
+---
+
+## Session of 21 Aug 2026 — D65 applied
+
+**`quantity` now multiplies everywhere, and the portal's charge is $30,294.35.**
+Two changes plus a third the operator ruled on when it was put to him:
+
+1. **`v_activity_money`: `coalesce(a.quantity, 0)` → `coalesce(a.quantity, 1)`**
+   on the charge and cost branches both. Schema change, applied first — a
+   coalesce of 1 changes nothing while `per_unit` is still false, so this order
+   is what kept the $1,065 hole from ever being open.
+2. **209 rate-card lines flipped to `per_unit`.** Data, not code (D60), applied
+   once against the live card and deliberately *not* added to `schema.sql`,
+   which is re-applied routinely and would re-flip a line the operator later
+   turns off on purpose. Two of the 211 flat lines are pure-percent and were
+   left alone: the view tests `charge_pct` first, so the flag is dead there.
+3. **The defaults flipped too** — column default `true`, admin checkbox
+   pre-checked. Otherwise the next rate line added would have reproduced the
+   very bug being fixed, invisibly. D62's lesson, third application.
+
+**It ties to D65's prediction to the cent** — every brand's delta as tabled,
+total charge $24,754.35 → $30,294.35. The apply script asserted the total before
+committing, so drift would have rolled back rather than landed quietly.
+
+**What D65 under-stated: cost moves too.** Contractors are paid per case as
+well, so contractor cost went $13,851.18 → $17,741.18 (+$3,890) and margin
+moved only +$1,650, not +$5,540. Dame Mas is the row that teaches it — charge
+untouched (percent basis), cost up $175, because percent on one side does not
+mean percent on both.
+
+**Verified:** 73 pytest · offline schema/RLS/staging suite · `verify_live.py`
+clean (1,084 activities, 0 anon grants, 0 write grants to `authenticated`) ·
+Dame Mas canary unchanged, which is the correct result rather than a lucky one.
 
 ---
 
