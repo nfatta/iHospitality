@@ -2077,3 +2077,65 @@ Zelle months. Residual on the whole window: **+$1,050 on $71,125**.
 **Still outside the evidence:** Jun and Jul 2025 predate the PDF, and Aug 2026
 is not yet invoiced (arrears). Those months rest on the activity span, not on an
 invoice.
+
+---
+
+**D71 — Money paid without an invoice is MARKED, not explained in a note. The retainer now reconciles to zero.** ✅ operator-ruled 21 Aug 2026
+
+Aspen Green paid **$500 a month by Zelle from Feb 2026** with no invoice raised
+until 3202 (work month Jun 2026). **$2,000 in total.** The operator's framing:
+
+> *"The $500 wouldn't be in QuickBooks since we never invoiced them, so it would
+> be as if it never happened."*
+
+Exactly so — and the consequence is the entry. **The money is real, and the
+portal is now the only record of it.** QuickBooks has no invoice and, checked
+directly, **no sale either**: Aspen Green does not appear in Sales by Customer
+for Feb–Jun 2026 at all. Whether it was ever booked as income is a bookkeeping
+question outside this system and was flagged to the operator.
+
+**Why a note was not sufficient.** A retainer with no invoice can never tie to
+one, so it shows as a permanent +$500 monthly shortfall — and the obvious fix
+is to delete it. **That exact mistake was made earlier the same day** (D68) and
+caught only because the operator happened to mention the Zelle payments. The
+next person reconciles first and reads notes second, so the fact has to be
+structural, not prose.
+
+`brand_retainer.source` is now `invoiced | uninvoiced`. Uninvoiced money counts
+toward revenue, is broken out as `retainer_uninvoiced` in
+`v_brand_month_revenue`, and is **excluded from every comparison against
+QuickBooks** — because a figure with no invoice should never be expected to tie.
+
+The Aspen Green period had to be **split**, which is the detail that shows the
+flag is doing real work: Feb–May 2026 is uninvoiced, **June 2026 is the same
+$500 but invoiced** (3202), and July onward is $1,000 invoiced.
+
+**A schema note worth keeping.** `create or replace view` cannot insert or
+rename a column mid-list, and dropping `v_brand_month_revenue` would take
+`v_month_business` with it. New columns go on the **end**. Separately, `FILTER`
+is aggregate-only — a per-row conditional needs `CASE`.
+
+---
+
+**THE RESULT: $71,125 on file against $71,125 invoiced. Zero.**
+
+Eleven of fourteen work months tie exactly. The three that do not are **two
+perfectly cancelling ±$1,450 pairs** (Oct/Nov 2025, Jan/Feb 2026) where 44
+North's invoice lands in an adjacent QuickBooks *transaction* month — the PDFs
+prove the *work* months are right, so the portal is correct and the bucketing is
+what moves.
+
+**`Invoice_June_july25.pdf` closed the last gap**, and produced two corrections
+that no amount of inference would have:
+
+- **Heaven's Door bills as "Spirit Investment Partners."** Nothing in its BILL TO
+  block says "Heaven's Door," which is why three earlier passes left a −$1,850
+  hole in June 2025 and why D68 declined to guess at it. It was invoiced for
+  **both June and July 2025**.
+- **Starr Rum starts July 2025**, not June; June was an assumption from the
+  activity span.
+- 44 North's July 2025 invoice carries a malformed `ACTIVITY DATE` of "2024",
+  so its month could not be parsed. The $1,450 is on the invoice.
+
+**What still rests on assumption rather than an invoice: nothing, except Aug
+2026** — which is not yet invoiced, because billing is in arrears.

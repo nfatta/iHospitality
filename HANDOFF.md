@@ -2,7 +2,7 @@
 
 Written at the close of **21 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D70**.
+they are. Read this first, then **D65 through D71**.
 
 ---
 
@@ -24,17 +24,19 @@ figure is still too high and must not be quoted.**
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D70 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D71 in `DECISIONS.md`.
 >
 > **1. Enter the contractors.** Nobody is on file, so base pay is $0 in every
 > total and margin is overstated. I will give you names, base pay and cadence.
 > Base pay is a COMPANY cost (D67) — it must not land in any per-brand margin.
 >
-> **2. The retainers are DONE and tie to the invoices** (D70) for every month
-> Aug 2025 – Jul 2026. Do not "fix" the Aspen Green Feb–May 2026 gap: it is
-> correct that it does not tie, because they paid by Zelle with no invoice.
-> Only Jun/Jul 2025 (older than the PDF) and Aug 2026 (not yet invoiced) rest
-> on assumption.
+> **2. The retainers are DONE. They reconcile to ZERO** — $71,125 on file
+> against $71,125 invoiced (D70, D71). Nothing rests on assumption any more
+> except Aug 2026, which is not yet invoiced because billing is in arrears.
+> **Do not "fix" the Aspen Green Feb–May 2026 money**: it is flagged
+> `source='uninvoiced'` because they paid by Zelle with no invoice, and it is
+> correctly excluded from the QuickBooks comparison. Deleting it would delete
+> $2,000 of real revenue — nearly done once already.
 >
 > **The unblock for line-by-line reconciliation is `Hubspot/Invoice_year.pdf`** —
 > it carries the per-activity lines with quantity and rate that the QuickBooks
