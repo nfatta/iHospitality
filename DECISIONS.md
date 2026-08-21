@@ -2277,3 +2277,58 @@ the invoices in several types — account visits **−257** (partly D69's own sp
 which multiplies one visit across brands while an invoice bills it once), and
 `1st case sale` **−117**. Those are the dangerous direction: making them agree
 means deleting logged work. They need looking at, not correcting.
+
+---
+
+**D74 — The edit grid was reclassifying without repricing. The column that moves money is the raw string, not the label.** ✅ operator-specified 21 Aug 2026
+
+The operator described the monthly workflow he actually wants, which is the
+right instinct — this should be a UI job done as data arrives, not a session of
+someone running scripts:
+
+> *"We have a table which lists the activity and the detail in different columns
+> shows me the rate, then I have an empty column where I can put the new
+> activity and then that will populate with the new rate and when I click save
+> it updates. Venue and description should also be able to be edited."*
+
+Most of that already existed on the Review and edit page. **The part that did
+not is the part that mattered.**
+
+`rate_card` is keyed on `source_activity_type` — the **raw** string — and
+deliberately so: *"tasting event"*, *"tasting event N/C"* and *"Tasting Event
+Split"* price at $150, $0 and $100 while all three classify as a single type.
+The grid edited the tidy **label**. So changing an activity's type left the
+charge exactly where it was — **silently**. Proved directly before rebuilding
+anything: changing `activity_type_id` moved the money **not at all**; changing
+`source_activity_type` moved it immediately.
+
+**An edit control that appears to work and does nothing is indistinguishable
+from one that works** — D62 for the third time this session, after the sync's
+overwrite and the `per_unit` default.
+
+**What the grid does now.** It edits the raw priced string; offers only strings
+the rate card can actually price *for that brand*; and re-derives the label
+through `resolve_activity_type()` on save, so reclassifying and repricing are
+**one action** rather than two that look like one. The rate itself is shown —
+seeing `$50 × 3 = $150` is what makes a wrong figure obvious, where seeing
+`$150` alone does not — and the brand-facing description is editable, while
+`title` stays read-only because it is HubSpot's deal name and the row's
+provenance.
+
+**A "what will change" preview prices the edit before it is committed**, and
+resolves the rate through the *same* lookup `v_activity_money` uses — brand line
+preferred over shared, effective on the activity's own date. A second pricing
+implementation in Python would drift from the view; this one cannot. Verified
+end to end: the preview said $75.00, the save produced $75.00, and the
+classification followed.
+
+It also **warns when a change would resolve to no rate at all**, rather than
+letting a $0 vanish into a revenue total that looks complete — the same
+principle as `unpriced` in `v_activity_money`.
+
+**One bug found by testing rather than by the operator.** The first version
+assembled the rate string in SQL with a literal `%`, which psycopg reads as a
+placeholder whenever parameters are passed. That is exactly what broke the
+Venues page, and `lib`'s `params or None` fix only rescues the *no-params* case
+— which this is not. The numbers come back raw and are formatted in pandas. **A
+page nobody has opened is not a page that works.**
