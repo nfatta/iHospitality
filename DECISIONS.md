@@ -2212,3 +2212,68 @@ concrete problems worth recording while they are fresh:
 
 The dismissal needs somewhere to live — a suggestion the operator has rejected
 has to be remembered, or the page will raise it again next week.
+
+---
+
+**D73 — The missing work was never in HubSpot, so it is backfilled from the invoices. And the canary was agreeing for the wrong reason.** ✅ operator-confirmed 21 Aug 2026
+
+Asked whether Aspen Green's missing 142 cases were lost on import or never
+logged, the operator was unambiguous: **"it was never in hubspot."** That
+settles the class of problem — **no sync will ever produce this data**, because
+the source does not have it. The invoice is the only record (D56).
+
+**Two parts, and the order is the safety — the same shape as D65.**
+
+**1. Sixteen rate-card lines the invoices prove exist were missing entirely.**
+Aspen Green had **no `recurring case` charge line** and Starr Rum had **no rate
+card at all**, despite both being invoiced throughout. A naive backfill would
+have booked Aspen Green's 199 cases at **$0 charge against $995 of cost —
+margin −$995**, which is worse than leaving them out. Rates first: charge
+$30,294.35 → **$31,686.65**, purely from pricing work already logged.
+
+Every rate came off the invoices, which state the rate on each line. Operator,
+on Aspen Green: *"we pay out $5 a case so we make nothing on those."* Both sides
+are stated explicitly on that line so the zero margin is **visible rather than
+inferred**.
+
+**2. Sixty-five invoice-derived activity rows**, keyed on `external_ref` in the
+same stable-idempotency style `import_activity_workbook.py` and
+`import_bottle_sales.py` already use, and marked `hand_edited` so the sync stops
+rather than reverting them (D64). Charge → **$39,201.65**, cost → $21,466.18.
+
+**What is lost, and is not pretended otherwise:** an invoice line carries a
+brand, a work *month*, an item and a quantity. **No venue and no day.** So each
+row is one activity per brand-month-type — truthful about what and how much,
+silent about where. Venue analysis for these brands stays incomplete.
+
+`recurring case` now ties **exactly at 359 = 359**, along with `5l barrel`,
+`barrel prep`, `half case sale`, `drink list 2`, fresh market and single barrel.
+Agreements went **133 → 198**.
+
+---
+
+**THE CANARY WAS AGREEING FOR THE WRONG REASON, and adding correct data exposed
+it.** Pricing Dame Mas mileage and tasting events broke a tie that had held for
+months. The instinct is to suspect the new data. **The data was right and the
+CHECK was wrong.**
+
+`invoice_recap.commission` is **one line on the invoice** — a percentage of
+depletions, which for Dame Mas is `bottle sale` and `bottle reorder` priced at
+10% through `charge_pct`. `lib.canary()` summed **every** charge Dame Mas
+carried and compared that total against **one of its parts**. It agreed only for
+as long as Dame Mas's flat-rate lines were missing from the rate card. The
+moment the card became more complete, the check failed — not because anything
+broke, but because it had never been comparing like with like.
+
+Restricted to percent-priced rows it compares commission to commission, and
+2026-04 (+$0.01, D48), 05, 06 and 07 tie again exactly.
+
+> **A check that agrees because both sides are incomplete is D62 wearing a
+> different hat.** It is not enough for a canary to be green; it has to be green
+> for a reason you can state. This one now is.
+
+**Still outstanding, and deliberately not "fixed":** the portal holds MORE than
+the invoices in several types — account visits **−257** (partly D69's own split,
+which multiplies one visit across brands while an invoice bills it once), and
+`1st case sale` **−117**. Those are the dangerous direction: making them agree
+means deleting logged work. They need looking at, not correcting.

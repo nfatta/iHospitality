@@ -2,7 +2,7 @@
 
 Written at the close of **21 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D71**.
+they are. Read this first, then **D65 through D73**.
 
 ---
 
@@ -24,7 +24,7 @@ figure is still too high and must not be quoted.**
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D71 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D73 in `DECISIONS.md`.
 >
 > **1. Enter the contractors.** Nobody is on file, so base pay is $0 in every
 > total and margin is overstated. I will give you names, base pay and cadence.
@@ -42,15 +42,21 @@ Paste this to pick up exactly where we stopped:
 > it carries the per-activity lines with quantity and rate that the QuickBooks
 > connector blanks. `scratchpad/parse_invoices.py` already extracts them.
 >
-> **3. Then mileage and expenses.** Ruled 21 Aug and not yet applied: mileage
+> **3. The portal now holds MORE than the invoices in two places, and that is
+> the dangerous direction — making them agree means DELETING logged work.**
+> Account visits run 257 over (partly D69's own All Brands split, which
+> multiplies one visit across brands while an invoice bills it once) and
+> `1st case sale` runs 117 over. Investigate; do not reconcile them away.
+>
+> **4. Then mileage and expenses.** Ruled 21 Aug and not yet applied: mileage
 > EARNS and belongs in revenue with a cost behind it; itemised expenses are
 > PASS-THROUGH at cost and must be excluded from revenue and margin entirely, or
 > margin is inflated by money that was never ours. Work out where each currently
 > lands and fix it.
 >
-> **4. Then reconcile, LINE BY LINE against the invoice lines** — not
-> brand-month totals. Read the note below on the QuickBooks connector first,
-> because it blanks the service lines and that is the blocker.
+> **5. `reconcile_invoices.py` is the line-by-line tool** (D72, D73). It
+> reads the invoice PDFs from `Hubspot/` and encodes every EXPECTED
+> non-match, so run it rather than rebuilding the comparison.
 >
 > **Do not touch the admin UI.** I said it is counterintuitive and I want to
 > talk about it before anything moves.
