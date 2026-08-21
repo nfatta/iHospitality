@@ -1814,3 +1814,111 @@ one-time update ran once, against the live card, and this entry is its record.
 2026-05/06/07 tying exactly, Jan–Mar still the known hole. Unchanged is the
 right answer there: Dame Mas prices on percent, so D65 could not touch it, and
 a canary that had moved would have meant something was wrong.
+
+---
+
+**D66 — The retainer gets a table of its own. It is the majority of what the business sells, and the portal had nowhere to put it.** ✅ operator-ruled 21 Aug 2026
+
+`charge` comes from `rate_card` pricing an **activity**. A retainer is not an
+activity: no venue, no work date, no quantity, and it arrives whether or not
+anyone visited an account that month. Dame Mas, July 2026, is the whole argument
+in one line — **$750 of retainer against $21.08 of commission.**
+
+**The size of what was missing.** From QuickBooks, over the fifteen months this
+portal actually covers (Jun 2025 – Aug 2026), the Retainer item billed
+**$76,875** against roughly $30,294 of priced activity. Lifetime it is $110,850
+of a $167,580 Sales group — **66%**. Operator, 21 Aug: *"every brand has a
+retainer."*
+
+**The consequence was a wrong sign, not a small understatement.** Dame Mas read
+charge $1,657.75 against cost $1,911.18: margin **−$253.43**. The portal said a
+profitable account lost money. With its retainer the same account is
+**+$10,246.57**.
+
+**Two shortcuts were considered and refused, and the reasons are the entry.**
+
+*Not a synthetic monthly activity.* It is the tempting one — everything
+downstream already works off `activities`, so it costs no new plumbing. It would
+also put rows nobody synced into the table **D64 exists to make trustworthy**,
+forcing the sync to carry a permanent exception; show brands a "Monthly
+Retainer" line in their own activity log beside real venue work; and inflate
+every activity count in the system by twelve rows per brand per year. It buys
+reuse at the price of the two things this project protects hardest.
+
+*Not read from `invoice_recap.consulting`*, tempting under D56 and already
+holding the right number for Dame Mas. **`invoice_recap` is the canary** — the
+independent figure the portal is checked against. Source revenue from it and the
+reconciliation compares the invoice to itself and ties forever. That is
+**D62's shape exactly**: a check that can no longer fail is indistinguishable
+from one that passes. invoice_recap stays the check; `brand_retainer` is the
+source.
+
+**Shape:** `brand_retainer` — brand, monthly amount, `effective_from`,
+`effective_to`, note. Month-granular and **inclusive at both ends**, because a
+person types these into a form and "the last month I billed them" is the fact
+they hold; an exclusive end invites an off-by-one nobody would catch. A rate
+change is a new row, as on the rate card. An **exclusion constraint** refuses
+overlapping periods outright — a double-billed month is invisible in every total
+that matters — and `03_retainer_test.sql` fires all six guards rather than
+trusting them (D62 again).
+
+`v_brand_month_revenue` **FULL joins** activity money to retainer months. A month
+with a retainer and no activity is real, and so is a month with activity and no
+retainer; an inner join would silently drop whichever side was missing — the
+same mistake `lib.canary()` needed a LEFT JOIN to avoid.
+
+**Scope starts June 2025**, where the HubSpot data starts (operator ruling, 21
+Aug). Earlier QuickBooks history is archived outside this system.
+
+**Billed in arrears** (operator, 21 Aug): the invoice naming a work month is
+issued the month after, which is why `ACTIVITY DATE` and not `txn_date` is the
+basis — and why `invoice_recap.month` is already correct and must not be shifted.
+
+**What is NOT done, and it is most of it.** Only Dame Mas is on file, at
+$750/mo from Jul 2025, still running. The QuickBooks connector **blanks the
+service lines on almost every invoice** — a $3,503 Five Trail invoice returns
+four empty line objects and a subtotal, in a single-invoice fetch as much as a
+bulk one — so the other nine brands' amounts are not derivable from it and must
+be entered on the Retainer page or exported from QuickBooks by hand.
+
+---
+
+**D67 — Contractor base pay is a property of the person and a cost of the business, not of a brand.** ✅ operator-ruled 21 Aug 2026
+
+Asked whether the retainer carries a contractor cost, the operator ruled that it
+does — but not in the shape the question assumed:
+
+> *"We might pay one contractor a base of $350 every 2 weeks but another $500.
+> It has nothing to do with the brand but has other internal factors."*
+
+**So base pay is keyed on the person, on their own cadence, and it is a COMPANY
+cost.** That distinction is load-bearing. Brand margin is a brand's revenue less
+the cost of the activities done *for that brand*. Base pay is not caused by any
+one brand, so pushing it into per-brand margin would mean **inventing an
+allocation nobody agreed to**, after which every brand's margin quietly carries
+a share of a cost it did not cause. It lands one level up, in
+`v_month_business`, against the business as a whole.
+
+**Per-activity pay stays in `rate_card.pay_rate`**, which a brand's job
+genuinely does cause. A contractor can have both — a base every fortnight plus
+per-activity pay — and neither page is the whole of what someone earns.
+
+**Shape:** `contractors` (the person, retired rather than deleted, because their
+historical pay is part of what last year cost) and `contractor_pay`
+(effective-dated amount and cadence — weekly, biweekly, semimonthly, monthly).
+Same exclusion constraint as the retainer. A rise is a new period; editing an
+amount in place restates every month before it.
+
+**"Monthly equivalent" is an average and the page says so.** Fortnightly pay
+lands three times in some months, so the view spreads the annual cost evenly
+rather than pretending to know which months carried the extra run. The **annual**
+figure is the exact one; a single month reconciled against a bank statement
+needs real pay dates.
+
+**Also ruled, 21 Aug, and not yet applied:** mileage **earns** (a real margin
+line) while itemised expenses are **pass-through at cost** and must be excluded
+from revenue and margin, or margin is inflated by money that was never
+iHospitality's. Reconciliation is to be **line by line against invoice lines**,
+not brand-month totals — which the connector's blanked service lines currently
+prevent. And the admin UI is **not to be touched** until it is discussed; the
+operator's word was *"counterintuitive"* rather than complicated.

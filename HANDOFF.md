@@ -1,51 +1,25 @@
 # HANDOFF — start here
 
-Written at the close of **19 Aug 2026** (second session that day). This is the
-"what now" document; `PROGRESS.md` is the full build log and `DECISIONS.md` is
-why things are the way they are. Read this first, then **D63, D64 and D65**.
+Written at the close of **21 Aug 2026**. This is the "what now" document;
+`PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
+they are. Read this first, then **D65, D66 and D67**.
 
 ---
 
 ## The one-paragraph version
 
-The staff admin got authentication (D63 — it turned out to need a config line,
-not a login) and HubSpot now lands in a **staging zone** that a person promotes
-from (D64), so cleaning data is finally durable. Along the way, reading the
-actual invoices exposed something larger: **the portal models roughly a tenth of
-what the business actually bills.** Every brand is on a monthly retainer that
-lives nowhere in the database, `invoice_recap` is loaded from spreadsheets that
-disagree with QuickBooks, and `quantity` is not being multiplied where it should
-be. None of that is a billing error — clients were charged correctly — but every
-revenue and margin figure in the portal is wrong, and wrong low.
-
----
-
-## Run it
-
-```bash
-# the staff admin — analysis, cleanup, and now review/promotion
-cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Hubspot/portal_seed"
-python -m streamlit run admin/app.py          # http://127.0.0.1:8501
-```
-
-**Launch it from `portal_seed/` and nowhere else.** The admin has no login; its
-access control is that it binds to loopback, and Streamlit resolves
-`.streamlit/config.toml` against the *working directory*. From the wrong
-directory that setting silently vanishes and the app publishes every brand's
-rate card to whatever network you are on. `lib._require_loopback()` refuses to
-render if that happens, but do not rely on being saved by it.
-
-```bash
-# the public site + brand portal
-cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Website/ihospitality-website_3_3_26/ihospitality"
-python -m http.server 8123                    # portal at /portal/login.html
-```
-
-Health checks, all read-only:
-
-```bash
-cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Hubspot/portal_seed" && python verify_live.py
-```
+**D65 is applied** — `quantity` multiplies everywhere now, and the portal's
+activity charge is $30,294.35 rather than $24,754.35. Then the retainer got
+modelled (**D66**): its own effective-dated table, because it is not an activity
+and `invoice_recap` had to stay the independent canary rather than become the
+source. Asking whether the retainer carried a contractor cost produced a
+different answer than expected (**D67**) — base pay belongs to the *person*, on
+their own cadence, and is a **company** cost that must never be pushed into
+per-brand margin. Both tables and both admin pages exist and are tested. **What
+is missing is data:** nine of ten brands have no retainer on file, and nobody is
+on file as a contractor. Until those are entered, every revenue and margin
+figure here is still wrong — just wrong for a reason that now has somewhere to
+be fixed.
 
 ---
 
@@ -53,34 +27,64 @@ cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Hubspot/portal_seed" && pytho
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D63–D65 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D67 in `DECISIONS.md`.
 >
-> Two jobs, in this order.
+> **1. Get the retainers in.** Nine brands have none: 44 North, Wodka, Aspen
+> Green, Blue Run, Barmen 1873, Starr Rum, Five Trail, Heavens Door, and the two
+> internal ones. I have the amounts — ask me for them, or I will paste them.
+> Enter them on the Retainer page (D60: this is data, not code) and then show me
+> `v_brand_month_revenue` per brand, and the on-file total against the $76,875
+> QuickBooks invoiced Jun 2025 – Aug 2026.
 >
-> **1. Apply D65 — it is agreed and half-finished.** `quantity` is always the
-> activity multiplier, but only 21 of 232 rate-card lines carry `per_unit`, so
-> the portal understates revenue by $5,540. This is TWO changes and doing one
-> without the other is worse than doing neither: set `per_unit` on the flat rate
-> lines (rate-card data, no code — D60), **and** change `coalesce(a.quantity, 0)`
-> to `coalesce(a.quantity, 1)` in `v_activity_money`, on the charge and cost
-> branches both. Without the second, 10 rows with NULL quantity drop to $0 and
-> $1,065 disappears. Show me the before/after per brand before committing.
+> **2. Then the contractors**, same thing — I will give you names, base pay and
+> cadence. Remember base pay is a COMPANY cost (D67); it must not land in any
+> per-brand margin.
 >
-> **2. Model the retainer.** Every brand pays a monthly retainer and the portal
-> has nowhere to put it — `charge` comes from `rate_card` pricing an *activity*,
-> and a retainer is not an activity. It is ~65% of what Dame Mas pays. Until
-> this exists, every margin number in the admin is fiction. Recommend a shape
-> first (a monthly billing table? a synthetic activity type? extend
-> `invoice_recap` and read from it?) and let me pick.
+> **3. Then mileage and expenses.** Ruled 21 Aug and not yet applied: mileage
+> EARNS and belongs in revenue with a cost behind it; itemised expenses are
+> PASS-THROUGH at cost and must be excluded from revenue and margin entirely, or
+> margin is inflated by money that was never ours. Work out where each currently
+> lands and fix it.
+>
+> **4. Then reconcile, LINE BY LINE against the invoice lines** — not
+> brand-month totals. Read the note below on the QuickBooks connector first,
+> because it blanks the service lines and that is the blocker.
+>
+> **Do not touch the admin UI.** I said it is counterintuitive and I want to
+> talk about it before anything moves.
 >
 > Standing rules that outrank convenience: the billing is the truth (D56), no
 > hardcoded business data (D60), the brand portal stays read-only by
-> construction (D61), and cleanup happens in the staging zone rather than by
-> overwriting (D64).
+> construction (D61), cleanup happens in the staging zone rather than by
+> overwriting (D64), and base pay is never allocated to a brand (D67).
 >
 > Before you finish: `python -m pytest test_normalize.py test_sync.py -q`,
 > `bash db/test/run.sh`, `python verify_live.py`, and confirm the Dame Mas
 > canary still ties on the admin's Health page.
+
+---
+
+## Run it
+
+```bash
+# the staff admin — analysis, cleanup, review, retainer, contractors
+cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Hubspot/portal_seed"
+python -m streamlit run admin/app.py          # http://127.0.0.1:8501
+```
+
+**Launch it from `portal_seed/` and nowhere else** (D63). The admin has no
+login; its access control is that it binds to loopback, and Streamlit resolves
+`.streamlit/config.toml` against the *working directory*. From the wrong
+directory that setting silently vanishes and the app publishes every brand's
+rate card — and now every contractor's pay — to whatever network you are on.
+`lib._require_loopback()` refuses to render if that happens, but do not rely on
+being saved by it.
+
+```bash
+# the public site + brand portal
+cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Website/ihospitality-website_3_3_26/ihospitality"
+python -m http.server 8123                    # portal at /portal/login.html
+```
 
 ---
 
@@ -90,118 +94,127 @@ Paste this to pick up exactly where we stopped:
 
 | repo | branch | latest |
 |---|---|---|
-| website (`…/ihospitality/`) | `portal-v1` | `15cc482` — 5 commits unpushed |
-| `Hubspot/portal_seed/` | `main` | `ccd3176` — local only, no remote by design |
+| website (`…/ihospitality/`) | `portal-v1` | `e907095` + this handoff — 7 commits unpushed |
+| `Hubspot/portal_seed/` | `main` | `f0cba62` — local only, no remote by design |
 
-**Verified at close:** 73 pytest pass · offline schema/RLS/staging suite passes,
-including all seven staging assertions · 0 grants to `anon`, 0 write grants to
-`authenticated`, 0 grants on `staging` to browser roles · 1,084 activities ·
-review queue `{in_sync: 1066}` · Dame Mas canary unchanged (4 of 7 tying, April
-+$0.01 per D48, Jan–Mar the known hole).
+**Verified at close:** 73 pytest pass · offline schema/RLS/staging/**retainer**
+suite passes, all six retainer guards fired · 0 grants to `anon`, 0 write grants
+to `authenticated` (29 SELECT grants, up from 22) · 1,084 activities · admin
+boots headless on loopback and every query on the two new pages runs against
+live · Dame Mas canary unchanged — Apr +$0.01 (D48), May/Jun/Jul tying exactly,
+Jan–Mar the known hole.
 
 ---
 
-## What changed on 19 Aug (second session)
+## What changed on 21 Aug
 
-**D63 — the admin is a laptop tool.** The planned work was "add authentication",
-sized for Phil needing remote access. He does not: cleanup is the operator's
-job, and what Phil wants is the *analysis*. That deleted a VM, Tailscale, a
-hosting bill and a Google OAuth client. What was left was real though — Streamlit
-binds to *all interfaces* by default, so on any untrusted network every brand's
-rate card was readable by that LAN. Now pinned to `127.0.0.1` with a runtime
-guard.
+**D65 applied.** 209 rate-card lines flipped to `per_unit` (not 211 — two are
+pure-percent and the view tests `charge_pct` first), and
+`coalesce(a.quantity, 0)` became `coalesce(a.quantity, 1)` on both branches of
+`v_activity_money`. **Schema first, data second**, because a coalesce of 1
+changes nothing while `per_unit` is still false; the reverse order would have
+opened the $1,065 hole for as long as it took to run the second command. Charge
+$24,754.35 → **$30,294.35**, tying to D65's prediction to the cent.
 
-**D64 — HubSpot lands, a person promotes.** `sync_hubspot.py` used to upsert
-straight into `activities`, overwriting nine columns every run. Every fix made
-in the admin would have been silently reverted the first time the sync ran in
-anger. Deals now land in `staging.hubspot_deals` and are promoted deliberately;
-rows nobody edited still take HubSpot's updates automatically (which is what
-keeps D59 working), rows you did edit stop and ask, and deleting a duplicate
-tombstones the deal id so it cannot come back.
+**Cost moves too, which D65 did not carry.** Contractors are paid per case as
+well: cost $13,851.18 → **$17,741.18**, so margin moved **+$1,650**, not
++$5,540. Dame Mas is the row that teaches it — charge untouched (percent basis),
+cost up $175. Percent on one side does not mean percent on both.
 
-**D65 — `quantity` is always the multiplier.** Agreed, not yet applied. See the
-next prompt.
+**The defaults flipped too**, operator-ruled: the `per_unit` column now defaults
+to `true` and the admin checkbox is pre-checked. Every rate-bearing line is
+per_unit now, so a new line starting unchecked would have reproduced the exact
+bug being fixed, invisibly. D62's lesson, third application.
 
-**A `lib` bug fixed on the way.** `lib.query/execute/scalar` always passed a
-params tuple, so psycopg treated a literal `%` as a placeholder — which broke
-the entire Venues page (merge *and* edit) on a `like '%' || … || '%'`. Now
-`params or None` in all three. Worth knowing because the failure mode is a page
-that has always been broken and nobody opened.
+**D66 — the retainer has a table.** `brand_retainer`, effective-dated, inclusive
+at both ends, with an exclusion constraint that refuses overlapping periods.
+`v_brand_retainer_month` expands it, `v_brand_month_revenue` FULL joins it to
+activity money. Dame Mas seeded at $750/mo from Jul 2025, still running:
+margin **−$253.43 → +$10,246.57**.
+
+**D67 — contractor base pay is a company cost.** `contractors` +
+`contractor_pay`, effective-dated, four cadences. Deliberately kept out of
+per-brand margin; it lands in `v_month_business` instead.
 
 ---
 
 ## Open work, most useful first
 
-1. **Apply D65** — $5,540 of understated revenue, and the coalesce trap.
-2. **Model the retainer.** Every brand is on one. The portal has no concept of
-   it, so margin is meaningless until it does.
-3. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** The workbooks
-   are a lossy copy: August 2025's commission is typed as `375.75` where the
-   invoice bills `354.75` (transposed digits), June 2026's expenses are $158
-   over, October 2025's are $125 over, and a $455 Dame Mas tasting invoice
-   (3203) is in neither the workbook nor the portal. QuickBooks also carries an
-   `ACTIVITY DATE` custom field on every invoice, which states the work month
-   explicitly — so the one-month billing lag needs no inference.
-4. **Widen the Health canary.** `lib.canary()` compares only `invoice_recap.commission`.
-   It reports "4 months tying" truthfully while ignoring consulting, billable,
-   subtotal and total — i.e. most of the invoice.
-5. **Run the sync for real.** It has never run with the staging code. Use
-   `--month` on a single month first and watch the review queue.
-6. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
-   6; it should be **1**. Fix in HubSpot (D59); the sync will carry it through
-   on its own because the row is not hand-edited.
-7. **17 duplicate venue clusters** — including Meg O'Malley's, which exists
-   twice (one copy with no city and no HubSpot id). The Venues page works again
-   as of this session.
-8. **Jan–Mar 2026 billed but empty** — $1,020.53 of commission against no priced
-   activity; those depletion summaries were never loaded. Aug–Dec 2025 is the
-   same story and was never even invoiced into `invoice_recap`.
-9. **Seven 44 North activities have no venue** because the HubSpot deal carries
-   no company association — the venue is named in the title every time.
-10. **Staff analytics on the website** (the second half of D63). No new backend
-    needed: `is_staff()` is already in every SELECT policy and
-    `create_portal_user.py --staff` already makes the account.
-11. **Phase 3 proper**, password reset for brand logins (D18), deleting the two
+1. **Enter the nine missing retainers.** Everything else about revenue is
+   blocked on this. On file: Dame Mas only, $750/mo.
+2. **Enter the contractors.** Nobody is on file, so base pay is $0 in every
+   total.
+3. **Mileage earns, expenses pass through** (D67). Ruled, not applied.
+4. **Reconcile line by line** against invoice lines — blocked, see below.
+5. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It currently
+   holds ONE brand and seven months. The workbooks are a lossy copy: Aug 2025
+   commission typed `375.75` where the invoice bills `354.75`, June 2026
+   expenses $158 over, Oct 2025 $125 over, and a $455 Dame Mas tasting invoice
+   (3203) in neither the workbook nor the portal.
+6. **Widen the Health canary.** `lib.canary()` compares only
+   `invoice_recap.commission` — it reports months tying while ignoring
+   consulting, billable, subtotal and total, i.e. most of the invoice.
+7. **Run the sync for real.** Never run with the staging code. Use `--month` on
+   a single month first and watch the review queue.
+8. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
+   6; it should be **1**. Fix in HubSpot (D59); the sync carries it through on
+   its own because the row is not hand-edited. **This matters more since D65** —
+   quantity now multiplies, so that row bills six times over.
+9. **17 duplicate venue clusters**, including Meg O'Malley's twice.
+10. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
+    activity charge against real contractor cost ($50, $50, $100, $50, $25).
+    Wider than the "Jan–Mar 2026" hole previously recorded.
+11. **The admin UI** — the operator called it *counterintuitive* and asked that
+    **nothing be moved until it is discussed**.
+12. **Phase 3 proper**, password reset for brand logins (D18), deleting the two
     test logins, and merging PR #1 when the portal should go live.
 
 ---
 
 ## Things that will bite you if you don't know them
 
-- **The portal shows ~13% of the business.** QuickBooks, Jan 2025–Aug 2026:
-  **$194,231** across 11 customers. The portal's lifetime charge is $24,754.
-  Retainers are the bulk of the gap. Do not quote a portal revenue figure to
-  anyone until items 1–3 above are done.
+- **THE QUICKBOOKS CONNECTOR BLANKS INVOICE SERVICE LINES.** This is the blocker
+  on line-by-line reconciliation and it is not a query problem. A $3,503 Five
+  Trail invoice comes back as **four empty line objects and a subtotal** — in a
+  single-invoice fetch by document number as much as in a bulk one. Invoice
+  *totals* are complete and correct (93 invoices summing to $194,414, matching
+  the sales-by-customer report per customer). Expense reimbursements and a few
+  item-based lines do come through. Dame Mas's `Sales:Retainer` lines are the
+  one service line that survives, which is the only reason its retainer could be
+  evidenced. **Do not spend a session re-discovering this.** Get the detail by
+  exporting *Sales by Product/Service Detail* from QuickBooks instead.
+- **Billed in arrears.** The invoice naming a work month is issued the month
+  after. `ACTIVITY DATE` on every invoice states the work month explicitly, so
+  the lag needs no inference — and `invoice_recap.month` is already on the
+  work-month basis, so **do not shift it again**.
+- **Scope starts June 2025**, where the HubSpot data starts. Earlier QuickBooks
+  history the operator archives manually.
+- **The portal still shows a fraction of the business.** QuickBooks, Jan 2025 –
+  Aug 2026: **$194,231** across 11 customers. Do not quote a portal revenue
+  figure to anyone until items 1–5 are done.
 - **Five Trail and Barmen Bourbon are ONE QuickBooks customer** and two brands
-  here. **Gin Lane 1751 ($6,661) is not in the portal at all.**
-- **The invoice is the truth (D56)**, and QuickBooks is more the truth than the
-  workbooks are.
-- **The workbook month is not the invoice month.** Work in July 2025 is invoiced
-  15 Aug 2025. QuickBooks states the work month in an `ACTIVITY DATE` custom
-  field; use it rather than inferring the lag.
-- **`invoice_recap.month` holds the WORKBOOK month**, so it is already on the
-  work-month basis — do not shift it again.
-- **No hardcoded business data (D60).** `load_rate_card.py` is retired.
+  here. Ruled 21 Aug: attribute the whole retainer to one brand, tolerable
+  *specifically because they are no longer a customer*, so nobody will compare
+  those two. **Gin Lane 1751 ($6,661) is not in the portal at all.**
+- **Base pay is never allocated to a brand** (D67). If you find yourself
+  dividing it across brands, stop — that allocation is not agreed.
 - **A constraint that has never fired looks exactly like one that works (D62).**
-  This session found two more of the same shape: the sync's overwrite (never run,
-  so never noticed) and the Venues page's `%` bug (broken all along).
-- **Local Postgres is not Supabase, in both directions (D6, D64).** A generated
-  column the local stub accepted was refused live for not being immutable.
+  Applied three times now: the sync's overwrite, the Venues `%` bug, and the
+  `per_unit` default. The retainer and contractor tables' guards are fired on
+  purpose in `db/test/03_retainer_test.sql`.
+- **Local Postgres is not Supabase, in both directions (D6, D64).** `btree_gist`
+  and the exclusion constraints were verified live, not assumed.
 - **`market` is deliberately unused.** All venues carry NULL on purpose.
-- **`activities.quantity` is SKU count on many rows (D56)** — and per D65 it
-  multiplies regardless.
 
 ---
 
 ## Not yet tested by anything automatic
 
-- The landing loop in `sync_hubspot.py.apply()` — the 73 tests cover pure logic
-  only. The staging *state machine* is covered by `db/test/02_staging_test.sql`;
-  the code that fills it is not.
+- The landing loop in `sync_hubspot.py.apply()`.
 - The sync against live HubSpot with the staging code. This is the real first
   test.
-- The admin's Review-and-edit buttons were driven through `promote.py` directly
-  rather than clicked.
-- The backfill deliberately stamped a hash derived from *our* data, not
-  HubSpot's, so the first real sync will likely re-promote those 1,066 rows as
-  state `auto`. That is expected and harmless — none are hand-edited.
+- The Retainer and Contractors pages were **queried** against live and the app
+  **boots**, but the forms were not clicked through — no retainer has been added
+  through the UI, only through SQL.
+- The first real sync will likely re-promote the 1,066 backfilled rows as state
+  `auto`. Expected and harmless — none are hand-edited.
