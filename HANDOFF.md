@@ -90,7 +90,7 @@ python -m http.server 8123                    # portal at /portal/login.html
 
 | repo | branch | latest |
 |---|---|---|
-| website (`…/ihospitality/`) | `portal-v1` | `f3928d9` — 45 commits unpushed |
+| website (`…/ihospitality/`) | `portal-v1` | `7970255` — 11 commits unpushed (vs `origin/portal-v1`) |
 | `Hubspot/portal_seed/` | `main` | `f0cba62` — local only, no remote by design |
 
 **Verified at close:** 73 pytest pass · offline schema/RLS/staging/**retainer**
