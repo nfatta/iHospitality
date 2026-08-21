@@ -8,20 +8,17 @@ they are. Read this first, then **D65, D66 and D67**.
 
 ## The one-paragraph version
 
-**D65 is applied** — `quantity` multiplies everywhere now, and the portal's
-activity charge is $30,294.35 rather than $24,754.35. Then the retainer got
-modelled (**D66**): its own effective-dated table, because it is not an activity
-and `invoice_recap` had to stay the independent canary rather than become the
-source. Asking whether the retainer carried a contractor cost produced a
-different answer than expected (**D67**) — base pay belongs to the *person*, on
-their own cadence, and is a **company** cost that must never be pushed into
-per-brand margin. Both tables and both admin pages exist and are tested. **What
-is missing is data:** nine of ten brands have no retainer on file, and nobody is
-on file as a contractor. Until those are entered, every revenue and margin
-figure here is still wrong — just wrong for a reason that now has somewhere to
-be fixed.
-
----
+**D65 applied** — `quantity` multiplies everywhere; activity charge is
+$30,294.35. The retainer got modelled (**D66**) and then **loaded and reconciled
+month by month against QuickBooks (D68)**: five months tie to the dollar, and
+the reconciliation *predicted* Starr Rum's $900 before the operator supplied it.
+Contractor base pay got its own shape (**D67**) — it belongs to the *person*,
+not the brand, and is a **company** cost. The 21 "All Brands" rows were split
+into 127, one per brand on retainer that month (**D69**), moving no money.
+**The portal now shows $109,944 of revenue against $30,294 before today.** What
+is still missing: nobody is on file as a contractor, so base pay is $0 in every
+total, and the mileage/expenses ruling is not applied — **so the $92,203 margin
+figure is still too high and must not be quoted.**
 
 ## THE NEXT PROMPT
 
@@ -29,16 +26,15 @@ Paste this to pick up exactly where we stopped:
 
 > Read `CLAUDE.md`, `HANDOFF.md`, and D65–D67 in `DECISIONS.md`.
 >
-> **1. Get the retainers in.** Nine brands have none: 44 North, Wodka, Aspen
-> Green, Blue Run, Barmen 1873, Starr Rum, Five Trail, Heavens Door, and the two
-> internal ones. I have the amounts — ask me for them, or I will paste them.
-> Enter them on the Retainer page (D60: this is data, not code) and then show me
-> `v_brand_month_revenue` per brand, and the on-file total against the $76,875
-> QuickBooks invoiced Jun 2025 – Aug 2026.
+> **1. Enter the contractors.** Nobody is on file, so base pay is $0 in every
+> total and margin is overstated. I will give you names, base pay and cadence.
+> Base pay is a COMPANY cost (D67) — it must not land in any per-brand margin.
 >
-> **2. Then the contractors**, same thing — I will give you names, base pay and
-> cadence. Remember base pay is a COMPANY cost (D67); it must not land in any
-> per-brand margin.
+> **2. Six retainer months still disagree** and I stopped rather than
+> curve-fit: Jun 2025 (−$950), Oct 2025 (+$1,450), Nov (+$675), Dec (+$900),
+> Jan 2026 (+$1,475), Feb (−$950). Gin Lane ($1,600/mo, not a portal brand)
+> explains part. **Read D68's Aspen Green paragraph before touching these** —
+> forcing a tie against a source that cannot see the thing destroys real data.
 >
 > **3. Then mileage and expenses.** Ruled 21 Aug and not yet applied: mileage
 > EARNS and belongs in revenue with a cost behind it; itemised expenses are
@@ -99,7 +95,9 @@ python -m http.server 8123                    # portal at /portal/login.html
 
 **Verified at close:** 73 pytest pass · offline schema/RLS/staging/**retainer**
 suite passes, all six retainer guards fired · 0 grants to `anon`, 0 write grants
-to `authenticated` (29 SELECT grants, up from 22) · 1,084 activities · admin
+to `authenticated` (29 SELECT grants, up from 22) · **1,190 activities** (1,084
+before the All Brands split) · revenue **$109,944** = $30,294 activity +
+$79,650 retainer · admin
 boots headless on loopback and every query on the two new pages runs against
 live · Dame Mas canary unchanged — Apr +$0.01 (D48), May/Jun/Jul tying exactly,
 Jan–Mar the known hole.
@@ -140,10 +138,11 @@ per-brand margin; it lands in `v_month_business` instead.
 
 ## Open work, most useful first
 
-1. **Enter the nine missing retainers.** Everything else about revenue is
-   blocked on this. On file: Dame Mas only, $750/mo.
-2. **Enter the contractors.** Nobody is on file, so base pay is $0 in every
-   total.
+1. **Enter the contractors.** Nobody is on file, so base pay is $0 in every
+   total and every margin figure is overstated.
+2. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
+   3114, 3119 (work months Mar–Jul 2025, none paid). Operator flagged it as a
+   live problem; the portal had no idea.
 3. **Mileage earns, expenses pass through** (D67). Ruled, not applied.
 4. **Reconcile line by line** against invoice lines — blocked, see below.
 5. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It currently
