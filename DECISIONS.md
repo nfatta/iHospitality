@@ -2385,3 +2385,62 @@ hurry should not be permanent.
 **A suggestion that cannot be rejected is worse than no suggestion**: it returns
 every month and teaches the operator to ignore the page, which costs more than
 the duplicates it was meant to catch.
+
+---
+
+**D76 — Two more from using the thing: identical names could not be merged, and the classifier would not take typing.** ✅ operator-reported 21 Aug 2026
+
+**"There are 2 321 Liquors. I go to merge them and when I click on 321 on the
+first part the other 321 becomes unselectable so I can't merge."**
+
+The target list was `[n for n in names if n != source_name]` — filtered by
+**name**. **Seventeen venue names are duplicated exactly** (321 Liquor, Meg
+O'Malley's, Frigates, Squidlips, Coasters Pub…), so choosing one removed both,
+and **the clearest duplicates in the database were the single case the page
+could not merge.** Fifteen of the seventeen are empty shells with no city and no
+activity — the easiest cleanup there is, and it was unreachable.
+
+Both selectors are keyed on `id` now and labelled with city, activity count and
+last activity, because two rows sharing a name is precisely when the name is not
+enough to tell them apart:
+
+    321 Liquor — Palm Bay · 1 activities · last 2025-12-17
+    321 Liquor — no city · 0 activities · last never
+
+**"Why wouldn't I manually type in the activity type in that table so then it
+could update?"** and then **"ideally I would want to be able to type and as I
+type it shows me options for what I have."**
+
+Both right, and they resolved to different mechanics. The column began as a
+closed dropdown to stop an unknown string resolving to **$0** and understating
+revenue silently — a real risk, but it forced a trip to another page to record
+any activity the rate card had not seen, which is the friction the page exists
+to remove.
+
+A `SelectboxColumn` **filters as you type**, so the common case is a few
+keystrokes. It cannot accept a value outside its list — `accept_new_options`
+exists on `st.selectbox` and **not** on `SelectboxColumn` as of Streamlit 1.52 —
+so both grids now pair the type-ahead with a box that adds a genuinely new
+string, which then becomes selectable in every row.
+
+**The original worry is still handled, just later and better:** every entered
+string is priced *before* saving, through the same lookup `v_activity_money`
+uses, and anything that will not price is named. Verified: `Staff Training` →
+$75.00, `  TASTING EVENT ` → $150.00, `stff trainng` → **NO RATE, flagged**. A
+typo looks exactly like a new activity, so it now says so instead of becoming a
+quiet zero.
+
+**Both were found by the operator using the pages, not by the tests** — which is
+the pattern of this whole session. The venue merge had passed every check that
+existed, because nothing tested the one arrangement that mattered.
+
+---
+
+**Why `source_activity_type` was NULL, since it was asked.** All 84 such rows
+came **from HubSpot**, in the original 10 Aug seed, on deals with the
+activity-type property **left blank**. `resolve_activity_type(null)` routes
+those to `unclassified` deliberately — *"an activity with no type at all is a
+data problem, not a new category. Route it somewhere visible instead of
+inventing a type per blank value."* Nothing is corrupted; the source field was
+empty. Per D59 the durable fix is filling it in HubSpot so future syncs carry
+it, otherwise new ones keep arriving unclassified.
