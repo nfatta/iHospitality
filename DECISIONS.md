@@ -2444,3 +2444,42 @@ data problem, not a new category. Route it somewhere visible instead of
 inventing a type per blank value."* Nothing is corrupted; the source field was
 empty. Per D59 the durable fix is filling it in HubSpot so future syncs carry
 it, otherwise new ones keep arriving unclassified.
+
+---
+
+**D77 — Nothing auto-saves, and the Save button was underneath 98 rows of grid.** ✅ operator-reported 21 Aug 2026
+
+*"I'm testing out the activity editor and classified some of what was
+unclassified. Does it auto save? If I refresh will it no longer say
+unclassified?"*
+
+**No, and no.** Streamlit holds grid edits in the widget until the button is
+clicked; a refresh discards them. Checked the database when he asked: **none of
+his edits had landed.**
+
+The question is the finding. Two things were wrong.
+
+**The Save button was several screens below the rows.** The queue is 98 rows and
+the grid rendered at full height, so the page ran long enough that the control
+sat well past the fold. Somebody classifying a batch would reasonably conclude
+it had saved, because the only evidence otherwise was off-screen. Both grids now
+have a fixed height and scroll *inside themselves*, so the save control stays on
+the same screen as the rows it applies to.
+
+**And nothing said the edits were unsaved.** The prompt read *"N row(s) would be
+classified"* — accurate, and far too quiet for something that is lost on
+refresh. It is a warning now, and says explicitly that leaving or refreshing
+loses the edits.
+
+**An IndexError was also hiding the button entirely.** Change detection looked
+each row's id back up in the original frame —
+`unresolved.loc[unresolved["id"] == r.id, ...].iloc[0]` — which raises the
+moment an id does not round-trip through the widget, and the exception landed
+exactly where the save block should have rendered. Rows are compared **by
+position** now; `num_rows="fixed"` guarantees the same rows in the same order,
+and it is how the Review and edit grid had always done it. The two pages match.
+
+> **Three of 21 Aug's bugs were found by the operator using a page**, not by any
+> test: the grid that reclassified without repricing (D74), the venue merge that
+> could not merge identical names (D76), and this one. All three passed every
+> check that existed, because no check drove a page the way a person does.
