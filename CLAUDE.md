@@ -42,7 +42,7 @@ python verify_live.py                  # read-only health check
 python apply_schema.py --apply         # re-apply db/schema.sql (idempotent)
 python seed_from_csv.py                # dry run; --apply to load
 python create_portal_user.py --list    # who has portal access
-python -m pytest test_normalize.py -q  # 35 unit tests
+python -m pytest test_normalize.py test_sync.py test_admin_sql.py -q  # 103 tests
 bash db/test/run.sh                    # schema + RLS + staging suite, no network
 python backfill_staging.py             # one-time; already applied 19 Aug
 bash test_seed_integration.sh          # end-to-end load, asserts idempotency
@@ -96,6 +96,20 @@ reproduces it; keep it that way.
   silently reverts every fix made in the admin. Deleting a duplicate tombstones
   the deal id in `staging.hubspot_suppressed` so a re-sync cannot resurrect it.
   `promote()` has ONE definition (`promote.py`), used by the sync and the admin.
+- **Itemised expenses earn nothing, and the view enforces it** (D78). The
+  `is_expense` branch is FIRST in both CASE expressions in `v_activity_money`,
+  so no rate-card line can make a reimbursement earn. Reimbursements sit BESIDE
+  revenue, never in it. Do not simplify that branch away; `04_money_test.sql`
+  builds the dangerous case on purpose and will fail.
+- **A charge with no pay rate is `uncosted`, not free** (D78). `unpriced`
+  understates revenue and someone chases it; a missing pay rate overstates
+  margin and nobody notices. Both are surfaced in the admin.
+- **In the admin: never a literal `%` in a query that passes params, and never
+  two `$` in one Streamlit markdown string** (D79). The first raises in
+  psycopg — a COMMENT counts — and the second renders as LaTeX. Both broke real
+  pages for a month. `test_admin_sql.py` checks the source for both.
+- **Open every admin page in a browser before calling a session done** (D79).
+  It is the highest-yield check in this project and nothing else covers it.
 - **The portal does not yet model the retainer**, which is most of what every
   brand pays, so no revenue or margin figure here is complete. See `HANDOFF.md`.
 - **The billing is the truth** (D56). Commission comes off the distributor's

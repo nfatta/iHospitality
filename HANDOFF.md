@@ -1,23 +1,25 @@
 # HANDOFF — start here
 
-Written at the close of **21 Aug 2026**. This is the "what now" document;
+Written at the close of **22 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D77**.
+they are. Read this first, then **D65 through D79**.
 
 ---
 
 ## The one-paragraph version
 
-The portal went from modelling roughly a tenth of the business to reconciling
-against the actual invoices. **D65** made `quantity` multiply everywhere.
-**D66–D71** gave the retainer its own table, loaded it from the invoice PDFs and
-reconciled it to **zero** — $71,125 on file against $71,125 invoiced. **D72–D73**
-did the same line by line for activity, which found that Aspen Green's missing
-cases had never been in HubSpot at all, and backfilled 65 rows from the invoices.
-**D74–D77** rebuilt the admin around the monthly workflow. Revenue is now
-**$116,752** against $24,754 that morning. **The margin figure is still too
-high** — nobody is on file as a contractor, and the mileage/expenses ruling is
-not applied.
+21 Aug took the portal from modelling a tenth of the business to reconciling
+against the invoices (**D65–D77**). 22 Aug did two things. **D78** applied the
+mileage/expenses ruling D67 had recorded and left sitting: itemised expenses are
+now excluded from revenue and margin **by construction** rather than by luck,
+and the missing-cost blind spot behind mileage turned out to be **$6,568.90
+across 37 activities and 12 types**, all of which was inflating margin
+invisibly. **D79** came from opening all nine admin pages in a browser, which
+found **four broken pages** — including the app's own front page, broken since
+D73, and Review and edit, broken by a comment warning about the very bug it
+caused. **Revenue is unchanged at $116,752.** The margin figure is still not
+quotable: base pay covers one person, and $6,568.90 of charge has no cost behind
+it.
 
 ---
 
@@ -25,18 +27,25 @@ not applied.
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D77 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D79 in `DECISIONS.md`.
 >
-> **1. Enter the contractors.** Nobody is on file, so base pay is $0 in every
-> total and every margin figure is overstated. I am entering these myself — pay
-> runs on the 1st and the 15th, semimonthly, 24 a year. Base pay is a COMPANY
-> cost (D67); it must never land in a per-brand margin.
+> **1. Finish entering the contractors.** Only Eric Anderson is on file
+> ($350 semimonthly from Jun 2025 — $10,500 so far). Everyone else is missing,
+> so base pay is understated and every margin figure is overstated. I am
+> entering these myself; the Contractors page renders correctly now (it did
+> not — D79). Base pay is a COMPANY cost (D67) and must never land in a
+> per-brand margin.
 >
-> **2. Mileage earns, expenses pass through.** Ruled 21 Aug, still not applied.
-> Mileage belongs in revenue with a cost behind it; itemised expenses are
-> reimbursements at cost and must be out of revenue and margin entirely, or
-> margin is inflated by money that was never ours. Work out where each lands
-> today and fix it.
+> **2. Enter the rates D78 exposed but must not invent.** Two gaps, both
+> business data that belongs to me, not to a script (D60):
+> - **`pay_rate` for the 12 uncosted types** — $6,568.90 of charge with no cost
+>   behind it, listed on the Rate card page. Mileage ($1,243.90) is the one you
+>   ruled on; `5l barrel` ($1,395), `single barrel sale` ($1,000) and
+>   `aspen green fresh market incentive` ($900) are larger. Some may correctly
+>   have none, if that work is covered by base pay instead.
+> - **`amount` on the five `is_expense` rows** — pass-through totals, currently
+>   all NULL, so `reimbursements` reads $0.00 while the Dame Mas invoices alone
+>   show $2,456.20 of expense lines.
 >
 > **3. The portal holds MORE than the invoices in two places, and that is the
 > dangerous direction — making them agree means DELETING logged work.** Account
@@ -45,7 +54,9 @@ Paste this to pick up exactly where we stopped:
 > 117 over. Investigate; do not reconcile them away.
 >
 > **4. Clear the classification queue** on the Activity types page — 98 rows,
-> 10 of them genuinely unclassified. Nothing auto-saves.
+> 10 of them genuinely unclassified. Nothing auto-saves. **One of those rows is
+> an `is_expense` row with an empty type**; D78 means classifying it can no
+> longer make it start earning, but check that it lands somewhere sensible.
 >
 > **5. Merge the 15 empty duplicate venues** — no city, no activity — now that
 > identical names are selectable (D76).
@@ -53,11 +64,13 @@ Paste this to pick up exactly where we stopped:
 > Standing rules that outrank convenience: the billing is the truth (D56), no
 > hardcoded business data (D60), the brand portal stays read-only by
 > construction (D61), cleanup happens in the staging zone rather than by
-> overwriting (D64), and base pay is never allocated to a brand (D67).
+> overwriting (D64), base pay is never allocated to a brand (D67), and a
+> reimbursement never earns (D78).
 >
-> Before you finish: `python -m pytest test_normalize.py test_sync.py -q`,
-> `bash db/test/run.sh`, `python verify_live.py`, and confirm the Dame Mas
-> canary still ties on the admin's Health page.
+> Before you finish: `python -m pytest test_normalize.py test_sync.py
+> test_admin_sql.py -q`, `bash db/test/run.sh`, `python verify_live.py`, and
+> **open all nine admin pages in a browser** — that last one is not optional
+> any more; it found four failures on 22 Aug that nothing else did (D79).
 
 ---
 
@@ -95,32 +108,37 @@ python -m http.server 8123                    # portal at /portal/login.html
 | repo | branch | latest |
 |---|---|---|
 | website (`…/ihospitality/`) | `portal-v1` | `git log` — unpushed vs `origin/portal-v1` |
-| `Hubspot/portal_seed/` | `main` | `f091fd3` — local only, no remote by design |
+| `Hubspot/portal_seed/` | `main` | local only, no remote by design |
 
-**Verified at close:** 73 pytest · offline schema/RLS/staging/retainer suite
-green **through both idempotency passes** · 0 grants to `anon`, 0 write grants
-to `authenticated` (30 SELECT grants) · 1,255 activities · admin boots on
-loopback and every page was opened in a browser · Dame Mas canary unchanged —
-Apr +$0.01 (D48), May/Jun/Jul tying exactly, Jan–Mar the known hole.
+**Verified at close:** 103 pytest (73 + 30 new source checks) · offline
+schema/RLS/staging/retainer/money suite green **through both idempotency
+passes**, and confirmed to **fail** when the D78 guard is removed · 0 grants to
+`anon`, 0 write grants to `authenticated` (30 SELECT grants) · 1,255 activities ·
+**all nine admin pages opened in a browser and checked for exceptions** · Dame
+Mas canary Apr +$0.01 (D48), May/Jun/Jul tying exactly, Jan–Mar the known hole.
 
 **The money:**
 
-| | that morning | now |
+| | 21 Aug | now |
 |---|---|---|
-| activity charge | $24,754 | **$39,202** |
-| retainer | — | **$79,650** |
-| revenue | $24,754 | **$116,752** |
-| contractor cost | $13,851 | $21,466 |
+| activity charge | $39,202 | $39,202 |
+| retainer | $79,650 | $79,650 |
+| revenue | $116,752 | **$116,752** |
+| contractor cost (per-activity) | $21,466 | $21,466 |
+| contractor base pay | — | $10,500 (one person) |
+| **charge with no cost behind it** | — | **$6,569** ⚠️ |
+| reimbursements (pass-through) | — | $0.00 (none entered) |
 
-Margin is **not** quotable until contractors and the expenses ruling land.
+Margin is **not** quotable. Two known reasons, both now measured rather than
+suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ---
 
 ## Open work, most useful first
 
-1. **Enter the contractors.** Base pay is $0 everywhere, so margin is
-   overstated. The operator is entering these himself.
-2. **Mileage earns, expenses pass through** (D67). Ruled, not applied.
+1. **Finish the contractors.** One person on file. Base pay understated.
+2. **Enter the 12 missing pay rates and the 5 expense amounts** (D78). Both are
+   listed in the admin; both are operator data by D60.
 3. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
    (117). Investigate — do not delete to make it tie.
 4. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
@@ -132,7 +150,8 @@ Margin is **not** quotable until contractors and the expenses ruling land.
    where the invoice bills `354.75`; a $455 Dame Mas tasting invoice (3203) is
    in neither the workbook nor the portal.
 7. **Widen the Health canary further.** It compares commission to commission
-   correctly now (D73) but still ignores consulting, billable and total.
+   correctly (D73) and now actually runs (D79), but still ignores consulting,
+   billable and total.
 8. **Run the sync for real.** Never run with the staging code. Use `--month` on
    one month and watch the review queue.
 9. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
@@ -141,25 +160,52 @@ Margin is **not** quotable until contractors and the expenses ruling land.
     unclassified (D76).
 11. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
     activity charge against real contractor cost.
-12. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
+12. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
+    It bounds the QuickBooks comparison at the last invoiced work month (D79).
+    It needs bumping when a new month is invoiced, alongside `QB_RETAINER_TOTAL`
+    and `QB_RETAINER_MONTHS` — or, better, derived from `invoice_recap` once
+    item 6 lands.
+13. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
     merging PR #1 when the portal should go live.
 
 ---
 
 ## Things that will bite you if you don't know them
 
+- **OPEN THE PAGES. Every one, in a browser, every session.** This is now the
+  highest-yield check in the project and it is not covered by anything else.
+  D74, D76 and D77 were found by the operator using a page; D79 found four more
+  in twenty minutes, two of them a month old, on the two pages the next session
+  was going to work in. **The admin's own front page had been raising an
+  exception since D73 while the handoff recorded the canary as verified** — it
+  had been verified by querying it, never by opening the app. Those are not the
+  same evidence.
 - **NEVER SAVE A PDF INTO THE WEBSITE REPO.** Its root IS the Netlify publish
   directory, so a committed PDF is served at `ihospitality.vip/<name>`. Twelve
   months of client invoices sat there untracked on 21 Aug. `*.pdf` is gitignored
   now; the invoices live at `Hubspot/Invoice_year.pdf` and
   `Hubspot/Invoice_June_july25.pdf`.
+- **A literal `%` in a query that passes params breaks the page, and a comment
+  counts** (D79). `lib.query`'s `params or None` only rescues the no-params
+  case. Spell the word out. `test_admin_sql.py` checks this now.
+- **Two `$` in one Streamlit markdown string renders as LaTeX** (D79). One is
+  fine, which is why it is easy to miss. Use a raw f-string and escape them.
+  Same test file.
+- **A reimbursement earns nothing, and that is enforced in the view, not in the
+  data** (D78). Do not "simplify" the `is_expense` branch out of
+  `v_activity_money` — it is first in both CASE expressions so that no rate-card
+  line can reach it, and `04_money_test.sql` will fail if it goes.
+- **`uncosted` deliberately requires a non-zero charge.** Without that it flags
+  718 rows instead of 37, because every `n/c` type prices at zero and has no pay
+  line either. A warning nobody acts on is worse than none.
 - **The QuickBooks API blanks invoice service lines; the PDFs do not** (D70). A
   $3,503 invoice returns four empty line objects and a subtotal, in a
   single-invoice fetch as much as a bulk one. Invoice *totals* are complete.
   Use `reconcile_invoices.py`; do not spend a session rediscovering this.
 - **Billed in arrears.** The invoice naming a work month is issued the month
   after; `ACTIVITY DATE` states the work month, so no inference is needed.
-  `invoice_recap.month` is already work-month based — **do not shift it**.
+  `invoice_recap.month` is already work-month based — **do not shift it**. This
+  is also why the current work month can never tie to QuickBooks (D79).
 - **Aspen Green Feb–May 2026 is `source='uninvoiced'`** and correctly does NOT
   tie to QuickBooks (D71). Deleting it would delete $2,000 of real revenue —
   nearly done once already.
@@ -175,10 +221,8 @@ Margin is **not** quotable until contractors and the expenses ruling land.
   reads as a discrepancy. **Gin Lane 1751 ($6,661) is not in the portal at all.**
 - **Scope starts June 2025**, where the HubSpot data starts.
 - **A constraint or control that has never been exercised looks exactly like one
-  that works (D62).** Five instances found on 21 Aug alone: the sync's
-  overwrite, the `per_unit` default, the edit grid reclassifying without
-  repricing, the venue merge on identical names, and the test harness reporting
-  success while printing a schema failure.
+  that works (D62).** Five instances on 21 Aug, and D78's expense exclusion was
+  a sixth — it was working only because nothing had tested it.
 - **Local Postgres is not Supabase, in both directions (D6).** On 21 Aug local
   was the stricter one and caught a fresh-install bug live could not show.
 - **`market` is deliberately unused.** All venues carry NULL on purpose.
@@ -189,12 +233,10 @@ Margin is **not** quotable until contractors and the expenses ruling land.
 
 - The landing loop in `sync_hubspot.py.apply()`, and the sync against live
   HubSpot with the staging code. That run is the real first test.
-- The admin's forms were exercised through their queries and write paths against
-  live, and every page was opened in a browser — but **no end-to-end save is
-  covered by a test**. Three bugs on 21 Aug were found by the operator using a
-  page, not by any check: the grid that reclassified without repricing, the
-  venue merge that could not merge identical names, and an IndexError that hid
-  the Save button.
+- **No end-to-end SAVE is covered by a test.** `test_admin_sql.py` checks the
+  admin's *source* for two render-time faults and `04_money_test.sql` checks the
+  money views, but nothing drives a form and asserts the row changed. Every save
+  bug so far has been found by a person clicking the button.
 - `reconcile_invoices.py` has no test; its expected non-matches live in code and
   comments, not assertions.
 - The first real sync will likely re-promote the backfilled rows as state

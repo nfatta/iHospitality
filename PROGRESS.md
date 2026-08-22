@@ -844,6 +844,58 @@ Dame Mas canary unchanged, which is the correct result rather than a lucky one.
 
 ---
 
+## Session of 22 Aug 2026 — D67's ruling applied (D78), and four broken pages (D79)
+
+**The ruling half.** D67 recorded the mileage/expenses ruling on 21 Aug and left
+it unapplied. Applying it meant finding out where each half actually landed:
+
+- **Itemised expenses were already out of revenue — by luck.** The five
+  `is_expense` rows contributed $0 only because no rate-card line matched their
+  types. `account visit` has 565 activities and no charge rate; pricing it (which
+  the open work list asks for) would have made "Aspen Green Samples" start
+  earning, silently. The exclusion is now the FIRST branch of both CASE
+  expressions in `v_activity_money`, so no rate-card line can reach it, and
+  `db/test/04_money_test.sql` builds that exact dangerous case and asserts $0.
+- **Mileage was the opposite** — $1,243.90 charged against no `pay_rate` at all,
+  so cost read $0. Chasing it found the general fault: `unpriced` made a missing
+  CHARGE visible, nothing made a missing PAY LINE visible, and that is the
+  direction that overstates margin. **37 activities across 12 types charge
+  $6,568.90 with no cost behind them.** Now `uncosted` / `uncosted_charge`,
+  surfaced on Health, Analysis and Rate card.
+
+Reimbursements are carried BESIDE revenue (`reimbursement`, `reimbursements`),
+never inside it. Revenue is unchanged at **$116,751.65** — nothing moved, but it
+can no longer move by accident.
+
+**The broken-pages half.** Opening all nine admin pages in a browser found four
+faults invisible to every other check:
+
+| page | fault | age |
+|---|---|---|
+| **Health (front page)** | `lib.canary()` raised on a literal `%` in a D73 comment — the app's first screen, before a single row | since D73 |
+| **Review and edit** | same fault, in a comment *warning about* literal percent signs | since D74–D77 |
+| **Contractors** | `$350.00 … **$700.00 a month**` rendered as LaTeX gibberish, on the page about to be used to enter everyone's pay | — |
+| **Retainer** | same LaTeX fault on the QuickBooks reconciliation caption | — |
+
+Plus one from reading rather than opening: the Retainer page compared 15 months
+of portal against 14 months of QuickBooks and accused the operator of a data
+error — *"$4,425.00 MORE than QuickBooks invoiced"* — when the answer was
+"August is not billed yet." Bounded now; it reads **$71,125.00 against $71,125**,
+D71's zero restored to the page meant to show it.
+
+**`test_admin_sql.py` (30 checks)** now catches both families at the source, with
+no database needed. Each checker was run against the real bug it was written for,
+not only synthetic ones.
+
+**Verified:** 103 pytest · offline schema/RLS/staging/retainer/money suite green
+through BOTH idempotency passes, and confirmed to FAIL when the D78 guard is
+removed · `verify_live.py` clean (1,255 activities, 0 anon grants, 0 write grants
+to `authenticated`, 30 SELECT) · all nine admin pages opened in a browser and
+checked for exceptions · Dame Mas canary Apr +$0.01 (D48), May/Jun/Jul exact,
+Jan–Mar the known hole.
+
+---
+
 ## Known data problems to resolve before seeding
 
 Found by profiling the six `hubspot-crm-exports-*.csv` files (315 rows):

@@ -2483,3 +2483,145 @@ and it is how the Review and edit grid had always done it. The two pages match.
 > test: the grid that reclassified without repricing (D74), the venue merge that
 > could not merge identical names (D76), and this one. All three passed every
 > check that existed, because no check drove a page the way a person does.
+
+---
+
+**D78 — Mileage earns and needs a cost behind it; itemised expenses pass through at cost. The exclusion is now structural, and the missing-cost blind spot has a name.** ✅ 21 Aug ruling, applied 22 Aug 2026
+
+D67 recorded this ruling and left it unapplied:
+
+> *Mileage **earns** (a real margin line) while itemised expenses are
+> **pass-through at cost** and must be excluded from revenue and margin, or
+> margin is inflated by money that was never iHospitality's.*
+
+Applying it meant first finding out where each actually landed, and the two
+halves turned out to be in opposite states.
+
+**Expenses were already excluded — by luck, not by rule.** The five `is_expense`
+activities did contribute $0 charge and $0 cost. But only because no rate-card
+line happened to match their activity types, and that was one edit from ending:
+
+- `account visit` carries **565 activities and no charge rate**, while the
+  invoices bill account visits. The day that line is priced — and the open work
+  list asks for exactly that — "Aspen Green Samples", an `is_expense` row typed
+  `account visit`, starts earning revenue silently.
+- One `is_expense` row sits in the classification queue with an **empty**
+  activity type. Whatever clearing that queue assigns it, if that type is
+  priced, the same thing happens.
+
+**"A constraint that has never been exercised looks exactly like one that
+works" (D62).** So the exclusion moved out of the data and into the view. The
+`is_expense` branch is now **first** in both CASE expressions in
+`v_activity_money`, which makes a reimbursement unreachable-by-construction
+rather than unmatched-by-luck. No rate-card line, for any type, can make one
+earn. `db/test/04_money_test.sql` builds precisely the dangerous case — an
+expense activity with a fully populated rate-card line behind it — and asserts
+the money still does not move. Removing the branch fails the suite; the live
+data would not have shown it for months.
+
+The money is not lost, only moved out of revenue: `reimbursement` carries the
+pass-through amount and `reimbursements` appears **beside** revenue in
+`v_month_money`, `v_brand_money`, `v_brand_month_revenue` and `v_month_business`
+— never inside it. Adding it to both sides would inflate the top line while
+leaving margin unchanged, which reads as a bigger business doing the same work.
+An expense is also **no longer counted as `unpriced`**: it has no rate by design,
+and a permanent floor under that number teaches the operator to ignore the one
+figure that exists to be chased to nil.
+
+**Mileage was the opposite problem, and it is not just mileage.** Mileage is in
+revenue correctly — $0.70/mile, per_unit, 7 activities, **$1,243.90**. It has no
+`pay_rate` at all, so cost resolves to **$0**, which reads exactly like a
+contractor who drives for nothing.
+
+Chasing it found the general fault. `unpriced` makes a missing **charge**
+visible; nothing made a missing **pay line** visible. So:
+
+| | direction | who notices |
+|---|---|---|
+| `unpriced` | understates revenue | someone chases it |
+| no pay line | **overstates margin** | nobody, ever |
+
+**37 activities across 12 types charge $6,568.90 with no pay rate behind them** —
+mileage is $1,243.90 of it, alongside `5l barrel` ($1,395), `single barrel sale`
+($1,000) and `aspen green fresh market incentive` ($900). That is now `uncosted`
+on `v_activity_money`, `uncosted_charge` on every money view, a metric on the
+Health page and Analysis, and its own panel on the Rate card page.
+
+**`uncosted` requires the charge to be non-zero, and that detail is the
+difference between a useful number and a dead one.** Defined as "has a charge
+line, has no pay line" it flagged **718** rows, because every `n/c` type prices
+at zero and has no pay line either — and a $0 charge inflates no margin. 718 is
+a warning people scroll past. 37 is one they act on.
+
+**What this does NOT do: invent the missing rates.** The mileage pay rate is
+business data and belongs to the operator (D60), as do the pass-through amounts
+— all five expense rows carry no `amount`, so `reimbursements` is currently
+$0.00 while the Dame Mas invoices alone show $2,456.20 of expense lines. The
+portal can now hold both correctly and says loudly that it does not yet.
+
+**Revenue is unchanged at $116,751.65.** Nothing moved today; what changed is
+that it can no longer move by accident.
+
+---
+
+**D79 — Four pages of the admin were broken in ways only a browser could show, and two of them had been broken for a month.** ✅ found 22 Aug 2026
+
+D77 closed with the observation that three of 21 Aug's bugs were found by the
+operator using a page rather than by any test. **Opening all nine pages on 22 Aug
+found four more**, in two families. Both are invisible to every other check in
+this repo: the queries return the right answers, the schema is fine, the tests
+pass, and the page is still broken.
+
+**Family one — a literal percent in a parameterised query.** psycopg treats `%`
+as a placeholder introducer whenever params are passed, and **a comment counts**.
+
+- **`lib.canary()` carried the words "10%" in a comment added by D73.** The
+  admin's **front page** raised `incomplete placeholder` before rendering a
+  single row, from the day D73 was committed. The handoff recorded the canary as
+  verified at close — and it had been, *by querying it*, never by opening the
+  app. The two are not the same evidence.
+- **`7_Review_and_edit.py` had a comment WARNING about literal percent signs
+  that quoted one as an example**, which broke the page that comment was about.
+  That is the page the whole monthly workflow runs through. Writing the escape
+  sequences out as examples fails the same way, and doing so was the first fix
+  attempted here — psycopg counts those too, and then the parameter count no
+  longer matches.
+
+`lib.query`'s `params or None` cannot help by construction: these queries *have*
+params. The note above it already predicted this — *"the escape has to be
+remembered every time, and forgetting it fails at runtime on a page nobody
+opened"* — and was right about everything except which page.
+
+**Family two — two dollar signs in one Streamlit markdown string.** Streamlit
+reads the pair as inline LaTeX, swallows both and italicises everything between,
+taking any `**bold**` with it. **One** unpaired dollar sign is fine, which is
+what makes it easy to miss: the same page carries a correct "$0" caption above a
+mangled one.
+
+- **Contractors** rendered `$350.00 semimonthly is **$700.00 a month**` as
+  `350.00semimonthlyis**700.00` — on the page the operator is about to use to
+  enter every contractor's pay.
+- **Retainer** mangled the QuickBooks reconciliation caption the same way.
+
+**Both families now have a source-level test** (`test_admin_sql.py`, 30 checks),
+because both fail at render rather than in an answer, and neither needs a
+database to detect. Each checker is **exercised against the real bug it was
+written for** as well as synthetic ones — a test that has never failed is
+indistinguishable from one that cannot fail (D62).
+
+**And one more, from reading the page rather than the code.** The Retainer page
+compared **fifteen** months of portal against **fourteen** months of QuickBooks
+and reported *"$4,425.00 MORE than QuickBooks invoiced — most likely a period
+left open that should have been closed."* That is an accusation of a data error
+where the true answer is **"August has not been billed yet."** Billing is in
+arrears, so the current work month is never invoiced; the check silently broke on
+1 Aug and would have grown by a month's retainer every month until the operator
+learned to scroll past the only check on that page. Bounded at
+`QB_RETAINER_LAST_MONTH` now, it reads **$71,125.00 against $71,125** — D71's
+zero, restored to the page that is supposed to show it — with the not-yet-billed
+remainder called out separately as expected rather than missing.
+
+> The pattern across D74–D79 is now unmistakable: **every check in this project
+> that has never been watched run has eventually turned out to be broken.** Nine
+> pages, opened in a browser, cost twenty minutes and found four failures, two of
+> them a month old, on the two pages the next session was going to work in.
