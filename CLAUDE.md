@@ -94,9 +94,14 @@ reproduces it; keep it that way.
   is retired and its write path deleted — do not revive it.
 - **HubSpot lands in staging; a person promotes it** (D64) — **for DEALS only.**
   `apply()` upserts `brands` and `venues` DIRECTLY, before the staging zone is
-  reached, with no review queue and no `hand_edited_at` (D83). A hand-corrected
-  `venues.city` reverts on the next sync. Do not assume the staging zone covers
-  anything but deals. `sync_hubspot.py`
+  reached (D83). Do not assume the staging zone covers anything but deals.
+- **The portal is the source of record; HubSpot is an input** (D84). The
+  business is moving off HubSpot, which is now a collection tool. A venue edited
+  in the admin is stamped `hand_edited_at` and the sync will NOT overwrite its
+  city — it files the disagreement into `staging.hubspot_venue_proposal` for the
+  Venues page. **This reverses D59 for venue attributes**: do not tell the
+  operator to "fix it in HubSpot" for those. Venue city goes through
+  `set_venue_city_from_hubspot()`, never a bare UPDATE. `sync_hubspot.py`
   writes to `staging.hubspot_deals`, never to `activities`. Rows nobody has
   edited still take HubSpot's updates automatically — that is what keeps D59
   working — but a row with `hand_edited_at` set stops and asks. Never restore the

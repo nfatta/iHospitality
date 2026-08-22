@@ -2,7 +2,7 @@
 
 Written at the close of **22 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D83**.
+they are. Read this first, then **D65 through D84**.
 
 ---
 
@@ -27,7 +27,7 @@ it.
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D83 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D84 in `DECISIONS.md`.
 >
 > **1. Finish entering the contractors.** Only Eric Anderson is on file
 > ($350 semimonthly from Jun 2025 — $10,500 so far). Everyone else is missing,
@@ -176,11 +176,9 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
     It needs bumping when a new month is invoiced, alongside `QB_RETAINER_TOTAL`
     and `QB_RETAINER_MONTHS` — or, better, derived from `invoice_recap` once
     item 6 lands.
-13. **Decide whether venues get the D64 treatment** (D83). Brands and venues are
-    upserted straight from HubSpot on every sync, outside the staging zone, so a
-    hand-corrected `venues.city` reverts with nothing reported. Giving them a
-    `hand_edited_at` that makes the sync stop and ask is the same decision D64
-    made for deals — and it is the operator's call, not a bug to fix quietly.
+13. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
+    in the city column, straight from HubSpot. Editing it in the admin now
+    STICKS (D84); it did not before today.
 14. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
     merging PR #1 when the portal should go live.
 
@@ -240,9 +238,13 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
   upserts brands and venues DIRECTLY, before the staging zone is reached — no
   review queue, no `hand_edited_at`, no conflict state. D64 is intact; its
   scope is narrower than its name suggests.
-- **`venues.city` is overwritten by HubSpot on every sync** (D83). A city
-  corrected by hand reverts silently whenever the HubSpot company record has
-  one. `Crown Lounge` (city "Locals Eatery & Bar") is the live example.
+- **THE PORTAL IS THE SOURCE OF RECORD NOW; HubSpot is an input** (D84). A
+  venue edited in the admin is stamped `hand_edited_at` and the sync refuses to
+  overwrite its city, filing what HubSpot wanted into
+  `staging.hubspot_venue_proposal` for the Venues page to resolve. This
+  reverses D59 for venue attributes — do not "fix it in HubSpot" for those any
+  more. `venues.city` was the ONLY field the sync could overwrite; brands were
+  never overwritable at all.
 - **Merging a venue that has a `hubspot_company_id` MUST record the alias**
   (D82), or the next sync inserts the duplicate straight back — it pre-loads
   venues by company id and creates one for any id it does not recognise.

@@ -2924,3 +2924,88 @@ promotes it"*, which reads as a statement about the whole sync. It is a statemen
 about deals. A protection whose scope is not written down gets remembered as
 broader than it is — by the operator, and by whoever writes the next feature on
 top of it.
+
+---
+
+**D84 — The portal is the source of record; HubSpot becomes an input. A hand-edited venue now wins, and the disagreement is kept.** ✅ operator-ruled 22 Aug 2026
+
+> *"Really we will be moving away from HubSpot, so this will become our central
+> source of data — and until we are completely done with HubSpot, that will be
+> more for data collection."*
+
+**This inverts the default.** Every sync decision to date assumed HubSpot owned
+the record and the portal reflected it: D59 ("fix it in HubSpot, let the sync
+carry it through"), D64's staging zone, the venue upsert running outside it
+(D83). From here the portal holds the truth and HubSpot is one input to it.
+
+**The exposure is far smaller than the ruling sounds, and saying so precisely
+was most of the work.** Auditing every writer that touches a venue or brand:
+
+| writer | what it does to an EXISTING row |
+|---|---|
+| `sync_hubspot` insert loop | new venues only — skips anything already cached |
+| `on conflict (hubspot_company_id)` | `updated_at = now()` — overwrites nothing |
+| `sync_hubspot` city update | **overwrites `city` — the entire surface** |
+| `promote()` | inserts when unknown, never updates |
+| `seed_from_csv` | inserts when unknown, never updates |
+| `brands` upsert | `on conflict (name) do update set updated_at` — overwrites nothing |
+
+So **`venues.city` was the only field the sync could overwrite**, and **brands
+needed no protection at all** — the sync can create a brand but has never been
+able to change one. A cathedral was not required, and building one would have
+been the wrong instinct.
+
+**The fix, and the half that is easy to miss.** `venues.hand_edited_at` /
+`hand_edited_by` mirror `activities` (D64) down to the column names, so there is
+one idea here and not two. The admin's venue form stamps them on save.
+
+The obvious implementation — `and hand_edited_at is null` on the UPDATE —
+**trades one silence for another.** Before D84 a hand-fixed city reverted with
+nothing reported. With the lazy fix, HubSpot's disagreement vanishes with
+nothing reported. Neither tells the operator anything, and the second is worse
+because it feels solved.
+
+So a refused change is **kept**. `set_venue_city_from_hubspot()` is one function
+doing both halves together — a caller that remembers the skip and forgets the
+proposal recreates exactly the silence this decision exists to remove — and
+`staging.hubspot_venue_proposal` holds what HubSpot wanted. The Venues page
+lists them: **Take HubSpot's** or **Keep ours**.
+
+Four behaviours that only show up once it runs twice, all asserted in
+`db/test/06_venue_handedit_test.sql`:
+
+- **A venue nobody edited still takes HubSpot's city.** The goal is to stop hand
+  edits being clobbered, not to stop the sync working — while HubSpot is still
+  the collection tool, most venues must keep flowing.
+- **Re-syncing does not pile up duplicates**, and the *same* refused value does
+  not re-open a dismissed proposal. A panel that nags forever gets ignored.
+- **A DIFFERENT value DOES re-open it.** Dismissing "Melbourne" is not a
+  decision about "Palm Bay", and treating it as one hides the next disagreement
+  behind the last.
+- **Agreement is not a conflict.** If HubSpot catches up to our value the
+  proposal clears itself, rather than showing a settled argument for ever.
+
+The test was confirmed to fail on the lazy fix — *"the refused change was not
+recorded — HubSpot disagrees and nobody will ever know"*.
+
+**Proved end to end on the live row it was written for.** `Crown Lounge` carries
+the city **"Locals Eatery & Bar"**, straight from its HubSpot company record.
+Run against live and rolled back:
+
+```
+start:            Crown Lounge city='Locals Eatery & Bar' protected=False
+sync, unedited:   city='Locals Eatery & Bar'   (HubSpot still owns it)
+after your edit:  city='Indian Harbour Beach'
+after next sync:  city='Indian Harbour Beach'  overwritten=False
+flagged for you:  HubSpot wanted 'Locals Eatery & Bar', dismissed=False
+```
+
+**No backfill.** Nothing records which of the 336 venues were already corrected
+by hand, so nothing is marked protected today; the flag is set from the next
+edit onward. Marking all 336 would freeze HubSpot out of venues it should still
+be feeding while it remains the collection tool.
+
+**What this does NOT yet cover, and should be revisited as HubSpot recedes:**
+venue *name* (the sync only sets it at insert, so it is already safe by
+accident rather than by rule), and brands (safe for the same reason). Both
+become real questions the moment anything starts updating them.
