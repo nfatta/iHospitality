@@ -75,8 +75,13 @@
       } else {
         const [brands, gaps] = await Promise.all([
           db.from('v_brand_money').select('*'),
+          // `unpriced`, NOT `charge is null`. Since D78 an itemised expense
+          // also has a null charge -- deliberately, because a reimbursement
+          // earns nothing -- so testing the charge would list the five expense
+          // rows here as missing rates. The view's own `unpriced` column
+          // already excludes them: a reimbursement has no rate BY DESIGN.
           db.from('v_activity_money').select('brand_name, source_activity_type')
-            .is('charge', null),
+            .eq('unpriced', true),
         ]);
         if (brands.error) {
           render(document.getElementById('list'), { error: brands.error });
@@ -137,6 +142,12 @@
       const sum = (f) => rows.reduce((a, r) => a + Number(r[f] || 0), 0);
       const charged = sum('charged'), cost = sum('contractor_cost');
       const unpriced = sum('unpriced_activities'), acts = sum('activities');
+      // D78. Unpriced work UNDERSTATES the margin and somebody chases it.
+      // Charged work with no pay rate behind it OVERSTATES the margin, and
+      // until this card existed nothing anywhere said so -- cost simply read
+      // $0, which is indistinguishable from work done for free.
+      const uncosted = sum('uncosted_charge');
+      const reimbursed = sum('reimbursements');
 
       const el = document.getElementById('stats');
       el.className = 'stat-grid';
@@ -150,7 +161,15 @@
           <div class="meta">${charged ? ((charged - cost) / charged * 100).toFixed(1) : '0'}% of charged</div></div>
         <div class="stat-card"><span class="num">${fmtNum(unpriced)}</span>
           <span class="lbl">Unpriced activities</span>
-          <div class="meta">of ${fmtNum(acts)} — margin above is understated</div></div>`;
+          <div class="meta">of ${fmtNum(acts)} — margin above is understated</div></div>
+        <div class="stat-card"><span class="num">${money(uncosted)}</span>
+          <span class="lbl">Charged, not costed</span>
+          <div class="meta">no pay rate behind it — margin above is
+            <strong>overstated</strong> by whatever it cost</div></div>`
+        + (reimbursed ? `
+        <div class="stat-card"><span class="num">${money(reimbursed)}</span>
+          <span class="lbl">Reimbursements</span>
+          <div class="meta">passed through at cost — in neither charge nor margin</div></div>` : '');
     }
 
     function renderGaps(shownBrands, gapRows) {
