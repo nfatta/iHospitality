@@ -72,6 +72,10 @@ reproduces it; keep it that way.
 - **Shared CSS is in `css/site.css`.** Page-specific CSS stays inline *after*
   the link so pages can override (gallery.html relies on this). Change brand
   colours in `:root` in that file only.
+- **`pitched` vs `placed` turns on ONE fact: `activity_types.is_depletion`**
+  (D86). Non-depletion work makes a venue `pitched`; a depletion makes it
+  `placed`. The trigger only ever advances and stops there. `reordering` and
+  `dormant` are RULED but NOT BUILT — see D86 and open item 1.
 - **Two markets only:** `central_florida`, `palm_beach_county`. Never "South
   Florida" — the database enum enforces it.
 - **Internal notes are never brand-facing.** `activities.notes` is internal;

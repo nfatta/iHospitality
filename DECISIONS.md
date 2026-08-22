@@ -3103,3 +3103,88 @@ different events (1)"* showing the reason and the undo.
 > teaching: **the failure was not in the data or the logic. It was that a person
 > using the page reached a dead end.** No test could have found either, because
 > both were about what the page did *not* offer.
+
+---
+
+**D86 — What "pitched" and "placed" actually mean, and the two rulings that make the account list tell the whole story.** ✅ operator-ruled 22 Aug 2026 · **NOT YET IMPLEMENTED**
+
+The operator asked what decides pitched vs placed, having seen Wildflower read
+`pitched` when he knew it was placed.
+
+---
+
+**THE RULE, as it stands today.** `brand_venue_status.status` is set by the
+trigger `sync_brand_venue_status()`, which fires `after insert or update of
+venue_id, brand_id, activity_date, activity_type_id on activities`:
+
+| what happened | status becomes |
+|---|---|
+| nothing yet | `prospect` (the column default) |
+| any **non-depletion** activity — visit, drink list, training, drink development | `pitched` |
+| any **depletion** activity — `case_sale`, `tap_placement`, `recurring_case`, bottle sales | `placed` |
+| `reordering`, `dormant`, `lost` | **never set by anything** |
+
+It only ever **advances**, and only as far as `placed`. It never downgrades, so
+a placed account cannot be knocked back to pitched by a later visit. **The
+single fact that decides it is `activity_types.is_depletion`** — did product
+actually move.
+
+**The Wildflower case: the portal was right, and it is a different bar.**
+
+| venue | city | activity | status |
+|---|---|---|---|
+| **Wildflower Sanford** | Sanford | 20 activities incl. case sales + tap placement | `placed` ✓ (both 44 North and Wodka) |
+| **The Wildflower** | Baldwin Park | ONE drink list placement, 1 Jul 2025 | `pitched` ✓ |
+
+Two different premises, two different HubSpot company ids, 40 miles apart. The
+`pitched` row is Baldwin Park, which has had a drink list and nothing else — no
+depletion, so `pitched` is correct. Not a bug, and worth recording because the
+names are close enough that it will be misread again.
+
+---
+
+**RULING 1 — a reorder advances the account to `reordering`.** ✅ operator, 22 Aug
+
+**21 brand/venue pairs have logged case reorders and every one still reads
+`placed`.** The status stops at `placed` and never moves again, so the portal
+never shows a brand the one thing it most wants to see: they bought again.
+
+> *Chosen: "Yes — auto-advance on a reorder."*
+
+The reasoning that decided it: **a reorder is a fact, not a judgement.** The
+original design note grouped `reordering` with `dormant` and `lost` as "human
+judgements the trigger must not overwrite" — correct for the other two, wrong
+for this one. If a `recurring_case` row exists, the account reordered.
+
+Affected: **20 Wodka pairs, 1 44 North.** Note D35's warning still applies —
+`recurring_case` is only logged for brands that pay for reorder tracking, so an
+absence means "not measured", never "no repeat business".
+
+**RULING 2 — a venue quiet for 180 days is marked `dormant`.** ✅ operator, 22 Aug
+
+Nothing is ever marked `dormant` or `lost` either. Offered three thresholds;
+the operator chose **180 days**, the widest.
+
+> *Chosen: "Auto-mark dormant after 180 days quiet." — **360 of 689 pairs**,
+> over half the account list.*
+
+That is a big, deliberate change to what every brand sees, and it was chosen
+over the conservative one-year option (42 pairs) and over leaving it to the
+days-quiet colouring already on `venues.html`. **It is honest**: an account
+nobody has walked into in six months is not an active account, and saying so is
+the point of the column.
+
+**Implementation notes for whoever picks this up:**
+
+- `dormant` must **not** be sticky the way `placed` is. A dormant account that
+  gets visited has to come back to life, or the flag is a one-way door and the
+  column becomes wrong in the other direction within a month. The advance-only
+  logic in the trigger is exactly what must NOT be copied here.
+- It cannot live in the insert trigger alone: nothing fires when a venue simply
+  goes quiet. It needs either a scheduled job or — better and simpler — to be
+  **derived in the view** from `days_since`, leaving the stored column for what
+  a person or an activity set. Deriving it also makes it self-correcting, which
+  handles the point above for free.
+- `lost` stays a human judgement. Nothing proposed here sets it.
+- `venues.html` already renders `reordering` and `dormant` pills and orders by
+  them (`STATUS_ORDER`), so the front end needs no work for either ruling.

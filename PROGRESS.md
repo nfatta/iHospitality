@@ -896,6 +896,69 @@ Jan–Mar the known hole.
 
 ---
 
+## Session of 22 Aug 2026, later — cleanup, and what using the app found
+
+Continued from the D78/D79 entry above. Everything below came from the operator
+using the admin and asking why something looked wrong.
+
+**D80** — reconciliation and classification are different axes; an activity type
+with 0 activities is a merge that worked; deal notes added to the classification
+grid (18 of 93 queued rows carry one).
+
+**D81** — the venue merge had NEVER once succeeded. It updated `photos.venue_id`,
+a column that does not exist, and its error handler blamed something else. Now
+`merge_venue()` in the schema, with a status-combining rule that cannot lose a
+fact. 15 duplicates merged. Plus `start-admin.cmd`, because the existing launch
+config pointed Streamlit at an absolute path and so dropped the loopback setting
+entirely — a launcher that could never work, next to one that could.
+
+**D82** — merging a venue that carried a `hubspot_company_id` would have been
+undone by the next sync, which inserts a venue for any id it does not recognise.
+`venue_hubspot_alias` closes it. Last two duplicates merged: **353 → 336 venues,
+zero duplicate names.**
+
+**D83** — the staging zone covers DEALS, not venues and brands. That boundary was
+written down nowhere, and it is why D82 was possible at all.
+
+**D84** — the operator ruled that the portal is becoming the source of record and
+HubSpot an input. `venues.hand_edited_at` now beats the sync, and the refused
+change is KEPT in `staging.hubspot_venue_proposal` rather than dropped — the lazy
+fix would have traded a silent overwrite for a silent refusal. `venues.city` was
+the only field the sync could overwrite; brands never were.
+
+**D85** — the Duplicates page could refuse and could not help. It blocked a delete
+over attached photos while offering no way to move a photo, and had no way to say
+"these two are different jobs". Both fixed. `move_activity_photos()` handles the
+same-image collision, which is the normal case rather than the edge one: 18
+duplicate pairs carry photos, and the two on 44 North / Chefs Table are literally
+the same photograph uploaded to HubSpot twice.
+
+**D86** — what `pitched` and `placed` mean (one fact: `is_depletion`), why the
+Wildflower row was correct all along (two different bars, 40 miles apart), and
+two rulings **NOT YET BUILT**: a reorder should read `reordering` (21 pairs), and
+a venue quiet 180 days should read `dormant` (360 pairs).
+
+**The website portal.** `business.html` counted unpriced work with
+`charge is null`, which since D78 also catches reimbursements; it now uses the
+view's own `unpriced` column (158 rows listed as gaps, 153 after). It also gained
+the "charged, not costed" figure, so margin is no longer described only as
+understated when it is simultaneously overstated by $6,568.90. Nothing else in
+the portal needed touching — every page queries live views and holds no hardcoded
+counts, so the merges and reclassification flow through on their own.
+
+**Verified at close:** 103 pytest · offline schema suite green through BOTH
+idempotency passes, seven files, and every new guard confirmed to FAIL when
+deliberately regressed · `verify_live.py` clean · 336 venues, zero duplicate
+names, 1,255 activities and $116,751.65 revenue unchanged throughout · every
+admin page opened in a browser and checked for exceptions · Dame Mas canary
+Apr +$0.01, May/Jun/Jul exact.
+
+**Not verified:** `business.html` is staff-gated and there was no login to hand,
+so its rendering was not seen. The inline module parses and the view columns it
+reads are confirmed present with the right values.
+
+---
+
 ## Known data problems to resolve before seeding
 
 Found by profiling the six `hubspot-crm-exports-*.csv` files (315 rows):

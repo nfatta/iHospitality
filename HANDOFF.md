@@ -2,7 +2,7 @@
 
 Written at the close of **22 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D85**.
+they are. Read this first, then **D65 through D86**.
 
 ---
 
@@ -27,7 +27,7 @@ it.
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D85 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D86 in `DECISIONS.md`.
 >
 > **1. Finish entering the contractors.** Only Eric Anderson is on file
 > ($350 semimonthly from Jun 2025 — $10,500 so far). Everyone else is missing,
@@ -60,7 +60,22 @@ Paste this to pick up exactly where we stopped:
 > is an `is_expense` row with an empty type**; D78 means classifying it can no
 > longer make it start earning, but check that it lands somewhere sensible.
 >
-> **5. Venue duplicates are DONE** — all 17 merged, zero duplicate names left,
+> **5. IMPLEMENT D86 — both rulings are made, neither is built.** The account
+> status stops at `placed` and never moves again, so the portal never shows a
+> brand that they bought again, and never shows an account going cold.
+> - **A case reorder must advance the status to `reordering`.** 21 brand/venue
+>   pairs have reorders and all still read `placed` (20 Wodka, 1 44 North). A
+>   reorder is a FACT, not a judgement — the original note grouping it with
+>   `dormant`/`lost` was wrong on this one.
+> - **A venue quiet 180 days must read `dormant`.** 360 of 689 pairs — over
+>   half the account list, chosen deliberately over the 1-year option (42).
+>   **It must NOT be sticky**: a dormant account that gets visited has to come
+>   back to life, so do not copy the trigger's advance-only logic. Best derived
+>   in the view from `days_since`, which makes it self-correcting. `lost` stays
+>   a human judgement. `venues.html` already renders both pills — no front-end
+>   work needed.
+>
+> **6. Venue duplicates are DONE** — all 17 merged, zero duplicate names left,
 > 353 → 336 venues with activities and revenue unchanged (D81, D82). Nothing to
 > do here. One leftover if you want it: **Crown Lounge has its city set to
 > "Locals Eatery & Bar"** — a venue name in the city column.
@@ -145,41 +160,44 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Open work, most useful first
 
-1. **Finish the contractors.** One person on file. Base pay understated.
-2. **Enter the 12 missing pay rates and the 5 expense amounts** (D78). Both are
+1. **Implement D86** — a reorder should read `reordering` (21 pairs), and a
+   venue quiet 180 days should read `dormant` (360 pairs). Both RULED, neither
+   BUILT. Dormant must not be sticky; derive it in the view. See D86 for why.
+2. **Finish the contractors.** One person on file. Base pay understated.
+3. **Enter the 12 missing pay rates and the 5 expense amounts** (D78). Both are
    listed in the admin; both are operator data by D60.
-3. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
+4. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
    (117). Investigate — do not delete to make it tie.
-4. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
+5. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
    3114, 3119 (work months Mar–Jul 2025, none paid).
-5. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
+6. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
    invoice, not a sale. A bookkeeping question outside this system.
-6. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It still
+7. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It still
    holds ONE brand and seven months. Aug 2025 commission is typed `375.75`
    where the invoice bills `354.75`; a $455 Dame Mas tasting invoice (3203) is
    in neither the workbook nor the portal.
-7. **Widen the Health canary further.** It compares commission to commission
+8. **Widen the Health canary further.** It compares commission to commission
    correctly (D73) and now actually runs (D79), but still ignores consulting,
    billable and total.
-8. **Run the sync for real.** Never run with the staging code. Use `--month` on
+9. **Run the sync for real.** Never run with the staging code. Use `--month` on
    one month and watch the review queue. **Check afterwards that no venue came
    back**: the merges of 22 Aug depend on `venue_hubspot_alias` being consulted
    by the pre-load loop (D82), and that path has never run against live HubSpot.
-9. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
+10. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
    6; it should be **1**. Matters more since D65, because quantity multiplies.
-10. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
+11. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
     unclassified (D76).
-11. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
+12. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
     activity charge against real contractor cost.
-12. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
+13. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
     It bounds the QuickBooks comparison at the last invoiced work month (D79).
     It needs bumping when a new month is invoiced, alongside `QB_RETAINER_TOTAL`
     and `QB_RETAINER_MONTHS` — or, better, derived from `invoice_recap` once
     item 6 lands.
-13. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
+14. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
     in the city column, straight from HubSpot. Editing it in the admin now
     STICKS (D84); it did not before today.
-14. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
+15. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
     merging PR #1 when the portal should go live.
 
 ---
@@ -238,6 +256,12 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
   upserts brands and venues DIRECTLY, before the staging zone is reached — no
   review queue, no `hand_edited_at`, no conflict state. D64 is intact; its
   scope is narrower than its name suggests.
+- **`pitched` vs `placed` is decided by ONE fact: `activity_types.is_depletion`**
+  (D86). Any non-depletion activity makes a venue `pitched`; any depletion makes
+  it `placed`. It only ever advances, never downgrades, and stops at `placed`.
+- **"The Wildflower" (Baldwin Park) and "Wildflower Sanford" are DIFFERENT
+  BARS**, 40 miles apart with different HubSpot ids (D86). The Baldwin Park row
+  reads `pitched` correctly — one drink list, no depletion. Do not merge them.
 - **Deleting an activity DESTROYS its photos** — `photos.activity_id` is
   `ON DELETE CASCADE` (D85). The Duplicates page refuses for that reason and
   now offers **Move photos to the row I am keeping** first. Move goes through
