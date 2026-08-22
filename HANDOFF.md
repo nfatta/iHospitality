@@ -2,7 +2,7 @@
 
 Written at the close of **22 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D82**.
+they are. Read this first, then **D65 through D83**.
 
 ---
 
@@ -27,7 +27,7 @@ it.
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D82 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D83 in `DECISIONS.md`.
 >
 > **1. Finish entering the contractors.** Only Eric Anderson is on file
 > ($350 semimonthly from Jun 2025 — $10,500 so far). Everyone else is missing,
@@ -176,7 +176,12 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
     It needs bumping when a new month is invoiced, alongside `QB_RETAINER_TOTAL`
     and `QB_RETAINER_MONTHS` — or, better, derived from `invoice_recap` once
     item 6 lands.
-13. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
+13. **Decide whether venues get the D64 treatment** (D83). Brands and venues are
+    upserted straight from HubSpot on every sync, outside the staging zone, so a
+    hand-corrected `venues.city` reverts with nothing reported. Giving them a
+    `hand_edited_at` that makes the sync stop and ask is the same decision D64
+    made for deals — and it is the operator's call, not a bug to fix quietly.
+14. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
     merging PR #1 when the portal should go live.
 
 ---
@@ -231,6 +236,13 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
   `reconcile_invoices.py` pools them; without that, every line on both sides
   reads as a discrepancy. **Gin Lane 1751 ($6,661) is not in the portal at all.**
 - **Scope starts June 2025**, where the HubSpot data starts.
+- **THE STAGING ZONE COVERS DEALS, NOT VENUES OR BRANDS** (D83). `apply()`
+  upserts brands and venues DIRECTLY, before the staging zone is reached — no
+  review queue, no `hand_edited_at`, no conflict state. D64 is intact; its
+  scope is narrower than its name suggests.
+- **`venues.city` is overwritten by HubSpot on every sync** (D83). A city
+  corrected by hand reverts silently whenever the HubSpot company record has
+  one. `Crown Lounge` (city "Locals Eatery & Bar") is the live example.
 - **Merging a venue that has a `hubspot_company_id` MUST record the alias**
   (D82), or the next sync inserts the duplicate straight back — it pre-loads
   venues by company id and creates one for any id it does not recognise.

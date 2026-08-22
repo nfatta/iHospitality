@@ -92,7 +92,11 @@ reproduces it; keep it that way.
   aliases and invoice figures live in tables the admin edits at runtime. A rule
   compiled into a script is a rule the operator cannot reach. `load_rate_card.py`
   is retired and its write path deleted — do not revive it.
-- **HubSpot lands in staging; a person promotes it** (D64). `sync_hubspot.py`
+- **HubSpot lands in staging; a person promotes it** (D64) — **for DEALS only.**
+  `apply()` upserts `brands` and `venues` DIRECTLY, before the staging zone is
+  reached, with no review queue and no `hand_edited_at` (D83). A hand-corrected
+  `venues.city` reverts on the next sync. Do not assume the staging zone covers
+  anything but deals. `sync_hubspot.py`
   writes to `staging.hubspot_deals`, never to `activities`. Rows nobody has
   edited still take HubSpot's updates automatically — that is what keeps D59
   working — but a row with `hand_edited_at` set stops and asks. Never restore the

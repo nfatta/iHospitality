@@ -2862,3 +2862,65 @@ every deleted row and its statuses are in `Hubspot/venue_merge_backup_*.json`.
 
 **Still open, and deliberately not touched:** `Crown Lounge` carries the city
 **"Locals Eatery & Bar"** — a venue name in the city column.
+
+---
+
+**D83 — The staging zone protects DEALS, not venues and brands. That boundary was not written down anywhere, and it is the reason D82 was possible.** ✅ operator-questioned 22 Aug 2026
+
+On being told a merged venue would come back on the next sync, the operator
+asked the right question:
+
+> *"I thought we developed a staging and landing area to prevent syncs from
+> messing things up."*
+
+**It was, and it does — for deals.** D64 is intact. The gap is one of scope, and
+nothing in `CLAUDE.md`, `PORTAL_PLAN.md` or D64 itself said where the boundary
+falls. `sync_hubspot.apply()` does four things, in this order:
+
+| # | step | staged? |
+|---|---|---|
+| 1 | upsert into `brands` | **no — direct write** |
+| 2 | upsert into `venues`, then update `venues.city` | **no — direct write** |
+| 3 | land deals into `staging.hubspot_deals` | yes |
+| 4 | promote only rows in state `auto` | yes, and gated |
+
+Steps 1 and 2 run **before** the staging zone is reached. So the protection the
+operator was relying on — hand edits survive, a conflict stops and asks — has
+never applied to a venue or a brand. That is why D82's merged venues would have
+been silently recreated: the recreate happens in step 2, and step 2 has no
+review queue, no `hand_edited_at`, and no conflict state.
+
+Whether that is right is a real question rather than an obvious bug. Deals carry
+hand-corrected money and classification; venues and brands were treated as
+reference data that HubSpot owns. **But two things make the boundary bite:**
+
+**1. A merge is a human decision about venue identity, and step 2 does not know
+it happened.** Fixed for company ids by `venue_hubspot_alias` (D82). Nothing
+equivalent exists for brands.
+
+**2. `venues.city` is overwritten by HubSpot on every sync, unconditionally.**
+
+```sql
+update venues set city = %s, updated_at = now()
+ where id = %s and (city is distinct from %s)
+```
+
+The comment above it says a hand-entered value *"is never blanked by an empty
+CRM field"*, and that much is true — no update is issued when HubSpot's city is
+empty. **But when HubSpot HAS a city, it wins.** A city corrected in the admin
+reverts on the next sync, with nothing reported.
+
+That is not hypothetical: `Crown Lounge` currently carries the city
+**"Locals Eatery & Bar"** — a venue name in the city column, almost certainly
+straight from the HubSpot company record. Correcting it in the admin would hold
+only until the next sync.
+
+**Recorded, not fixed.** Giving venues the D64 treatment — a `hand_edited_at`
+that makes the sync stop and ask — is a design decision with the same shape as
+D64 itself, and it is the operator's to make. It is on the open list.
+
+**The narrower lesson.** D64's write-up says *"HubSpot lands in staging; a person
+promotes it"*, which reads as a statement about the whole sync. It is a statement
+about deals. A protection whose scope is not written down gets remembered as
+broader than it is — by the operator, and by whoever writes the next feature on
+top of it.
