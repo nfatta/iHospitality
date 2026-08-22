@@ -3009,3 +3009,97 @@ be feeding while it remains the collection tool.
 venue *name* (the sync only sets it at insert, so it is already safe by
 accident rather than by rule), and brands (safe for the same reason). Both
 become real questions the moment anything starts updating them.
+
+---
+
+**D85 — The Duplicates page told the operator to do something the app could not do, and had no way to say "not a duplicate".** ✅ operator-reported 22 Aug 2026
+
+Two reports from using the page, and they are the same fault twice: **the page
+could refuse, and it could not help.**
+
+---
+
+**1. "I can't delete a duplicate because it says a photo is attached. How do I
+transfer the photo, or what's the workaround?"**
+
+There was no workaround. The branch read *"Deleting it would orphan them. Move
+the photos first"* while nothing anywhere in the app could move a photo. **A
+guard with no escape hatch is a wall.**
+
+**The guard is right; its wording was wrong, and the wrong word mattered.**
+`photos.activity_id` is `ON DELETE CASCADE`, so deleting the activity does not
+*orphan* the photos — it **destroys** them, silently, along with the only visual
+record that the work happened. Refusing was correct. Refusing with no way
+forward was the bug.
+
+**Why a function and not `update photos set activity_id = …`.** There is a
+partial unique index on `photos (activity_id, content_hash)`, so the plain
+update raises the instant the surviving activity already holds the same
+*image* — and that is not an edge case, it is **the normal case**. Checked
+against live: 44 North at Chefs Table, two rows, two photo files, and
+
+```
+44-north/2026/04/212876649137.jpg   hash 31e31414…
+44-north/2026/04/211037705049.jpg   hash 31e31414…
+```
+
+— **the same photograph**, uploaded to HubSpot twice as two files. **18 of the
+duplicate pairs carry photos**, so the naive move would have failed exactly
+where it was most wanted. Same shape as the venue merge colliding on
+`brand_venue_status` (D81).
+
+`move_activity_photos()` moves what can move, drops a copy the target already
+holds, and **returns the freed storage paths** rather than swallowing them — the
+files stay in the bucket, and a caller who does not know they are now
+unreferenced can never tidy them up. A photo with **no** `content_hash` always
+moves and is never treated as a duplicate: rows predating that column would
+otherwise vanish.
+
+`db/test/07_move_photos_test.sql` pins two things. It asserts a **bare UPDATE
+still collides** — so if the unique index ever goes, the careful version cannot
+quietly become pointless without anyone noticing. And it asserts **the cascade
+is real**, because the Duplicates guard was written for a cascade and would need
+revisiting if the FK ever became `SET NULL` or `RESTRICT`.
+
+---
+
+**2. "It has Wildflower a case sale and tap placement as a potential duplicate.
+They aren't, but I have no way of saying that."**
+
+Correct on both counts. The pair query joins any two **depletion** activities at
+one brand/venue inside the window, and `case_sale` and `tap_placement` are both
+depletions. The live pair, with its own notes attached:
+
+| | |
+|---|---|
+| 2026-06-24 · Case Sale | *"Sold in case of Huck for new Sangria on tap to build on Thursday"* |
+| 2026-06-25 · Tap Placement | *"Finalized sangria on tap for ongoing 44N featured drink"* |
+
+Sold the case to build the tap; finished the tap the next day. **Two jobs**, and
+the notes say so plainly.
+
+`activity_duplicate_dismissed` mirrors `venue_duplicate_dismissed`, for the
+reason that table already records: **a suggestion that cannot be rejected comes
+back every month and trains the operator to ignore the page**, which costs far
+more than the duplicates do.
+
+Keyed on the ordered pair, with a check constraint holding the same order the
+query emits, so one judgement cannot be stored twice under two spellings.
+`ON DELETE CASCADE` both sides — a judgement about a deleted row is meaningless,
+and leaving it would silence a future pair that reused an id. Deliberately **not**
+keyed on the dates or types: the judgement is that these two ROWS are different
+events, and correcting a date afterwards should not reopen the question.
+
+**Dismissals are reviewable and reversible.** A dismissal that cannot be seen is
+indistinguishable from a bug — rows vanish and nothing says why. The page lists
+every judged pair with its reason and a **Suggest it again** button.
+
+Verified through the page: **8 pairs → 7**, Wildflower gone, *"Pairs marked as
+different events (1)"* showing the reason and the undo.
+
+---
+
+> Both halves of this are the same lesson, and it is the one D74–D79 kept
+> teaching: **the failure was not in the data or the logic. It was that a person
+> using the page reached a dead end.** No test could have found either, because
+> both were about what the page did *not* offer.

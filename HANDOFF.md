@@ -2,7 +2,7 @@
 
 Written at the close of **22 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D84**.
+they are. Read this first, then **D65 through D85**.
 
 ---
 
@@ -27,7 +27,7 @@ it.
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D84 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D85 in `DECISIONS.md`.
 >
 > **1. Finish entering the contractors.** Only Eric Anderson is on file
 > ($350 semimonthly from Jun 2025 — $10,500 so far). Everyone else is missing,
@@ -238,6 +238,15 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
   upserts brands and venues DIRECTLY, before the staging zone is reached — no
   review queue, no `hand_edited_at`, no conflict state. D64 is intact; its
   scope is narrower than its name suggests.
+- **Deleting an activity DESTROYS its photos** — `photos.activity_id` is
+  `ON DELETE CASCADE` (D85). The Duplicates page refuses for that reason and
+  now offers **Move photos to the row I am keeping** first. Move goes through
+  `move_activity_photos()`, never a bare UPDATE: a partial unique index on
+  `(activity_id, content_hash)` collides whenever both rows hold the same
+  image, which is the NORMAL case — 18 duplicate pairs carry photos.
+- **A pair can be marked "not a duplicate"** (D85). `case_sale` and
+  `tap_placement` are both depletions, so genuinely different work shows up as
+  a suspected duplicate. Dismissals are listed with their reason and reversible.
 - **THE PORTAL IS THE SOURCE OF RECORD NOW; HubSpot is an input** (D84). A
   venue edited in the admin is stamped `hand_edited_at` and the sync refuses to
   overwrite its city, filing what HubSpot wanted into
