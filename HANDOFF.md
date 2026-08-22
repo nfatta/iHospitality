@@ -2,7 +2,7 @@
 
 Written at the close of **22 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D79**.
+they are. Read this first, then **D65 through D80**.
 
 ---
 
@@ -27,7 +27,7 @@ it.
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D79 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D80 in `DECISIONS.md`.
 >
 > **1. Finish entering the contractors.** Only Eric Anderson is on file
 > ($350 semimonthly from Jun 2025 — $10,500 so far). Everyone else is missing,
@@ -53,9 +53,11 @@ Paste this to pick up exactly where we stopped:
 > visit across brands while an invoice bills it once) and `1st case sale` runs
 > 117 over. Investigate; do not reconcile them away.
 >
-> **4. Clear the classification queue** on the Activity types page — 98 rows,
-> 10 of them genuinely unclassified. Nothing auto-saves. **One of those rows is
-> an `is_expense` row with an empty type**; D78 means classifying it can no
+> **4. Clear the classification queue** on the Activity types page — 93 rows,
+> 5 of them genuinely unclassified (blank in HubSpot, so no reconciliation will
+> ever fix them — D80). Nothing auto-saves. The **deal note is now the last
+> column** and is often what decides the row; 18 of the 93 have one. **One row
+> is an `is_expense` row with an empty type**; D78 means classifying it can no
 > longer make it start earning, but check that it lands somewhere sensible.
 >
 > **5. Merge the 15 empty duplicate venues** — no city, no activity — now that
@@ -220,6 +222,16 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
   `reconcile_invoices.py` pools them; without that, every line on both sides
   reads as a discrepancy. **Gin Lane 1751 ($6,661) is not in the portal at all.**
 - **Scope starts June 2025**, where the HubSpot data starts.
+- **An activity type with 0 activities is a MERGE that worked, not lost data**
+  (D80). `merge_activity_type()` retires the source rather than deleting it, so
+  a future sync of the old raw string cannot recreate what you just merged away.
+  The Activity types page lists them separately and traces each to its survivor.
+- **Reconciliation and classification are different axes** (D80). The
+  reconciliation writes nothing; classification maps HubSpot's raw string to a
+  type. A row can reconcile perfectly and still be unclassified.
+- **`activities.notes` is on the classification grid now, and is still
+  internal** (D80). Safe only because the admin is staff-only. Do not copy that
+  query into anything a brand login can reach.
 - **A constraint or control that has never been exercised looks exactly like one
   that works (D62).** Five instances on 21 Aug, and D78's expense exclusion was
   a sixth — it was working only because nothing had tested it.

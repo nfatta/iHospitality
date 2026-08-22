@@ -2625,3 +2625,69 @@ remainder called out separately as expected rather than missing.
 > that has never been watched run has eventually turned out to be broken.** Nine
 > pages, opened in a browser, cost twenty minutes and found four failures, two of
 > them a month old, on the two pages the next session was going to work in.
+
+---
+
+**D80 — Reconciliation and classification are different axes, an empty type is a merge that worked, and the deal note is now on the classification grid.** ✅ operator-asked 22 Aug 2026
+
+Three questions from the operator, and the first rested on a premise worth
+correcting.
+
+**"We did a reconciliation — shouldn't that mean nothing is unclassified?"**
+No, and the two are independent. **Reconciliation compares invoice lines to
+portal rows**; `reconcile_invoices.py` writes nothing at all. **Classification
+maps HubSpot's raw activity-type string to a canonical type.** A row can
+reconcile perfectly and still be unclassified, and vice versa.
+
+The reconciliation is intact and still runs: **196 brand-month-type combinations
+agree, 88 differ for a known reason, 81 disagree** — and the 81 are the ones
+D72/D73 already identified, portal *over* invoice on account visits and
+`1st case sale`, which is the direction where making them tie means deleting
+logged work.
+
+**The 5 remaining unclassified rows all carry `source_activity_type` NULL.**
+There is no raw string to resolve, because the HubSpot deal never had an
+activity-type value. No reconciliation can fill a field the source system left
+empty — that is open item 10, filling the property in HubSpot itself.
+
+**"Some types are classified but have no activity. How does that happen?"**
+They are **retired by a merge**, and the table gave no way to tell — a merged
+type and a live empty one looked identical in a boolean column.
+
+`merge_activity_type()` does three things: moves every activity to the target,
+**repoints the aliases** so a future sync of the old raw string resolves to the
+merged type instead of recreating it, and sets `is_active = false` on the source
+**rather than deleting it**. All five empty types are inactive with zero
+aliases, which is that function having worked correctly:
+
+| retired type | its raw string now resolves to | activities |
+|---|---|---|
+| `day_buy_out_comp` | Day Buy-Out | 4 |
+| `tap_cocktail` | Tap Placement | 4 |
+| `tasting_event_split` | Tasting Event | 2 |
+| `barrel_prep_charge` | Barrel Prep | 1 |
+| `tap_with_labor` | Tap Placement | 0 — no row ever used that spelling |
+
+**Nothing was lost, and the money did not move**, because charge is keyed on the
+raw `source_activity_type` string and not on the type label (D74) — `tap cocktail`
+still bills $700 under Tap Placement. They are kept rather than deleted because
+deleting one lets the next sync recreate the type just merged away. The page now
+splits them into their own section and traces each to its survivor, so the
+question does not have to be asked twice.
+
+**"Add notes to that table — the deal notes help me decide the type."** Done, as
+the last column of the classification grid, read-only.
+
+It earns its place: *"Sold in AG both SKUs for Jax location"* is plainly a case
+sale where the deal name *"Fresh Market Stuart"* says nothing at all. **18 of the
+93 queued rows carry one**, and the caption says so, because a column that is
+blank four times out of five needs to distinguish "nothing recorded in HubSpot"
+from "not loaded here."
+
+**`activities.notes` is internal and stays that way.** It is written candidly and
+names people; `brand_visible_summary` is the client-facing field. Selecting it
+here is safe *only* because the admin is staff-only — it binds to loopback (D63)
+and reads with `DATABASE_URL`, never from a browser session. The query carries a
+comment saying so, because the standing rule is that the brand-facing views do
+not select this column and the obvious way to break that rule is to copy a query
+that does.
