@@ -2691,3 +2691,105 @@ and reads with `DATABASE_URL`, never from a browser session. The query carries a
 comment saying so, because the standing rule is that the brand-facing views do
 not select this column and the obvious way to break that rule is to copy a query
 that does.
+
+---
+
+**D81 — The venue merge had never once succeeded, and the launcher that was supposed to make the admin safe to start pointed at the wrong directory.** ✅ 22 Aug 2026
+
+Asked to "take care of the venue duplicates". The duplicates were the easy part.
+
+**The merge was broken, and had been from the beginning.** It lived as five
+lines inside `5_Venues.py`, and every attempt raised on the first statement:
+
+```
+update photos set venue_id = ...     ->  UndefinedColumn: column "venue_id" does not exist
+```
+
+**`photos` has no `venue_id` and never did** — a photo hangs off an *activity*
+(`photos.activity_id`), so moving the activities moves the photos already. The
+exception was caught by a handler that blamed `brand_venue_status` and told the
+operator to "clear the duplicate status first", which is plausible enough that
+nobody read past it.
+
+**And the second bug was real too, so fixing only the first would still fail.**
+`brand_venue_status` is keyed `(brand_id, venue_id)`, and a trigger gives every
+brand that touched a venue a status row — so **any duplicate worth merging has
+colliding statuses by construction.** The UPDATE hits the primary key every time.
+
+**D76 recorded the merge as fixed.** What D76 fixed was being able to *select*
+two identically named venues, which was a genuine bug. The merge underneath it
+had never run to completion, and nothing noticed, because no test drove it and
+the failure message named the wrong cause. D62 for the seventh time.
+
+**Why the fix is a function, not a repair in place.** `merge_venue(source,
+target)` now lives in `schema.sql` for the same reason `merge_activity_type()`
+does: so the admin and anything else cannot disagree about what a merge means,
+and so the offline suite can drive it without a browser.
+
+**What it does with a colliding status, and why "keep the target's" is wrong.**
+All 15 empty duplicates carry status rows *identical* to their target's, so on
+live data every rule looks correct. **Root+Branch is the row that
+discriminates**: the folded copy holds Blue Run `placed` with
+`first_placed_on = 2025-08-22` while the survivor holds Blue Run `pitched` with
+no placement date. Keeping the target would downgrade a placed account to a
+pitch and throw away the date it was placed. So a collision **combines**:
+
+| field | rule |
+|---|---|
+| `status` | whichever is further along the enum |
+| `first_placed_on` | the earliest either knows |
+| `last_touched_on` | the latest either knows |
+| `notes` | both, joined, when they differ |
+
+None of those can lose a fact. `db/test/05_venue_merge_test.sql` builds exactly
+that discriminating case and was confirmed to **fail** — *"status is pitched,
+expected placed — a placed account was downgraded to a pitch"* — when the rule
+is regressed to keeping the target.
+
+**The duplicates themselves: 15 merged, 2 deliberately left.** Venues went
+**353 → 338**, no-city 32 → 17, no-activity 18 → 3, with activities (1,255) and
+revenue ($116,751.65) unchanged. A JSON snapshot of every deleted row and its
+statuses was written to `Hubspot/venue_merge_backup_<stamp>.json` first — the
+merge is not reversible, and the operator asked for it in one instruction rather
+than fifteen.
+
+The 15 share a shape: the survivor came from the HubSpot sync and carries a
+`hubspot_company_id`, the empty twin was created name-only by another importer.
+`venues_name_unique_without_hubspot_id` is **partial** and so does not cover that
+pairing, which is precisely how they accumulated.
+
+**Two were NOT merged, because they are judgment calls and D58/D59 says flag
+rather than auto-merge:**
+
+- **Root+Branch, Clermont vs Clermont** — 12 activities against 2, and **two
+  different HubSpot company ids**. HubSpot itself holds the place twice; the fix
+  arguably belongs there, since merging here fixes the portal and lets HubSpot
+  drift.
+- **Boardwalk Bar & Grill, Melbourne vs Indialantic** — 3 activities against 2,
+  two company ids, two adjacent but genuinely different towns. The 44 North and
+  Barmen 1873 statuses carry identical dates on both, which suggests one place
+  recorded twice — but Indialantic and Melbourne are not the same town and only
+  the operator knows.
+
+**The launcher, which turned out to be the same kind of problem.** Asked how to
+start the admin without asking Claude to run it, and `.claude/launch.json`
+already had an `ihospitality-admin` entry — pointing `streamlit` at an
+**absolute** path to `app.py`. Streamlit resolves `.streamlit/config.toml`
+against the **working directory**, which for that entry is the website repo,
+where no such file exists. So the entry bound the admin to all interfaces and
+`_require_loopback()` refused to render it: a launcher that could never work,
+sitting next to one that could.
+
+`portal_seed/start-admin.cmd` fixes it at the root. Its first real line is
+`cd /d "%~dp0"` — the folder the file itself lives in — so the working directory
+is correct from a Desktop shortcut, the Start menu, or anywhere else.
+**D63 becomes automatic instead of remembered.** Verified by launching it from
+`C:\…\Temp` and confirming the listener is `127.0.0.1:8501` and not `0.0.0.0`.
+
+It deliberately keeps its console window open and ends in `pause`: without that
+the window closes instantly on failure and the error is invisible — which is
+this project's recurring failure mode in yet another costume.
+
+**Not in the website repo, and that is deliberate.** That repo's root is the
+Netlify publish directory, so a `.cmd` committed there would be downloadable at
+`ihospitality.vip/start-admin.cmd`.

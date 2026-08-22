@@ -2,7 +2,7 @@
 
 Written at the close of **22 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D80**.
+they are. Read this first, then **D65 through D81**.
 
 ---
 
@@ -27,7 +27,7 @@ it.
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D80 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D81 in `DECISIONS.md`.
 >
 > **1. Finish entering the contractors.** Only Eric Anderson is on file
 > ($350 semimonthly from Jun 2025 — $10,500 so far). Everyone else is missing,
@@ -60,8 +60,12 @@ Paste this to pick up exactly where we stopped:
 > is an `is_expense` row with an empty type**; D78 means classifying it can no
 > longer make it start earning, but check that it lands somewhere sensible.
 >
-> **5. Merge the 15 empty duplicate venues** — no city, no activity — now that
-> identical names are selectable (D76).
+> **5. Two venue duplicates need YOUR call** — the other 15 are merged (D81).
+> **Root+Branch** (Clermont, 12 activities vs 2) and **Boardwalk Bar & Grill**
+> (Melbourne 3 vs Indialantic 2) each hold TWO HubSpot company ids, so HubSpot
+> itself has the place twice. Merging here fixes the portal and lets HubSpot
+> drift, so the fix may belong at source. Only you know whether Melbourne and
+> Indialantic are one bar or two.
 >
 > Standing rules that outrank convenience: the billing is the truth (D56), no
 > hardcoded business data (D60), the brand portal stays read-only by
@@ -78,8 +82,13 @@ Paste this to pick up exactly where we stopped:
 
 ## Run it
 
+**Double-click `Hubspot/portal_seed/start-admin.cmd`.** That is the whole
+procedure — it `cd`s to its own folder first, which is what keeps the admin on
+loopback (D63/D81), so it is safe from a Desktop shortcut or the Start menu.
+Leave its console window open; closing it stops the server.
+
 ```bash
-# the staff admin — nine pages
+# or by hand — from portal_seed AND NOWHERE ELSE
 cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Hubspot/portal_seed"
 python -m streamlit run admin/app.py          # http://127.0.0.1:8501
 

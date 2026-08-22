@@ -26,6 +26,10 @@ not belong in this repo.
 python -m http.server 8123
 ```
 
+The staff admin has a double-click launcher: **`portal_seed/start-admin.cmd`**.
+Its first line is `cd /d "%~dp0"`, which is what keeps D63 true from a Desktop
+shortcut. Do not replace it with a direct `streamlit` invocation from elsewhere.
+
 Or the `ihospitality-static` config in `.claude/launch.json` via `preview_start`.
 The portal is at `/portal/login.html` — it needs `http://localhost`, not
 `file://`, because it uses ES modules.
@@ -110,6 +114,10 @@ reproduces it; keep it that way.
   pages for a month. `test_admin_sql.py` checks the source for both.
 - **Open every admin page in a browser before calling a session done** (D79).
   It is the highest-yield check in this project and nothing else covers it.
+- **Merging goes through a FUNCTION, never hand-written UPDATEs** —
+  `merge_activity_type()` and `merge_venue()` (D81). The venue merge was five
+  lines in the admin and had never once succeeded: it updated `photos.venue_id`,
+  a column that does not exist. Photos hang off ACTIVITIES, not venues.
 - **The portal does not yet model the retainer**, which is most of what every
   brand pays, so no revenue or margin figure here is complete. See `HANDOFF.md`.
 - **The billing is the truth** (D56). Commission comes off the distributor's
