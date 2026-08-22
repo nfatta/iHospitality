@@ -2,7 +2,7 @@
 
 Written at the close of **22 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D81**.
+they are. Read this first, then **D65 through D82**.
 
 ---
 
@@ -27,7 +27,7 @@ it.
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D81 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D82 in `DECISIONS.md`.
 >
 > **1. Finish entering the contractors.** Only Eric Anderson is on file
 > ($350 semimonthly from Jun 2025 — $10,500 so far). Everyone else is missing,
@@ -60,12 +60,10 @@ Paste this to pick up exactly where we stopped:
 > is an `is_expense` row with an empty type**; D78 means classifying it can no
 > longer make it start earning, but check that it lands somewhere sensible.
 >
-> **5. Two venue duplicates need YOUR call** — the other 15 are merged (D81).
-> **Root+Branch** (Clermont, 12 activities vs 2) and **Boardwalk Bar & Grill**
-> (Melbourne 3 vs Indialantic 2) each hold TWO HubSpot company ids, so HubSpot
-> itself has the place twice. Merging here fixes the portal and lets HubSpot
-> drift, so the fix may belong at source. Only you know whether Melbourne and
-> Indialantic are one bar or two.
+> **5. Venue duplicates are DONE** — all 17 merged, zero duplicate names left,
+> 353 → 336 venues with activities and revenue unchanged (D81, D82). Nothing to
+> do here. One leftover if you want it: **Crown Lounge has its city set to
+> "Locals Eatery & Bar"** — a venue name in the city column.
 >
 > Standing rules that outrank convenience: the billing is the truth (D56), no
 > hardcoded business data (D60), the brand portal stays read-only by
@@ -164,7 +162,9 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
    correctly (D73) and now actually runs (D79), but still ignores consulting,
    billable and total.
 8. **Run the sync for real.** Never run with the staging code. Use `--month` on
-   one month and watch the review queue.
+   one month and watch the review queue. **Check afterwards that no venue came
+   back**: the merges of 22 Aug depend on `venue_hubspot_alias` being consulted
+   by the pre-load loop (D82), and that path has never run against live HubSpot.
 9. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
    6; it should be **1**. Matters more since D65, because quantity multiplies.
 10. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
@@ -231,6 +231,10 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
   `reconcile_invoices.py` pools them; without that, every line on both sides
   reads as a discrepancy. **Gin Lane 1751 ($6,661) is not in the portal at all.**
 - **Scope starts June 2025**, where the HubSpot data starts.
+- **Merging a venue that has a `hubspot_company_id` MUST record the alias**
+  (D82), or the next sync inserts the duplicate straight back — it pre-loads
+  venues by company id and creates one for any id it does not recognise.
+  `merge_venue()` handles it; do not merge venues with hand-written SQL.
 - **An activity type with 0 activities is a MERGE that worked, not lost data**
   (D80). `merge_activity_type()` retires the source rather than deleting it, so
   a future sync of the old raw string cannot recreate what you just merged away.

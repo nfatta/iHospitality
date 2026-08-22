@@ -2793,3 +2793,72 @@ this project's recurring failure mode in yet another costume.
 **Not in the website repo, and that is deliberate.** That repo's root is the
 Netlify publish directory, so a `.cmd` committed there would be downloadable at
 `ihospitality.vip/start-admin.cmd`.
+
+---
+
+**D82 — A venue merge undid itself on the next sync, and the last two duplicates are gone.** ✅ operator-ruled 22 Aug 2026
+
+The operator settled both judgment calls from D81:
+
+> *"root and branch you are correct, it is the same place just double entered.
+> boardwalk bar and grill is in Indialantic — merge the melbourne one into that."*
+
+Note the second: **the survivor is the copy with FEWER activities.** Indialantic
+held 2 and Melbourne 3, and the bar is in Indialantic. A rule like "keep the row
+with more data" would have got it backwards; only the operator knows where the
+bar is.
+
+**Checking those two first found a bug that would have quietly reversed the
+work.** Both differ from the 15 merged earlier in one way that turns out to
+decide everything: **each folded copy carries its own `hubspot_company_id`.**
+
+`sync_hubspot.apply()` pre-loads venues into a dict keyed `("id", company_id)`,
+then inserts a fresh venue for any identity **not** in that dict. Delete a venue
+and its company id is gone from the portal — so the next sync does not recognise
+it, and **inserts the duplicate straight back.** The partial unique index does
+not stop it either: `venues_name_unique_without_hubspot_id` only covers rows
+with a NULL company id, and the recreated row has one.
+
+The 15 merged earlier were safe **by accident** — all carried NULL company ids,
+so there was nothing to come back as. Root+Branch and Boardwalk would both have
+returned on the next real sync, which is item 8 on the open list.
+
+**This is the lesson `merge_activity_type()` already learned**, and its own page
+says so: it repoints the aliases *"so a future import of the old raw string
+resolves to the merged type instead of recreating what you just merged away"*.
+Venues had no equivalent. `promote._resolve_venue()` happens to fall back to a
+name match and would have survived — but the sync's pre-load loop runs first and
+has no name fallback, and the name fallback itself stops working the moment a
+surviving venue is renamed.
+
+**`venue_hubspot_alias` closes it.** `merge_venue()` records the folded venue's
+company id against the survivor; the sync's pre-load and `promote()` both
+consult it. `05_venue_merge_test.sql` now gives the folded twin its own company
+id and asserts the alias exists and points at the survivor — *"the folded
+venue's HubSpot id was forgotten — the next sync will recreate it"*.
+
+**The merges, and what the combining rule saved.** Root+Branch was the case D81
+predicted:
+
+| | before | after |
+|---|---|---|
+| Blue Run status | `pitched` on the survivor, `placed` on the folded copy | **`placed`** |
+| `first_placed_on` | null on the survivor | **2025-08-22** |
+| `last_touched_on` | 2025-09-05 / 2025-08-22 | **2025-09-05** |
+
+Keeping the survivor's row — the obvious implementation — would have downgraded
+a placed account to a pitch and binned the date it was placed.
+
+Boardwalk reported *4 statuses combined, 0 moved* where 2 and 2 were expected,
+and the reason is worth recording: **moving the activities first fires the
+trigger that creates a status row per brand**, so by the time the statuses were
+reconciled the target already had all four. The combining rule then took the
+better value on each. Correct either way, but it means "moved" will usually read
+0 — the trigger gets there first.
+
+**Result: 336 venues, zero duplicate names, 1,255 activities and $116,751.65
+revenue both unchanged.** Down from 353 at the start of the day. Snapshots of
+every deleted row and its statuses are in `Hubspot/venue_merge_backup_*.json`.
+
+**Still open, and deliberately not touched:** `Crown Lounge` carries the city
+**"Locals Eatery & Bar"** — a venue name in the city column.
