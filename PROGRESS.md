@@ -1124,6 +1124,34 @@ It had survived everything, including me opening that exact page twice in the
 same session while building the grid directly above it. D79 said open every
 page; D89 said open every tab; **D92 says opening a page is not using it.**
 
+**Dame Mas reconciled end to end (D93).**
+
+The canary reads **13 months tying, 0 billed-but-missing, 0 drifted** — it read
+4 and 3 that morning.
+
+`parse_invoices.py` reads the 13 Dame Mas invoice PDFs (Jul 2025 – Jul 2026).
+$3,307.28 of commission was missing and is now booked one row per month,
+carrying the gross as its amount and priced by the existing 10/8 card:
+$2,645.82 of contractor cost, $661.46 net. Month-level because the per-venue
+route was tested and fails — bottle price runs $123.00 to $210.75 with case
+discounting, and October reconstructs to ~$5,000 against $6,533 invoiced.
+Apr–Jul 2026 are skipped by a computed guard, not a date range.
+
+The parser refuses to write unless every invoice adds to its own stated
+SUBTOTAL, and that check paid for itself immediately: the first version matched
+expenses by keyword and read "minimum 80% staff" as $80.00 while missing a
+$534.87 line under "C. Nicolas". October's expenses were $123.50; they are
+$1,243.95.
+
+`classify_dame_mas.py` reclassified 46 of the 50 `account sold` rows from the
+workbook notes — 40 placements, 5 reorders, 1 that was never a sale. It sets
+`activity_type_id` and nothing else, so Dame Mas charge and cost are unchanged
+to the cent.
+
+**Found and not acted on: 11 sale events are in the workbook and not in the
+portal at all**, verified month by month. They carry no money but would change
+venue status; several need venues created, which is the operator's call.
+
 ---
 
 ## Known data problems to resolve before seeding

@@ -192,6 +192,22 @@ reproduces it; keep it that way.
   a column that does not exist. Photos hang off ACTIVITIES, not venues.
 - **The portal does not yet model the retainer**, which is most of what every
   brand pays, so no revenue or margin figure here is complete. See `HANDOFF.md`.
+- **The invoice PDFs are the billing source, and `parse_invoices.py` reads
+  them** (D93). They carry the line detail the QuickBooks API blanks (D70),
+  including the month's GROSS stated on the commission line. **Every invoice
+  must add to its own stated SUBTOTAL or nothing is written** — that check
+  caught three separate parse faults worth $1,120 in one month. Never match
+  invoice lines by keyword; the descriptions are typed by hand. Take every line
+  in the item table ending in an amount.
+- **Dame Mas commission for Jul 2025 – Mar 2026 is booked MONTH-LEVEL** (D93),
+  because no venue-level depletion exists for those months and bottle counts
+  cannot be turned into money — the price runs $123.00 to $210.75 with case
+  discounting. Any month already carrying percentage-priced rows is skipped, so
+  loading a depletion summary stops the monthly row automatically. Never write
+  both: that is D51's double-count.
+- **Reclassifying an activity must not move money** (D93). Set
+  `activity_type_id`; leave `source_activity_type` alone. The rate card keys on
+  the raw string (D74), so that one rule is what makes classification safe.
 - **The billing is the truth** (D56). Commission comes off the distributor's
   depletion report. Where the portal disagrees, investigate the portal.
   **QuickBooks is more the truth than the workbooks are** — they disagree, and

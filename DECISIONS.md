@@ -3599,3 +3599,107 @@ now (D79's four pages, D89's dead tab, this) have been invisible to everything
 except a person interacting with the thing. The static checks exist precisely
 because that person is not always available, and each new fault should leave one
 behind.
+
+---
+
+**D93 — Dame Mas reconciled to the invoices, and the 50 `account sold` rows
+classified from the operator's own workbooks.** ✅ operator-ruled 23 Aug 2026
+
+The operator asked why Dame Mas showed so many unpriced rows still reading
+`account sold`, and pointed at the invoice PDFs and the two activity workbooks:
+*"If you are not sure which account sold is a bottle sale or an account visit
+lets use the data... Also use the notes in the deal as a guide. They arent 100%
+fact but a good guide."*
+
+**The canary now reads 13 months tying, 0 billed-but-missing, 0 drifted.** It
+read 4 and 3 that morning.
+
+---
+
+**WHAT THE TWO SOURCES ACTUALLY CONTAIN**, established before deciding anything:
+
+| source | gives | does not give |
+|---|---|---|
+| 13 invoice PDFs, Jul 2025 – Jul 2026 | commission, gross, retainer, itemised expenses, per month | anything per venue |
+| the workbooks, 245 rows | per-venue events, SKU, bottle counts in the notes | dollars outside Apr–Jul 2026 |
+| the Account Sold Summary | per-venue bottles and dollars | Apr–Jul 2026 only |
+
+**RULING 1 — the missing months are recorded at MONTH level.** $3,307.28 of
+commission across Jul 2025 – Mar 2026 was absent entirely. It is now one row per
+month carrying that month's gross as its `amount`, priced by the brand's
+existing 10 percent / 8 percent card — $2,645.82 of contractor cost, $661.46
+net, and no special case anywhere in the money model.
+
+**The per-venue alternative was TESTED, not assumed, and it fails.** Deriving
+dollars from the bottle counts in the notes requires a stable bottle price and
+there isn't one: $123.00 (Reposado) to $210.75 (Extra Anejo), with case
+discounting on top, so Executive Cigar's 24 bottles price at $163.875 each while
+Dancers Royale's six price at $207.75. October 2025 reconstructs to roughly
+$5,000 against $6,533 invoiced. **The gap is D51's finding restated** — the
+depletion report counts every bottle moved through every account, including
+reorders nobody logged an activity for. The activity log is a subset and always
+will be.
+
+**The double-count guard is COMPUTED, not a date range.** Any month already
+carrying percentage-priced rows is skipped, so Apr–Jul 2026 — where the
+venue-level depletion is loaded and ties exactly — are left alone, and loading
+another depletion summary tomorrow stops the monthly row for that month by
+itself. Writing both is precisely what D51 warned against.
+
+**RULING 2 — classification only, no money.** `classify_dame_mas.py` sets
+`activities.activity_type_id` and **nothing else**. `source_activity_type` is
+deliberately untouched, because that is the column the rate card keys on (D74) —
+so no row it touches can start or stop earning. Dame Mas charge and cost are
+unchanged to the cent, before and after 46 reclassifications.
+
+| from the notes | rows |
+|---|---|
+| `bottle_sale` — a placement | 40 |
+| `bottle_reorder` — bought again | 5 |
+| `case_sale` — cases, unchanged | 4 |
+| `account_visit` — never a sale | 1 |
+
+The operator's warning that the notes are *"a good guide, not 100% fact"* is
+taken literally: a note moves a row only when it says something unambiguous
+("1 bottle reorder", "Sold in 4b of the Repo", "Walked in to set an
+appointment"). Three rows with no note anywhere were left exactly as they were.
+
+---
+
+**THREE THINGS FOUND ON THE WAY, each worth more than the task that found it.**
+
+**1. Every invoice must add to its own stated SUBTOTAL, or nothing is written.**
+The first parser matched expense lines on the word "engagement" and was wrong
+three separate ways: `"minimum 80% staff"` parsed as $80.00 once the percent
+sign was stripped; `"THE COPPER ROCKET - Dame Mas 50.60"` is an expense and
+never says so; and a $534.87 line sat under `"C. Nicolas"` on a wrapped row.
+October's expenses read $123.50 against a real **$1,243.95**.
+
+No vocabulary covers descriptions typed by hand each month. What is reliable is
+the SHAPE — every charge sits in the item table and ends in an amount with
+cents. So the parser takes every such line, names the three that are structural,
+and lets the rest be expenses. **Nothing can be silently missed, because
+"missed" would mean a line the subtotal does not account for.** Same method as
+D51: check money against something that cannot lie about itself.
+
+**2. The workbook and HubSpot disagree about dates by a day or two**, and exact
+matching lost the clearest reorder in the set — Chatham's Place, 10 Feb in the
+workbook and 11 Feb in HubSpot, note "Reorder for backbar". Same venue within
+three days is the same event.
+
+**3. ELEVEN SALE EVENTS ARE IN THE WORKBOOK AND NOT IN THE PORTAL AT ALL** —
+verified against the portal month by month, not inferred from a failed name
+match. Three February reorders (Mullets, Roasted Spirits, Fillin Station, all
+reading "1 bottle reorder" or "1 case reorder"), five March placements
+(Executive Cigar, Eden Lounge, Wine Bar George, Mullets, Campi), two August 2025
+(Cypress Liquor, Nick & Moes) and Ruby St Grille's July 2025 two-SKU placement.
+HubSpot never recorded them. **They carry no money — `account sold` is unpriced
+by D51 — so this changes venue status and counts, not revenue.** Not created:
+several would require creating venues too, which is a larger act than
+reclassifying and belongs to the operator.
+
+**And a consequence worth acting on.** There are now five `bottle_reorder` rows
+on Dame Mas, and `bottle_reorder.is_reorder` is still unticked (D86) — so five
+accounts that demonstrably bought again still read `placed`. Ticking that box on
+the Activity types page is now worth considerably more than the 11 pairs it was
+worth this morning.

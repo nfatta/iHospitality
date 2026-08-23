@@ -166,6 +166,12 @@ does not rerun until submit — so they could never be enabled, by any sequence 
 actions, since the day they were written. Fixed by dropping the form. The class
 is now a static check, confirmed to fail on the pre-fix file.
 
+Finally **D93 — Dame Mas is reconciled end to end.** The canary reads **13
+months tying, 0 billed-but-missing, 0 drifted**, against 4 and 3 that morning.
+$3,307.28 of missing commission is booked from the invoice PDFs, and 46 of the
+50 `account sold` rows are classified from the workbook notes without moving a
+cent.
+
 **Verified at close (23 Aug):** **118 pytest** (103 + 15 new source checks) ·
 offline suite green **through both idempotency passes**, now nine files ·
 0 grants to `anon`, 0 write grants to `authenticated`, 0 grants of any kind to
@@ -209,20 +215,33 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Open work, most useful first
 
-1. **Finish the contractors.** One person on file. Base pay understated. It now
+1. **CREATE THE 11 MISSING DAME MAS SALES, or rule that they stay out** (D93).
+   They are in the workbook and not in the portal at all — verified month by
+   month, not guessed from a name mismatch. Three Feb 2026 reorders (Mullets,
+   Roasted Spirits, Fillin Station), five Mar 2026 placements (Executive Cigar,
+   Eden Lounge, Wine Bar George, Mullets, Campi), two Aug 2025 (Cypress Liquor,
+   Nick & Moes) and Ruby St Grille's Jul 2025 two-SKU placement. **They carry no
+   money** — `account sold` is unpriced by D51 — so this is venue status and
+   counts, not revenue. Several need their venue created too, which is why they
+   were left rather than written.
+2. **Tick `bottle_reorder` as a reorder** on the Activity types page. There are
+   now FIVE Dame Mas `bottle_reorder` rows (D93) on top of the 11 pairs it was
+   worth this morning, and every one of those accounts demonstrably bought again
+   while still reading `placed`.
+3. **Finish the contractors.** One person on file. Base pay understated. It now
    feeds a second thing: the owner dropdown on the Venues page's **Grade and
    ownership** tab lists active contractors, so until they are entered there is
    nobody to assign a venue to.
-2. **Grade the venues, and assign owners** (D88). 336 venues, all blank. Grid or
+4. **Grade the venues, and assign owners** (D88). 336 venues, all blank. Grid or
    CSV — download, edit in Excel, upload, confirm the diff. A blank grade means
    not graded yet; nothing reads it as a bad grade.
-3. **Enter the remaining missing pay rates and the 5 expense amounts** (D78).
+5. **Enter the remaining missing pay rates and the 5 expense amounts** (D78).
    **Mileage is DONE** — it pays out 100 percent (D91), which took the uncosted
    figure from $6,568.90 to **$5,325.00 across 30 activities**. What is left is
    led by `5l barrel` ($1,395), `single barrel sale` ($1,000) and
    `aspen green fresh market incentive` ($900). Not a fault — unfinished. Both
    are operator data by D60.
-4. **DECIDE THE PRICES THAT LOSE MONEY** (D90). Measured and listed on the Rate
+6. **DECIDE THE PRICES THAT LOSE MONEY** (D90). Measured and listed on the Rate
    card page: **58 activities charged $3,283.90 against $4,578.90 of pay —
    minus $1,295.00.** The loss is unchanged by the mileage ruling, which is the
    point: mileage passes through at exactly zero.
@@ -240,38 +259,42 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
      by design. Nothing to do.
 
    Not all of it is wrong, and none of it is mine to decide (D60).
-5. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
+7. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
    (117). Investigate — do not delete to make it tie.
-6. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
+8. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
    3114, 3119 (work months Mar–Jul 2025, none paid).
-7. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
+9. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
    invoice, not a sale. A bookkeeping question outside this system.
-8. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It still
-   holds ONE brand and seven months. Aug 2025 commission is typed `375.75`
-   where the invoice bills `354.75`; a $455 Dame Mas tasting invoice (3203) is
-   in neither the workbook nor the portal.
-9. **Widen the Health canary further.** It compares commission to commission
+10. **Load `invoice_recap` for THE OTHER BRANDS.** Dame Mas is DONE — 13 months,
+   from the invoice PDFs, via `parse_invoices.py --brand "<name>"` (D93). The
+   Aug 2025 `375.75` vs `354.75` discrepancy is resolved: the invoice bills
+   354.75 and the invoice wins (D56). **The parser is brand-agnostic already**;
+   what is left is confirming each brand's invoices balance and deciding how
+   their commission is modelled. `Coors Whiskey` is a billing name covering Five
+   Trail AND Barmen 1873 and is deliberately unmapped. The $455 Dame Mas tasting
+   invoice (3203) is still in neither the workbook nor the portal.
+11. **Widen the Health canary further.** It compares commission to commission
    correctly (D73) and now actually runs (D79), but still ignores consulting,
    billable and total.
-10. **Run the sync for real.** Never run with the staging code. Use `--month` on
+12. **Run the sync for real.** Never run with the staging code. Use `--month` on
    one month and watch the review queue. **Check afterwards that no venue came
    back**: the merges of 22 Aug depend on `venue_hubspot_alias` being consulted
    by the pre-load loop (D82), and that path has never run against live HubSpot.
-11. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
+13. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
    6; it should be **1**. Matters more since D65, because quantity multiplies.
-12. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
+14. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
     unclassified (D76).
-13. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
+15. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
     activity charge against real contractor cost.
-14. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
+16. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
     It bounds the QuickBooks comparison at the last invoiced work month (D79).
     It needs bumping when a new month is invoiced, alongside `QB_RETAINER_TOTAL`
     and `QB_RETAINER_MONTHS` — or, better, derived from `invoice_recap` once
     item 8 lands.
-15. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
+17. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
     in the city column, straight from HubSpot. Editing it in the admin now
     STICKS (D84); it did not before today.
-16. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
+18. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
     merging PR #1 when the portal should go live.
 
 ---
