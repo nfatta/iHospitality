@@ -3842,3 +3842,41 @@ the bare **`Mullets` will still read as ambiguous**, because it is then equally
 close to both Mullets venues. That row needs an explicit assignment, which the
 loader has no option for yet — roughly ten lines, and the shape is already there
 in `_resolve_venue`.
+
+---
+
+**D96 — The staff Business page gained the figure the admin got today.**
+✅ 23 Aug 2026
+
+The operator asked for the website's staff pages to match the admin panel. They
+already agreed on almost everything — `business.html` reads `v_brand_money` and
+shows Charged, Contractor cost, Margin, Unpriced and Charged-not-costed, all the
+same numbers the Analysis page shows.
+
+**One thing was missing, and it was the one added today: work priced at or below
+what it pays (D90).** The page showed Aspen Green's **$75.00 margin on $2,534.90
+charged** and said nothing about why — which is the exact confusion that started
+D90 in the first place. `unpriced` understates revenue and `uncosted` overstates
+margin; this third case is neither, and **it has no flag on the activity because
+it is not a data fault — it is a price** — so the page has to compute it.
+
+Added as a stat card and a per-brand column, so a total can be traced to a row:
+**−$1,295.00 across 58 activities**, led by Wodka's `1st case sale` at −$1,140.
+
+Three things about the implementation are deliberate:
+
+- **Compared in the browser, not in the query.** PostgREST cannot compare two
+  columns to each other. Six small columns are fetched, only for rows carrying
+  both rates.
+- **Lines that are zero on BOTH sides are excluded**, exactly as the admin now
+  excludes them (D94). Dame Mas prices its placements at an explicit 0.00 / 0.00
+  because the money is billed as commission elsewhere; counting those would put
+  65 rows in a warning about losing money and bury the 58 that are.
+- **The card is scoped to the same brands the table shows**, so the active/all
+  toggle cannot leave the two describing different populations — the D87 mistake,
+  which was counting one thing in the cards and displaying another.
+
+**Not verified: the page rendering while logged in.** It is staff-gated and
+there was no session to hand. The module parses and redirects with no console
+errors and every column it reads is confirmed present with the right values —
+which D79 is explicit is NOT the same evidence as opening it.

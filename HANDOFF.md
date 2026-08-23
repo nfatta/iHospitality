@@ -224,12 +224,15 @@ still passes on the version where a whole tab renders blank (D89), because
 checker to write**, and it is about twenty lines: the shape is already in
 `widgets_disabled_inside_a_form`.
 
-**NOT verified: the logged-in `venues.html`.** It is behind a brand login and
+**NOT verified: the logged-in `venues.html` and `business.html`.** It is behind a brand login and
 there was no session to hand, so the corrected stat cards were not seen
 rendering. The module parses and redirects with no console errors and the view
 columns are confirmed present — but D79 is explicit that this is not the same
-evidence as opening the page. **Open it once you are logged in**; the four
-numbers at the top are what changed.
+evidence as opening the page. **Open both once you are logged in.** On
+`venues.html` the four numbers at the top are what changed; on `business.html`
+it is the new **"Priced at or below cost"** card and column (D96), which should
+read **−$1,295.00 across 58 activities**, with Wodka at −$1,140 and Aspen Green
+at $0.00 across 23 activities that earn exactly nothing.
 
 **The money:**
 

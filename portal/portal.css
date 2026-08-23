@@ -44,6 +44,9 @@
 .pill-prospect   { color:rgba(232,224,213,0.5); border-color:var(--divider-dark); }
 .pill-dormant    { color:#C98A5A; border-color:rgba(201,138,90,0.35); background:rgba(201,138,90,0.08); }
 .pill-lost       { color:#B87070; border-color:rgba(184,112,112,0.3); }
+/* A negative figure on a stat card. Same red as `pill-lost`, so a loss reads
+   the same wherever it appears. */
+.neg             { color:#B87070; }
 
 /* Filters */
 .filters { display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center; }

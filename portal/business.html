@@ -73,7 +73,7 @@
           title: 'Staff only',
           body: 'This page shows internal figures and is not part of your portal.' } });
       } else {
-        const [brands, gaps] = await Promise.all([
+        const [brands, gaps, priced] = await Promise.all([
           db.from('v_brand_money').select('*'),
           // `unpriced`, NOT `charge is null`. Since D78 an itemised expense
           // also has a null charge -- deliberately, because a reimbursement
@@ -82,24 +82,54 @@
           // already excludes them: a reimbursement has no rate BY DESIGN.
           db.from('v_activity_money').select('brand_name, source_activity_type')
             .eq('unpriced', true),
+          // THE THIRD WAY THE RATE CARD GOES WRONG, and the admin gained this
+          // on 23 Aug while this page did not (D90). `unpriced` means no rate
+          // at all and understates revenue; `uncosted` means charged with no
+          // pay rate and overstates margin. This is neither: the line is fully
+          // priced, the arithmetic is right, and the work earns nothing or
+          // loses money. It has no flag on the activity BECAUSE IT IS NOT A
+          // DATA FAULT — it is a price — so it has to be computed.
+          //
+          // Compared here rather than in the query because PostgREST cannot
+          // compare two columns to each other. Only five small columns are
+          // fetched, and only for rows that carry both rates.
+          db.from('v_activity_money')
+            .select('brand_name, source_activity_type, charge_rate, pay_rate, charge, cost')
+            .not('charge_rate', 'is', null).not('pay_rate', 'is', null),
         ]);
         if (brands.error) {
           render(document.getElementById('list'), { error: brands.error });
         } else {
+          // A line charging nothing AND paying nothing is a no-op, not a
+          // leak — Dame Mas prices its placements at an explicit 0.00 / 0.00
+          // because the money is billed as commission elsewhere (D94), and
+          // counting those would bury the ones that really do lose money.
+          const atCost = (priced.data || []).filter(r =>
+            Number(r.charge_rate) <= Number(r.pay_rate)
+            && !(Number(r.charge_rate) === 0 && Number(r.pay_rate) === 0));
           document.getElementById('f-scope')
-            .addEventListener('change', () => draw(brands.data, gaps.data));
-          draw(brands.data, gaps.data);
+            .addEventListener('change', () => draw(brands.data, gaps.data, atCost));
+          draw(brands.data, gaps.data, atCost);
         }
       }
     }
 
-    function draw(rows, gapRows) {
+    function draw(rows, gapRows, atCost) {
       const scope = document.getElementById('f-scope').value;
       // `brands.is_active` was set weeks of decisions ago and did nothing until
       // now. This is the toggle that gives it a job.
       const shown = scope === 'active' ? rows.filter(r => r.is_active) : rows;
 
-      renderStats(shown);
+      // Scoped to the same brands the table is showing, so the cards and the
+      // rows can never describe different populations.
+      const names = new Set(shown.map(r => r.brand_name));
+      const loss = (atCost || []).filter(r => names.has(r.brand_name));
+      renderStats(shown, loss);
+      const lossByBrand = new Map();
+      for (const r of loss) {
+        lossByBrand.set(r.brand_name, (lossByBrand.get(r.brand_name) || 0)
+          + Number(r.charge || 0) - Number(r.cost || 0));
+      }
       document.getElementById('count').textContent =
         `${fmtNum(shown.length)} brand${shown.length === 1 ? '' : 's'}`;
       document.getElementById('shown').textContent =
@@ -130,6 +160,17 @@
             const cls = m < 0 ? 'pill pill-lost' : m === 0 ? 'muted' : '';
             return `<span class="${cls}">${money(m)}</span>`;
           } },
+        // Per brand, so the card above can be traced to a row. This is where
+        // Aspen Green's story is: a $75 margin on $2,535 charged looks like a
+        // thin month until you see that its cases are charged $5.00 and paid
+        // $5.00 (D90).
+        { head: 'At or below cost', cls: 'num', nowrap: true,
+          value: r => Number(lossByBrand.get(r.brand_name) || 0),
+          get: r => {
+            const m = lossByBrand.get(r.brand_name);
+            if (m === undefined) return '<span class="muted">—</span>';
+            return `<span class="${m < 0 ? 'pill pill-lost' : 'muted'}">${money(m)}</span>`;
+          } },
         { head: 'Last activity', cls: 'num', nowrap: true,
           sortValue: r => r.last_activity || '',
           get: r => r.last_activity ? esc(fmtDate(r.last_activity)) : '<span class="muted">—</span>' },
@@ -138,7 +179,7 @@
       renderGaps(shown, gapRows || []);
     }
 
-    function renderStats(rows) {
+    function renderStats(rows, atCost) {
       const sum = (f) => rows.reduce((a, r) => a + Number(r[f] || 0), 0);
       const charged = sum('charged'), cost = sum('contractor_cost');
       const unpriced = sum('unpriced_activities'), acts = sum('activities');
@@ -148,6 +189,9 @@
       // $0, which is indistinguishable from work done for free.
       const uncosted = sum('uncosted_charge');
       const reimbursed = sum('reimbursements');
+      const lossRows = atCost || [];
+      const lossMargin = lossRows.reduce(
+        (a, r) => a + (Number(r.charge || 0) - Number(r.cost || 0)), 0);
 
       const el = document.getElementById('stats');
       el.className = 'stat-grid';
@@ -166,6 +210,11 @@
           <span class="lbl">Charged, not costed</span>
           <div class="meta">no pay rate behind it — margin above is
             <strong>overstated</strong> by whatever it cost</div></div>`
+        + (lossRows.length ? `
+        <div class="stat-card"><span class="num ${lossMargin < 0 ? 'neg' : ''}">${money(lossMargin)}</span>
+          <span class="lbl">Priced at or below cost</span>
+          <div class="meta">${fmtNum(lossRows.length)} activities fully priced that
+            earn nothing — the rate, not the data</div></div>` : '')
         + (reimbursed ? `
         <div class="stat-card"><span class="num">${money(reimbursed)}</span>
           <span class="lbl">Reimbursements</span>
