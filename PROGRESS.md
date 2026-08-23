@@ -1079,6 +1079,31 @@ missed 33 Wodka activities worth minus $1,140: the largest instance, invisible
 to the check written to find it. Rewritten against `v_activity_money`, which
 already resolves the pairing the way the billing does.
 
+**And the rate card became editable (D91).**
+
+The current-rates table now edits in place, which cuts against this page's own
+rule that `effective_from` stops last year's revenue being restated. Both acts
+are real: correcting a rate that was always wrong SHOULD reach back, changing a
+price from a date forward must not. So the edit is allowed and the difference is
+made visible — nothing saves until the money impact is shown, and that impact is
+measured by applying the edit and asking `v_activity_money` inside a rolled-back
+transaction rather than recomputing pricing in Python. Correcting Aspen Green's
+two case lines to $50.00 previews as +$11,520.00 across 14 activities already on
+file.
+
+**Mileage now pays out in full**, per the operator: every cent charged goes to
+the contractor. Eight rate lines, all charging $0.70 per unit with no pay rate
+at all. Charge unchanged at $39,201.65; contractor cost $21,466.18 → $22,710.08;
+uncosted charge $6,568.90 → **$5,325.00**, exactly the $1,243.90 that moved.
+
+**And the two `rate_card` one-basis CHECK constraints had never existed on
+Supabase.** They are declared inside `create table if not exists`, which does
+nothing when the table already exists — so they were real on every fresh install
+and in every offline test run, and absent on live. Found by deliberately writing
+both a rate and a percentage in one edit to watch it be refused, and watching it
+succeed. Restated as a guarded ALTER; zero rows violated them. Seventh instance
+of D62.
+
 ---
 
 ## Known data problems to resolve before seeding

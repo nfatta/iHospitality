@@ -139,6 +139,21 @@ reproduces it; keep it that way.
   neither**: fully priced, arithmetic correct, work loses money. That third one
   has no flag on the activity and cannot have one; it is a priced decision, not
   a data fault. 51 activities are in it, at −$1,295.
+- **Mileage is a 100 percent pass-through** (D91). Every cent charged goes to
+  the contractor; iHospitality keeps none. Its pay rate is set FROM its charge
+  rate so the two cannot drift. A $0.00 mileage margin is the correct answer,
+  not a missing pay rate — do not "fix" it, and do not remove it from the
+  at-cost list either.
+- **Editing a rate in the table RESTATES HISTORY, and that is sometimes right**
+  (D91). Correcting a rate that was always wrong should reach back; changing a
+  price from a date forward must not, and is a new row with a later
+  `effective_from`. The grid shows the money impact before saving, measured by
+  applying the edit and asking `v_activity_money` inside a rolled-back
+  transaction — never by recomputing pricing in Python.
+- **`create table if not exists` does NOTHING on live** (D91). Two `rate_card`
+  CHECK constraints were declared inside it and had never existed on Supabase,
+  while passing in every test. Anything added to an existing table — column,
+  default, or constraint — must be restated as an `ALTER`.
 - **Check prices against `v_activity_money`, NEVER against `rate_card` rows**
   (D90). A charge and a pay for the same work need not sit on the same row — a
   brand line can set the charge while `(all brands)` sets the pay, which is how

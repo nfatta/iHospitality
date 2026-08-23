@@ -153,6 +153,13 @@ whole family: **51 activities charged $2,040.00 against $3,335.00 of pay, a
 margin of MINUS $1,295.00**, led by Wodka's `1st case sale` at −$1,140.
 Clicking a brand-month on the Analysis page now opens every row behind it.
 
+Then **D91**: the rate table edits in place, showing what each edit does to
+money already recorded before it saves. **Mileage now pays out in full** — eight
+lines, charge unchanged, contractor cost +$1,243.90, uncosted charge down to
+**$5,325.00**. And the two `rate_card` one-basis CHECK constraints turned out to
+have **never existed on Supabase** — declared inside `create table if not
+exists`, real in every test, absent on live.
+
 **Verified at close (23 Aug):** 103 pytest · offline suite green **through both
 idempotency passes**, now eight files including `08_account_status_test.sql` ·
 0 grants to `anon`, 0 write grants to `authenticated`, 0 grants of any kind to
@@ -180,9 +187,10 @@ numbers at the top are what changed.
 | activity charge | $39,202 | $39,202 |
 | retainer | $79,650 | $79,650 |
 | revenue | $116,752 | **$116,752** |
-| contractor cost (per-activity) | $21,466 | $21,466 |
+| contractor cost (per-activity) | $21,466 | **$22,710** (mileage, D91) |
 | contractor base pay | — | $10,500 (one person) |
-| **charge with no cost behind it** | — | **$6,569** ⚠️ |
+| **charge with no cost behind it** | — | **$5,325** ⚠️ (was $6,569) |
+| **charged at or below what it pays** | — | **−$1,295** ⚠️ (D90) |
 | reimbursements (pass-through) | — | $0.00 (none entered) |
 
 Margin is **not** quotable. Two known reasons, both now measured rather than
@@ -199,13 +207,18 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 2. **Grade the venues, and assign owners** (D88). 336 venues, all blank. Grid or
    CSV — download, edit in Excel, upload, confirm the diff. A blank grade means
    not graded yet; nothing reads it as a bad grade.
-3. **Enter the 12 missing pay rates and the 5 expense amounts** (D78). Both are
-   listed in the admin; both are operator data by D60. This is where the
-   $6,568.90 all-time (or $2,676.40 on the page's default filter) of uncosted
-   charge comes from — it is not a fault, it is unfinished.
-4. **DECIDE THE PRICES THAT LOSE MONEY** (D90). New, measured, and listed on
-   the Rate card page: **51 activities charged $2,040.00 against $3,335.00 of
-   pay — minus $1,295.00.**
+3. **Enter the remaining missing pay rates and the 5 expense amounts** (D78).
+   **Mileage is DONE** — it pays out 100 percent (D91), which took the uncosted
+   figure from $6,568.90 to **$5,325.00 across 30 activities**. What is left is
+   led by `5l barrel` ($1,395), `single barrel sale` ($1,000) and
+   `aspen green fresh market incentive` ($900). Not a fault — unfinished. Both
+   are operator data by D60.
+4. **DECIDE THE PRICES THAT LOSE MONEY** (D90). Measured and listed on the Rate
+   card page: **58 activities charged $3,283.90 against $4,578.90 of pay —
+   minus $1,295.00.** The loss is unchanged by the mileage ruling, which is the
+   point: mileage passes through at exactly zero.
+   - **Mileage: $0.00 margin, 7 activities, DELIBERATE** (D91). Nothing to do.
+     It is in the list because it belongs there, not because it is wrong.
    - **Wodka `1st case sale`: charged $10.00, paid $25.00, 33 activities,
      −$1,140.** The charge is on Wodka's own line; the pay comes from the shared
      `(all brands)` line. The single biggest item.
@@ -290,6 +303,21 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 - **Two `$` in one Streamlit markdown string renders as LaTeX** (D79). One is
   fine, which is why it is easy to miss. Use a raw f-string and escape them.
   Same test file.
+- **`create table if not exists` DOES NOTHING ON LIVE, including its
+  CONSTRAINTS** (D91). Two `rate_card` CHECK constraints were declared inside
+  one and had never existed on Supabase, while being real in every offline test
+  run — so the suite could not have caught it and did not. Anything added to a
+  table that already exists — column, default, or constraint — must be restated
+  as an `ALTER`. Seventh instance of D62.
+- **Editing a rate in the table RESTATES HISTORY** (D91). Sometimes that is
+  exactly right: a rate that was always wrong should be corrected everywhere. A
+  price CHANGE is a new row with a later `effective_from` instead. The grid
+  previews the money impact before saving, by applying the edit and asking
+  `v_activity_money` in a rolled-back transaction — do not replace that with
+  arithmetic in Python.
+- **Mileage pays out 100 percent and its $0.00 margin is CORRECT** (D91). Its
+  pay rate is set from its charge rate so they cannot drift. Do not read it as
+  a missing pay rate, and do not hide it from the at-cost list.
 - **CHECK PRICES AGAINST `v_activity_money`, NEVER AGAINST `rate_card` ROWS**
   (D90). The charge and the pay for the same work need not sit on the same row —
   a brand line can set the charge while `(all brands)` sets the pay. A check

@@ -3445,3 +3445,99 @@ costs what the contractor is paid, and 44 North's `recurring case` is paid and
 never charged **by design** — it is on no invoice on purpose, and the handoff
 has said so since 21 Aug. The page lists and quantifies; which figure to change
 is business data and belongs to the operator (D60).
+
+---
+
+**D91 — The rate table is editable, mileage pays out in full, and two
+constraints had never reached the live database.** ✅ operator-ruled 23 Aug 2026
+
+> *"Are we able to make the current rate table editable? That would make it so
+> much easier than using the add or change a rate setup. Keep that for adding a
+> rate, but for changing let's just make it editable inside the table."*
+
+**THIS CUTS AGAINST POINT 3 OF THE PAGE'S OWN DOCSTRING, and that tension is
+the design rather than something to paper over.** `effective_from` exists so
+that last year's revenue is not restated at this year's prices. An in-place edit
+does precisely that, silently, to every activity the line has ever priced.
+
+Both acts are real and they are **different**:
+
+| | should it reach back? | how |
+|---|---|---|
+| **Correcting** a rate that was always wrong | **Yes** | edit in the table |
+| **Changing** a price from a date forward | **No** | new row, later `effective_from` — the form |
+
+Aspen Green charging $5.00 a case when it should have been $50.00 was never
+true (D90); a new row dated today would leave every historical month still
+wrong. So the grid edits in place, and the difference is made **visible**
+instead of being left to memory: nothing saves until the money impact is shown.
+
+**THE IMPACT IS MEASURED BY APPLYING THE EDIT AND ASKING THE VIEW, INSIDE A
+TRANSACTION THAT IS ROLLED BACK.** It is never recomputed in Python. That is
+D90's lesson applied one decision later: a check that re-implements how a charge
+and a pay pair up missed the largest instance of the thing it was written to
+find. `v_activity_money` already resolves brand-line-over-shared-line precedence
+and `effective_from` ordering exactly as the billing does, so asking it is both
+simpler and correct by construction. Verified against live: correcting Aspen
+Green's two case lines to $50.00 previews as **+$11,520.00 of charge across 14
+activities already on file** — which is exactly the number a person needs to see
+before agreeing to restate history.
+
+`brand` and `source_activity_type` stay read-only. Changing either does not
+amend a rate, it points it at different work — which is an add, and the form
+already does adds properly.
+
+---
+
+**RULING — mileage is a 100 percent pass-through.** ✅ operator, 23 Aug 2026
+
+> *"All cases of mileage is 100% paid out to the contractor. So if we charge
+> $180 in mileage for one event all 180 goes back, iHospitality keeps none of
+> it."*
+
+Eight rate lines, every brand, all charging **$0.70 per unit with no pay rate at
+all** — which is why mileage was $1,243.90 of the uncosted total and the case
+the operator first named on 21 Aug ("mileage belongs in revenue with a cost
+behind it").
+
+**The pay rate is set FROM the charge rate rather than typed**, so the two
+cannot drift apart if either is ever changed.
+
+| | before | after |
+|---|---|---|
+| activity charge | $39,201.65 | $39,201.65 (unchanged, correctly) |
+| contractor cost | $21,466.18 | **$22,710.08** |
+| charge with no cost behind it | $6,568.90 | **$5,325.00** |
+| mileage margin, every brand | — | **$0.00** |
+
+Mileage now appears in the "priced at or below what it pays" list, which is
+**correct and must stay**: a zero margin is the right answer here, not a missing
+number. The page says so explicitly, alongside the other two deliberate cases
+(44 North's `recurring case`, and n/c work that still costs), so nobody "fixes"
+them next month.
+
+---
+
+**FOUND WHILE BUILDING IT — the one-basis CHECK constraints had never reached
+Supabase.** ⚠️
+
+`rate_card_charge_one_basis` and `rate_card_pay_one_basis` are declared in
+`create table if not exists rate_card`, which **does nothing when the table
+already exists**. They were therefore real on every fresh install and in every
+run of the offline suite, and **absent on the live database**.
+
+Discovered by deliberately writing `charge_rate` and `charge_pct` in a single
+edit to watch it be refused — and watching it succeed instead, silently pricing
+the line at $0.00.
+
+Restated as a guarded `ALTER`, exactly as `rate_card.per_unit`'s default already
+had to be a few lines above. Zero rows violated them, so adding was safe. The
+guard checks only for the constraint's EXISTENCE, deliberately: if a row ever
+does violate this, the ALTER must fail loudly and stop the schema run, because
+skipping a constraint quietly is how this one came to be missing in the first
+place.
+
+Two standing lessons, both already on the books: **D6** — local Postgres and
+Supabase disagree, in both directions, about things this file claims to
+guarantee. **D62** — a constraint nobody has exercised looks exactly like one
+that works. This is the seventh instance.
