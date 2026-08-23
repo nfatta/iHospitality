@@ -2,7 +2,8 @@
 
 Written at the close of **23 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
-they are. Read this first, then **D65 through D86**.
+they are. Read this first, then **D86 through D95** — 23 Aug was a long session
+and those ten entries are the current state of the system.
 
 ---
 
@@ -38,7 +39,15 @@ status and counts the stored one**.
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and D65–D86 in `DECISIONS.md`.
+> Read `CLAUDE.md`, `HANDOFF.md`, and **D86–D95** in `DECISIONS.md` (23 Aug was
+> a long session: the account list, venue grading, the editable rate card, and
+> Dame Mas reconciled end to end).
+>
+> **Start with open item 1** — three Dame Mas sales are waiting on venues the
+> operator has already ruled on, and it is twenty minutes of work.
+>
+> Then the old list below, which is still accurate apart from what D86–D95
+> closed.
 >
 > **1. Finish entering the contractors.** Only Eric Anderson is on file
 > ($350 semimonthly from Jun 2025 — $10,500 so far). Everyone else is missing,
@@ -172,12 +181,32 @@ $3,307.28 of missing commission is booked from the invoice PDFs, and 46 of the
 50 `account sold` rows are classified from the workbook notes without moving a
 cent.
 
+**D88–D89** added venue grading and ownership (staff-only, in its own table
+because a column on `venues` is a column a brand can read) — and found that
+`st.stop()` inside a tab had been rendering "Edit a venue" blank since the day
+it was written. **D90–D92** came from the operator reading the Analysis page:
+Aspen Green earns nothing because it is charged $5.00 a case and paid $5.00 a
+case, **51 activities are priced at a loss (−$1,295)**, the rate table is now
+editable with a money-impact preview, and the four money fields on "Add a rate"
+could never be enabled by anyone.
+
+**D93–D95 reconciled Dame Mas end to end.** The Health canary reads **13 months
+tying, 0 billed-but-missing, 0 drifted** — it read 4 and 3 that morning.
+$3,307.28 of commission was booked from the invoice PDFs, 46 of the 50
+`account sold` rows were classified from the operator's own workbook notes
+without moving a cent, and nine sales the workbook had and HubSpot never did
+were created.
+
 And **D94** closed the loop on it: Dame Mas had no per-case rate of its own, so
 the shared `(all brands)` $25.00 pay line was inventing **$325.00 of contractor
 cost against no charge**. Its placements now carry explicit 0.00 / 0.00 lines,
 which also stops 56 deliberately-free rows reading as a fault — **Dame Mas
 unpriced 63 → 7, portal-wide 152 → 96**. Nine missing sales created; three held
 back where the venue was too close to call.
+
+**Session ended at the operator's call**, with three Dame Mas rows deliberately
+unwritten (item 1) and one question outstanding (item 5). Nothing is half-done
+in the database: every script here is idempotent and was re-run to prove it.
 
 **Verified at close (23 Aug):** **118 pytest** (103 + 15 new source checks) ·
 offline suite green **through both idempotency passes**, now nine files ·
@@ -209,10 +238,12 @@ numbers at the top are what changed.
 | activity charge | $39,202 | $39,202 |
 | retainer | $79,650 | $79,650 |
 | revenue | $116,752 | **$116,752** |
-| contractor cost (per-activity) | $21,466 | **$22,710** (mileage, D91) |
+| contractor cost (per-activity) | $21,466 | **$26,891** |
 | contractor base pay | — | $10,500 (one person) |
-| **charge with no cost behind it** | — | **$5,325** ⚠️ (was $6,569) |
+| activity charge | $39,202 | **$42,509** (D93) |
+| **charge with no cost behind it** | $6,569 | **$3,225** ⚠️ |
 | **charged at or below what it pays** | — | **−$1,295** ⚠️ (D90) |
+| unpriced activities, portal-wide | 152 | **96** (D94) |
 | reimbursements (pass-through) | — | $0.00 (none entered) |
 
 Margin is **not** quotable. Two known reasons, both now measured rather than
@@ -222,18 +253,24 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Open work, most useful first
 
-1. **DECIDE THREE VENUES, then re-run `load_missing_dame_mas.py`** (D94). Nine
-   of the twelve missing sales are in. Three are held back because the venue is
-   too close to an existing one to decide automatically, and D81 says a matcher
-   confident enough to fold them would fold different premises together:
-   - **"Mullets" (30 Mar) and "Mullets Sprots Bar" (15 Feb, a reorder)** against
-     the existing **Mullets Cigar and Bar (Clermont)**. The depletion summary
-     lists "MULLETS SPORTS BAR, CLERMONT" — so is the cigar bar the same
-     premises, or two Mullets in one town?
-   - **"Fillin Station" (18 Feb, a case reorder)** against **Johnny's Filling
-     Station (Orlando)** and **4th Street Fillin Station (Cocoa Beach)**.
-   Say which, and the loader picks them up — it is idempotent and re-running is
-   safe.
+1. **FINISH THE LAST THREE DAME MAS SALES.** Nine of twelve are in; these three
+   wait on venues, and **the operator has now ruled** (D95):
+   - **"Mullets" (30 Mar, placement) and "Mullets Sprots Bar" (15 Feb, a bottle
+     REORDER) are both `Mullets Sports Bar, Clermont`.** Create that venue with
+     city Clermont.
+   - **"Fillin Station" (18 Feb, a case REORDER) is probably its own venue** —
+     his belief, **not confirmed**, and he could not check. Create it, and leave
+     the note saying it is unconfirmed.
+   - **STILL OPEN, and do not assume it:** the portal also holds
+     `Mullets Cigar and Bar (Clermont)`. He named the sports bar rather than
+     saying the two are one, and the workbook calls the cigar bar "New cigar bar
+     in Clermont". **Treat them as two venues** until he says otherwise (D81).
+
+   Then `python load_missing_dame_mas.py` — idempotent, reports 0 missing today.
+   **Creating `Mullets Sports Bar` makes "Mullets Sprots Bar" match at 0.92 on
+   its own, but the bare "Mullets" will then be ambiguous between the two
+   Mullets venues** and needs an explicit assignment. The loader has no option
+   for that yet: about ten lines, and the shape is already in `_resolve_venue`.
 2. **Tick `bottle_reorder` as a reorder** on the Activity types page. There are
    now FIVE Dame Mas `bottle_reorder` rows (D93) on top of the 11 pairs it was
    worth this morning, and every one of those accounts demonstrably bought again
@@ -245,12 +282,22 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 4. **Grade the venues, and assign owners** (D88). 336 venues, all blank. Grid or
    CSV — download, edit in Excel, upload, confirm the diff. A blank grade means
    not graded yet; nothing reads it as a bad grade.
-5. **Enter the remaining missing pay rates and the 5 expense amounts** (D78).
-   **Mileage is DONE** (D91) and **Dame Mas is DONE** (D93/D94). What is left is
-   **$5,125.00 uncosted across the other brands** — `5l barrel` ($1,395),
-   `single barrel sale` ($1,000), `aspen green fresh market incentive` ($900),
-   `tap cocktail` ($700). Where work is deliberately free, give it an explicit
-   **0.00 rate line rather than no line** (D94), so it stops reading as a gap. What is left is
+5. **Enter the remaining pay rates and the 5 expense amounts** (D78).
+   **Mileage is DONE** (D91), **Dame Mas is DONE** (D93/D94), and on 23 Aug the
+   operator entered `aspen green fresh market incentive` and `single barrel
+   sale` himself — together those took uncosted from $6,568.90 to **$3,225.00**.
+   What is left: `5l barrel` ($1,395), `tap cocktail` ($700), `promo specialist`
+   ($240), `day buy-out split` ($230), `barrel prep` ($200), `tap w/2 cases`
+   ($200), `tap maintenance` ($100), `tasting event split` ($100), `half case
+   sale` ($60). Where work is deliberately free, give it an explicit **0.00 rate
+   line rather than no line** (D94), so it stops reading as a gap.
+
+   **ONE QUESTION FOR THE OPERATOR, from his own entry:** he set
+   `aspen green fresh market incentive` to **charge $100.00 and pay $100.00**,
+   so it now earns nothing across 9 activities and sits in the "priced at or
+   below what it pays" list beside mileage. That is right if it is a
+   pass-through like mileage (D91) and wrong if the pay was meant to be lower.
+   **Nothing in the data can tell which** — ask him. What is left is
    led by `5l barrel` ($1,395), `single barrel sale` ($1,000) and
    `aspen green fresh market incentive` ($900). Not a fault — unfinished. Both
    are operator data by D60.

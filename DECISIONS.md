@@ -3779,3 +3779,66 @@ only thing that would have found either:
 rows into a warning about work priced at a loss, burying the 58 that really are.
 A line charging nothing and paying nothing is a no-op, not a leak, and is now
 excluded.
+
+---
+
+**D95 — Two venue rulings, two operator rate entries, and where 23 Aug stopped.**
+✅ operator-ruled 23 Aug 2026 · **PARTLY UNFINISHED, DELIBERATELY**
+
+**RULING — "Mullets" is Mullets Sports Bar, Clermont.** The bare `Mullets` in
+the workbook (30 Mar 2026) and `Mullets Sprots Bar` (15 Feb 2026, a reorder) are
+the same premises, and the depletion summary's `MULLETS SPORTS BAR, CLERMONT`
+is that venue's proper name.
+
+**WHAT THE RULING DOES NOT SETTLE, and it must not be assumed:** the portal
+holds **`Mullets Cigar and Bar` (Clermont)**, and the operator was asked whether
+the cigar bar is the same premises or a second Mullets in one town. He named the
+sports bar rather than agreeing they are one, and the workbook's own note for
+the cigar bar reads *"New cigar bar in Clermont"* — which reads like a different
+room. **Treat them as two venues until told otherwise.** D81 is the standing
+warning: `Executive Cigar` and `Executive Cigar Sanford` are forty miles apart,
+and a matcher confident enough to fold one pair folds the other.
+
+**RULING — `Fillin Station` is probably its own venue**, distinct from
+`Johnny's Filling Station` (Orlando) and `4th Street Fillin Station` (Cocoa
+Beach). **Explicitly UNCONFIRMED** — the operator said he believes so but could
+not check. Recorded as a belief, not a fact, so nobody later reads it as settled.
+
+---
+
+**OPERATOR RATE ENTRIES, made in the admin the same day**, and both are visible
+in the numbers:
+
+| line | charge | pay | effect |
+|---|---|---|---|
+| Aspen Green · `aspen green fresh market incentive` | $100.00 | **$100.00** | 9 activities, **zero margin** |
+| Blue Run · `single barrel sale` | $1,000.00 | $800.00 | 1 activity, $200 margin |
+
+Uncosted charge fell **$5,125.00 → $3,225.00**; contractor cost rose to
+$26,890.90 and margin to $15,618.03.
+
+**THE FRESH MARKET INCENTIVE NOW CHARGES AND PAYS THE SAME $100.00**, so it
+earns nothing and will appear in the Rate card page's "priced at or below what
+it pays" list alongside mileage. That is either a deliberate pass-through — the
+same shape as mileage (D91), which would make it correct — or a slip where the
+pay was meant to be lower. **Nobody has said which, and the page cannot tell.**
+Worth one sentence from the operator, and it is in the handoff as such.
+
+---
+
+**WHERE THE SESSION STOPPED.** Three Dame Mas sale rows are still not created,
+all waiting on the venue question above:
+
+| date | workbook name | what it is |
+|---|---|---|
+| 15 Feb 2026 | Mullets Sprots Bar | a bottle **reorder** |
+| 30 Mar 2026 | Mullets | a placement |
+| 18 Feb 2026 | Fillin Station | a **case reorder** |
+
+`load_missing_dame_mas.py` is idempotent and re-running it is safe — it reports
+0 missing today and will pick these up once the venues exist. Note that creating
+`Mullets Sports Bar` makes `Mullets Sprots Bar` match automatically at 0.92, but
+the bare **`Mullets` will still read as ambiguous**, because it is then equally
+close to both Mullets venues. That row needs an explicit assignment, which the
+loader has no option for yet — roughly ten lines, and the shape is already there
+in `_resolve_venue`.

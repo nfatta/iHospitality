@@ -1174,6 +1174,28 @@ and the duplicate check ran on the workbook's spelling rather than the resolved
 venue, so "Eden Loung" would have been created twice. **A loader that has only
 been run once is not known to be idempotent.**
 
+**Close of 23 Aug.** The operator entered two pay rates himself during the
+session — `aspen green fresh market incentive` ($100 charge, $100 pay) and
+`single barrel sale` (Blue Run $1,000 / $800). Uncosted charge fell $5,125.00 →
+**$3,225.00**; contractor cost is $26,890.90 and margin $15,618.03 on $42,508.93
+of activity charge.
+
+He also ruled on two venues (D95): **"Mullets" and "Mullets Sprots Bar" are both
+Mullets Sports Bar, Clermont**, and **"Fillin Station" is probably its own
+venue — unconfirmed, he could not check.** Whether `Mullets Cigar and Bar
+(Clermont)` is the same premises as the sports bar is STILL OPEN and must not be
+assumed.
+
+Session ended by request with three Dame Mas sale rows deliberately unwritten,
+waiting on those venues. Nothing is half-applied: every loader written today is
+idempotent and was re-run to prove it — which is how two faults in the loader
+were found in the first place.
+
+**One question outstanding:** the fresh market incentive now charges and pays
+the same $100.00, so it earns nothing across 9 activities. That is correct if it
+is a pass-through like mileage, wrong if the pay was meant to be lower, and
+nothing in the data can tell which.
+
 ---
 
 ## Known data problems to resolve before seeding
