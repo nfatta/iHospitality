@@ -295,8 +295,7 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
    The Health canary reads **12 months tying, 1 DRIFTED**: June 2026 has portal
    $388.05 against invoice $409.13. The gap is one bottle at **Gleneagle
    Country Club** whose `amount` is NULL, so its 10 percent rate charges $0.00
-   while looking perfectly priced (D98). The invoice's own arithmetic gives
-   The figure is **$210.75** — one Extra
+   while looking perfectly priced (D98). The figure is **$210.75** — one Extra
    Añejo, ruled by the operator (D101). Type it into **Amount (gross)** on
    Review and edit (Dame Mas, 2026-06). Ten percent is $21.075, which the
    invoice rounds to the $21.08 that is missing, so the canary should return to
