@@ -167,8 +167,15 @@ reproduces it; keep it that way.
   two `$` in one Streamlit markdown string** (D79). The first raises in
   psycopg — a COMMENT counts — and the second renders as LaTeX. Both broke real
   pages for a month. `test_admin_sql.py` checks the source for both.
+- **Never `disabled=<another widget>` inside `st.form`** (D92). A form does not
+  rerun until submit, so the expression keeps the value it had at the start of
+  the run and the widget can NEVER be enabled by clicking. It cost the Rate
+  card's four money fields — unusable from the day they were written, on a page
+  that rendered perfectly. Drop the form and use live widgets in a fragment.
+  `test_admin_sql.py` checks for it now.
 - **Open every admin page — AND EVERY TAB — in a browser before calling a
-  session done** (D79, D89). It is the highest-yield check in this project and
+  session done** (D79, D89). And where a page takes input, TYPE IN IT (D92) —
+  opening a page is not using it. It is the highest-yield check in this project and
   nothing else covers it. Tabs matter because `st.stop()` halts the WHOLE
   script run, not the block it sits in: one inside a tab killed "Edit a venue"
   from the day it was written, with a clean console and a page that looked

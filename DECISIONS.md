@@ -3541,3 +3541,61 @@ Two standing lessons, both already on the books: **D6** — local Postgres and
 Supabase disagree, in both directions, about things this file claims to
 guarantee. **D62** — a constraint nobody has exercised looks exactly like one
 that works. This is the seventh instance.
+
+---
+
+**D92 — The money fields on "Add a rate" could never be enabled, by anyone, ever.**
+⚠️ operator-reported 23 Aug 2026
+
+> *"In the add or change a rate form I cannot type in the charge amount or the
+> pay amount or the percentage. The cursor turns into a red null sign."*
+
+The four money fields are disabled until the **Basis** radio beside them says
+which basis that side uses — a good guard, because a line carries a rate OR a
+percentage and never both. The radio defaults to `none`, so all four start
+disabled. **That is correct, and it was meant to last one click.**
+
+**Inside `st.form` it lasted for ever.** A form does not rerun the script when a
+widget inside it changes — that batching *is* the point of a form — so
+`charge_basis` still read `"none"` when the `number_input` below it was
+constructed, on every render, whatever the radio was showing on screen. Picking
+"amount" changed nothing until the form was submitted, and submitting with no
+basis was refused by the form's own validation two lines further down. **There
+was no sequence of actions that could enable them.**
+
+**THE FIX IS NOT TO REMOVE THE GUARD — it is to stop batching.** The block is
+now live widgets inside an `st.fragment`: the radio enables its field on the
+click, and the reactivity costs one function call rather than a page reload.
+Verified in a browser by clicking each basis in turn, watching exactly the right
+field enable and the other three stay disabled, and typing a value into it.
+
+**A regression of my own, in the same file, found the same way.** "Retire a rate
+line" read a module-level `card` frame that the previous commit had made local
+by moving the rates query inside the grid's fragment, so it raised `NameError`
+on render. It now runs its own query rather than reading a variable another
+section happens to leave lying around.
+
+---
+
+**THE CLASS IS NOW A TEST**, and this is the durable part.
+
+`test_admin_sql.py` grows a third checker: **a widget inside `st.form` whose
+`disabled=` is not a constant.** Constants are allowed — `disabled=True` cannot
+depend on a widget and is a fine way to render something permanently read-only —
+and `form_submit_button` is exempt, because it *does* re-evaluate on submit,
+which is the one place inside a form where a computed disable behaves sensibly.
+
+Confirmed to **FAIL on the pre-fix file**, naming both offending lines (D62).
+103 tests → 118. It was the only instance in the admin.
+
+**WHY IT SURVIVED EVERYTHING.** The page raises nothing. It renders every
+widget. Both existing checkers pass on it. `verify_live.py` is clean, the schema
+suite is green, and the page opens perfectly — I opened it myself, twice, in
+this same session, while building the editable grid directly above it.
+
+D79 said: open every page. D89 added: open every tab. **D92 is the same lesson
+one step further in — opening a page is not USING it.** Three separate faults
+now (D79's four pages, D89's dead tab, this) have been invisible to everything
+except a person interacting with the thing. The static checks exist precisely
+because that person is not always available, and each new fault should leave one
+behind.

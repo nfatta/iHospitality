@@ -1104,6 +1104,26 @@ both a rate and a percentage in one edit to watch it be refused, and watching it
 succeed. Restated as a guarded ALTER; zero rows violated them. Seventh instance
 of D62.
 
+**And the form nobody could type in (D92).**
+
+Reported as "the cursor turns into a red null sign". The four money fields on
+"Add a rate" are disabled until the Basis radio says which basis applies —
+correct, and meant to last one click. Inside `st.form` it lasted for ever: a
+form does not rerun when a widget inside it changes, so the disabling expression
+kept the value it had at the start of the run. Picking "amount" changed nothing
+until submit, and submitting with no basis was refused by the form's own
+validation. No sequence of actions could enable them.
+
+Fixed by dropping the form — live widgets in a fragment, so the radio enables
+its field on the click. Verified in a browser by clicking each basis and typing.
+
+The class is now a test: a widget inside `st.form` whose `disabled=` is not a
+constant. Confirmed to fail on the pre-fix file. 103 tests → 118.
+
+It had survived everything, including me opening that exact page twice in the
+same session while building the grid directly above it. D79 said open every
+page; D89 said open every tab; **D92 says opening a page is not using it.**
+
 ---
 
 ## Known data problems to resolve before seeding

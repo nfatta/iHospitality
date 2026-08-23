@@ -160,8 +160,14 @@ lines, charge unchanged, contractor cost +$1,243.90, uncosted charge down to
 have **never existed on Supabase** — declared inside `create table if not
 exists`, real in every test, absent on live.
 
-**Verified at close (23 Aug):** 103 pytest · offline suite green **through both
-idempotency passes**, now eight files including `08_account_status_test.sql` ·
+And **D92**, reported as "the cursor turns into a red null sign": the four money
+fields on "Add a rate" were disabled by a radio **inside `st.form`**, and a form
+does not rerun until submit — so they could never be enabled, by any sequence of
+actions, since the day they were written. Fixed by dropping the form. The class
+is now a static check, confirmed to fail on the pre-fix file.
+
+**Verified at close (23 Aug):** **118 pytest** (103 + 15 new source checks) ·
+offline suite green **through both idempotency passes**, now nine files ·
 0 grants to `anon`, 0 write grants to `authenticated`, 0 grants of any kind to
 `anon` on `venue_grading` · 1,255 activities and $39,201.65 activity charge
 unchanged by D86 · both account views agreeing status-for-status across all 689
@@ -169,9 +175,12 @@ pairs · `venue_grading`'s write path driven against live and rolled back,
 including clearing a field back to empty · **all nine admin pages AND every tab
 on them opened in a browser** — which is how D89 was found.
 
-**Not covered by any test, and it bit today:** control flow in the admin.
-`test_admin_sql.py` checks the source for two render-time faults and passes on
-the version where a whole tab renders blank.
+**Not covered by any test, and it bit twice today:** control flow in the admin.
+`test_admin_sql.py` now catches three source faults — including D92's — but it
+still passes on the version where a whole tab renders blank (D89), because
+`st.stop()` after `st.tabs()` is not checked. **That is the obvious next
+checker to write**, and it is about twenty lines: the shape is already in
+`widgets_disabled_inside_a_form`.
 
 **NOT verified: the logged-in `venues.html`.** It is behind a brand login and
 there was no session to hand, so the corrected stat cards were not seen
@@ -269,6 +278,16 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Things that will bite you if you don't know them
 
+- **NEVER `disabled=<another widget>` INSIDE `st.form`** (D92). A form does not
+  rerun until submit, so that expression keeps the value it had at the start of
+  the run and the widget can never be enabled by clicking. It made the Rate
+  card's four money fields unusable from the day they were written. Drop the
+  form, use live widgets in a fragment. Checked by `test_admin_sql.py` now.
+- **OPEN THE PAGES, EVERY TAB — AND TYPE IN THEM.** D79: open every page. D89:
+  open every tab. **D92: opening a page is not USING it.** Three faults now have
+  been invisible to everything except a person interacting with the thing, and
+  D92 survived me opening that exact page twice in one session while working
+  directly above it.
 - **OPEN THE PAGES — AND EVERY TAB ON THEM. In a browser, every session.**
   D89 is why the rule grew: `st.stop()` halts the WHOLE script run, not the tab
   it sits in, and one inside the Venues merge tab had been killing "Edit a
