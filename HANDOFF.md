@@ -1,6 +1,7 @@
 # HANDOFF — start here
 
-Written at the close of **23 Aug 2026**. This is the "what now" document;
+Written at the close of **23 Aug 2026 (second session)**. Read **D97–D99**
+first — they are this session, and D98 is money that is currently unbilled. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
 they are. Read this first, then **D86 through D95** — 23 Aug was a long session
 and those ten entries are the current state of the system.
@@ -33,6 +34,40 @@ days" into one that counted 91-to-180 only — falling as the situation got wors
 on a page that rendered perfectly. The account list now **displays the effective
 status and counts the stored one**.
 
+
+**Later on 23 Aug**, three things. **D97**: the operator ruled that Mullets
+Sports Bar and the cigar lounge are ONE premises, reversing the hold D95 put on
+it — so it was a RENAME of the single existing row, done through the admin so
+`hand_edited_at` defends it (D84). The last three Dame Mas sales are in:
+**1,262 → 1,265 activities, 339 → 340 venues, and not one cent moved**. The
+loader gained `--assign`, which is how an operator ruling reaches a matcher that
+is correctly refusing to guess (D81/D60).
+
+**D98 is the one that matters.** The operator reclassified a Gleneagle row to a
+bottle sale and found he could not enter what it was worth. There was nothing
+to enter it into: **`amount` was readable nowhere and editable nowhere**, and a
+percentage-priced row with no amount **charges $0.00 while looking perfectly
+priced** — not `unpriced`, shows a `10%` rate, charge reads zero. It has cost
+**$21.08 of June commission**, and the Health canary is the only thing that ever
+saw it. `amount` is now on Review and edit, and the preview prices percentage
+rows off it. The same field unblocks the five expense rows behind
+`reimbursements` reading $0.00.
+
+**D99**: the `st.stop()`-after-`st.tabs()` checker, proven by flagging **line
+265 of the real pre-fix `5_Venues.py`** while all three older checkers call that
+file clean. **118 → 134 tests.**
+
+**Verified in a browser this session:** all nine admin pages, every tab panel
+carrying content, the Rate card's four money fields **typed into** and confirmed
+to enable on picking a basis (D92's fix, working), the venue rename done through
+the UI, and — **at last, while logged in as staff** — `business.html` and
+`venues.html`. Both were correct: venues.html reads 692/221/471/151 exactly, and
+counting the displayed status would have shown **117** stocking instead of 221,
+so D87's fix is doing its job on live data. `business.html` reads
+**−$1,265.00 across 66 activities**, not the −$1,295.00/58 this file predicted —
+the figure had moved with the operator's own later rate entries, and it ties to
+`v_activity_money` brand for brand.
+
 ---
 
 ## THE NEXT PROMPT
@@ -43,8 +78,8 @@ Paste this to pick up exactly where we stopped:
 > a long session: the account list, venue grading, the editable rate card, and
 > Dame Mas reconciled end to end).
 >
-> **Start with open item 1** — three Dame Mas sales are waiting on venues the
-> operator has already ruled on, and it is twenty minutes of work.
+> **Start with open item 1** — $21.08 of June commission is unbilled because
+> one row has no `amount`. The field to fix it now exists (D98).
 >
 > Then the old list below, which is still accurate apart from what D86–D95
 > closed.
@@ -256,24 +291,20 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Open work, most useful first
 
-1. **FINISH THE LAST THREE DAME MAS SALES.** Nine of twelve are in; these three
-   wait on venues, and **the operator has now ruled** (D95):
-   - **"Mullets" (30 Mar, placement) and "Mullets Sprots Bar" (15 Feb, a bottle
-     REORDER) are both `Mullets Sports Bar, Clermont`.** Create that venue with
-     city Clermont.
-   - **"Fillin Station" (18 Feb, a case REORDER) is probably its own venue** —
-     his belief, **not confirmed**, and he could not check. Create it, and leave
-     the note saying it is unconfirmed.
-   - **STILL OPEN, and do not assume it:** the portal also holds
-     `Mullets Cigar and Bar (Clermont)`. He named the sports bar rather than
-     saying the two are one, and the workbook calls the cigar bar "New cigar bar
-     in Clermont". **Treat them as two venues** until he says otherwise (D81).
+1. **ENTER THE GLENEAGLE AMOUNT — $21.08 of June commission is unbilled.**
+   The Health canary reads **12 months tying, 1 DRIFTED**: June 2026 has portal
+   $388.05 against invoice $409.13. The gap is one bottle at **Gleneagle
+   Country Club** whose `amount` is NULL, so its 10 percent rate charges $0.00
+   while looking perfectly priced (D98). The invoice's own arithmetic gives
+   **$210.80** for that bottle — confirm it against the June depletion report,
+   then type it into **Amount (gross)** on Review and edit (Dame Mas, 2026-06).
+   The preview will show $21.08 before you save, and the canary should go back
+   to 13 tying. **Do not infer the figure from a per-bottle average** — that
+   night's other rows run $163.88 to $207.75 because of case discounting (D93).
 
-   Then `python load_missing_dame_mas.py` — idempotent, reports 0 missing today.
-   **Creating `Mullets Sports Bar` makes "Mullets Sprots Bar" match at 0.92 on
-   its own, but the bare "Mullets" will then be ambiguous between the two
-   Mullets venues** and needs an explicit assignment. The loader has no option
-   for that yet: about ten lines, and the shape is already in `_resolve_venue`.
+   Then the same field clears **the five `is_expense` rows**, all NULL, which
+   is why `reimbursements` reads $0.00 against $2,456.20 of expense lines.
+
 2. **Tick `bottle_reorder` as a reorder** on the Activity types page. There are
    now FIVE Dame Mas `bottle_reorder` rows (D93) on top of the 11 pairs it was
    worth this morning, and every one of those accounts demonstrably bought again

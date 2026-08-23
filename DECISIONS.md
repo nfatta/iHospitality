@@ -3880,3 +3880,143 @@ Three things about the implementation are deliberate:
 there was no session to hand. The module parses and redirects with no console
 errors and every column it reads is confirmed present with the right values —
 which D79 is explicit is NOT the same evidence as opening it.
+
+---
+
+**D97 — Mullets is one premises, the last three sales are in, and a percentage
+row with no amount charges nothing.**
+✅ operator-ruled and built 23 Aug 2026 (later session)
+
+**RULING, and it REVERSES the hold D95 put on this.** The operator: *"Mullets
+sports bar is also the cigar lounge."* So `Mullets Cigar and Bar` and
+`Mullets Sports Bar` are ONE venue, not two. D95 had deliberately treated them
+as two pending exactly this answer, and the answer went the other way.
+
+That made the work a **RENAME, not a merge** — there was only ever one row.
+`Mullets Cigar and Bar` (Clermont, HubSpot company `41047490817`, 3 activities)
+became `Mullets Sports Bar`, keeping its city, its company id and its history.
+
+**Done through the admin's "Edit a venue", not by hand**, because that path
+stamps `hand_edited_at` and clears any pending city proposal (D84). A bare
+UPDATE would have left the row undefended.
+
+**The rename is safe from the sync, and this was checked rather than assumed**:
+`sync_hubspot.apply()` skips any venue already resolved by company id
+(`if identity in venue_ids: continue`) and its `on conflict` touches only
+`updated_at`. **The sync cannot overwrite a venue NAME at all** — only the city
+was ever overwritable (D84).
+
+---
+
+**`--assign` ON THE LOADER: how an operator ruling reaches a matcher that is
+right to refuse.** `_resolve_venue` reports and skips anything it cannot
+decide, which D81 requires and which must not be loosened. So the skipped rows
+need a person, and `--assign "Mullets=Mullets Sports Bar"` is how the person
+answers. `=new` is equally a ruling — "none of the candidates, create it" —
+which is what `Fillin Station` needed against two Filling Stations it is not.
+
+**Why a CLI option and not a table or a constant:** the ruling arrives at run
+time and is recorded here, rather than compiled into the matcher where the
+operator could not reach it (D60). Checked FIRST, before the three existing
+answers, so a ruling can never be overruled by a similarity score.
+
+**THE RENAME IMMEDIATELY BROKE SOMETHING, AND THAT IS THE INTERESTING PART.**
+With the venue renamed, the workbook's own `Mullets Cigar and Bar` row stopped
+matching — its key is `mullets cigar`, the venue's is now `mullets sports` —
+so a sale ALREADY IN THE PORTAL since Oct 2025 reported as unresolved. Assigning
+it too resolves it to the same venue, where the date check then finds it
+present and correctly declines to create it again. **The ruling has to be
+applied to the history as well as the new rows, or the loader re-reports old
+work for ever.**
+
+**RESULT: 1,262 → 1,265 activities, 339 → 340 venues, and the money did not
+move — $42,277.85 charged and $26,729.04 cost, before and after.** The three
+rows are `source_activity_type = 'account sold'`, which for Dame Mas carries
+explicit 0.00 / 0.00 lines (D94), so the month's commission still carries the
+money exactly once (D51). Re-running created 0 and 0.
+
+**`unpriced` stayed at 96 across all three, which is D94 working**: they are
+PRICED AT ZERO, not unpriced, so three deliberate decisions did not become
+three new warnings.
+
+`reordering` went 21 → 22: Fillin Station is a new pair and `recurring_case` is
+a ticked reorder type. Mullets was already `placed` and stayed there — its pair
+existed before. Effective status put Fillin Station straight into `dormant`
+(Feb 2026 is over 180 days back), which is dormancy deriving itself (D86).
+
+---
+
+**D98 — A percentage-priced row with no `amount` charges nothing, and there was
+nowhere to type the amount.**
+✅ 23 Aug 2026, found by the operator
+
+Reported as *"I changed it to a bottle sale. Now the problem is I cant add how
+much we charged for it."* The answer is that **there is no "how much we
+charged" to type** — and then that the field there IS to type could not be
+reached.
+
+**Dame Mas is billed as a PERCENTAGE (D94): 10 percent charged, 8 percent paid,
+off the gross.** So for those rows `quantity` says how many bottles moved and
+**`amount` says what they were worth, and the money comes from the second one.**
+A per-case rate would be D94's exact mistake.
+
+**THE FAILURE MODE IS THE DANGEROUS KIND: it looks priced.** The row is not
+`unpriced`, it displays a rate of `10%`, and the charge reads `$0.00` as though
+zero were the answer. It is a fourth way the rate card goes wrong, beside
+`unpriced`, `uncosted` and charge-≤-pay (D78/D90) — and unlike those three
+**nothing in the admin surfaced it**.
+
+**WHAT IT COST: $21.08, and the Health canary is the only thing that saw it.**
+June 2026 reads portal $388.05 against invoice $409.13. The gap is exactly
+$21.08 of commission — 10 percent of **$210.80**, one bottle at Gleneagle
+Country Club with no amount on it. The figure is not inferred from a per-bottle
+average, which would be wrong: that night's sister rows price at $207.75,
+$166.88 and $163.88 a bottle, because case discounting runs $123.00–$210.75
+(D93). **It comes from the invoice's own arithmetic**, which is D56.
+
+**The operator's reclassification did not cause the drift; it is what made the
+row visible.** Before it, the row priced off `account sold`'s 0.00 / 0.00 line
+and was excluded from the canary's percent-only comparison; after it, the row
+is correctly in the commission population. June was short by $21.08 either way.
+(The handoff recorded 13 months tying that morning and it now reads 12 tying,
+1 drifted — the prior state cannot be reconstructed from here, and is recorded
+as unexplained rather than papered over.)
+
+**THE FIX: `amount` is now selected, shown and editable on Review and edit**,
+with the preview pricing percentage rows off it — `charge_pct × amount`, so the
+money is visible before saving rather than after (D91). The page previously
+carried a caption apologising that it could not project those rows; that
+caption is now a WARNING when a percentage row has no amount, because that is
+not a display limitation, it is unbilled work.
+
+**This also unblocks the five `is_expense` rows** (D78), which all carry NULL
+`amount` and are why `reimbursements` reads $0.00 against $2,456.20 of expense
+lines on the Dame Mas invoices alone. Same gap, same field, no way to enter it
+until now.
+
+---
+
+**D99 — The `st.stop()` checker, and proof it sees what the other three could
+not.**
+✅ 23 Aug 2026
+
+`test_admin_sql.py` gains a fourth source check: **`st.stop()` after
+`st.tabs()`** (D89). `st.stop()` halts the whole script run, so every `with
+tab:` below it renders blank, with no error and no log.
+
+**Proven against the real fault, not a sample.** Run over the actual pre-fix
+`5_Venues.py` from git (`39b9658^`), it flags **line 265** — the exact
+`st.stop()` that had "Edit a venue" rendering blank from the day it was
+written — while **all three existing checkers report that file clean.** That is
+why D89 survived them for a month, and it is the evidence D62 asks for.
+
+Deliberately flags ANY stop after the tabs are created, not only one lexically
+inside a `with tab:` block: a stop between the `st.tabs()` call and the first
+`with` is just as fatal and reads as more innocent, because the tab labels are
+already on screen by then. A stop BEFORE `st.tabs()` — the guard every page
+opens with — is correct and stays clean.
+
+**What it cannot see:** a stop reached through a function call. Lexical, which
+is how the rule is written and how a person reading the page reasons about it.
+
+**118 → 134 tests.**

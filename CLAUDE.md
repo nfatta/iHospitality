@@ -167,6 +167,33 @@ reproduces it; keep it that way.
   two `$` in one Streamlit markdown string** (D79). The first raises in
   psycopg — a COMMENT counts — and the second renders as LaTeX. Both broke real
   pages for a month. `test_admin_sql.py` checks the source for both.
+- **A PERCENTAGE RATE PRICES OFF `amount`, AND A ROW WITHOUT ONE CHARGES
+  NOTHING WHILE LOOKING PRICED** (D98). Dame Mas is 10 percent charged and 8
+  percent paid off the gross (D94), so `quantity` says how many bottles moved
+  and **`amount` says what they were worth** — the money comes from the second.
+  A percentage row with a NULL amount is not `unpriced`, displays its rate, and
+  reads `$0.00` as though that were the answer. It is a FOURTH failure mode
+  beside `unpriced`, `uncosted` and charge-≤-pay, and nothing flagged it: it
+  cost $21.08 of June 2026 commission, caught only by the Health canary.
+  `amount` is editable on Review and edit. Take the figure from the depletion
+  report or the invoice — **never from a per-bottle average**, because case
+  discounting runs $123.00–$210.75 (D93).
+- **Never `st.stop()` after `st.tabs()`** (D89) — checked by `test_admin_sql.py`
+  now (D99). It halts the WHOLE script run, so every `with tab:` below renders
+  blank with no error. Use `else:`. The checker is proven against the real
+  pre-fix file, where all three older checkers pass.
+- **An operator ruling reaches the venue matcher through `--assign`, not
+  through a lower threshold** (D97). `_resolve_venue` refuses to guess and must
+  keep refusing (D81); `load_missing_dame_mas.py --assign "X=Y"` (or `=new`) is
+  how a person answers, and it is checked before every similarity score.
+  **Apply a ruling to the HISTORY too** — renaming a venue made an Oct 2025 sale
+  already on file report as unresolved for ever until it was assigned as well.
+- **`Mullets Sports Bar` IS the cigar lounge** (D97, operator-ruled) — one
+  premises, one row. This REVERSES D95's hold, which had kept them apart
+  pending exactly this answer.
+- **The sync cannot overwrite a venue NAME, only its city** (D97). `apply()`
+  skips any venue already resolved by company id and its `on conflict` touches
+  only `updated_at`. Renaming in the admin is safe and sticks.
 - **Never `disabled=<another widget>` inside `st.form`** (D92). A form does not
   rerun until submit, so the expression keeps the value it had at the start of
   the run and the widget can NEVER be enabled by clicking. It cost the Rate
