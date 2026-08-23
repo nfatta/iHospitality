@@ -172,6 +172,13 @@ $3,307.28 of missing commission is booked from the invoice PDFs, and 46 of the
 50 `account sold` rows are classified from the workbook notes without moving a
 cent.
 
+And **D94** closed the loop on it: Dame Mas had no per-case rate of its own, so
+the shared `(all brands)` $25.00 pay line was inventing **$325.00 of contractor
+cost against no charge**. Its placements now carry explicit 0.00 / 0.00 lines,
+which also stops 56 deliberately-free rows reading as a fault — **Dame Mas
+unpriced 63 → 7, portal-wide 152 → 96**. Nine missing sales created; three held
+back where the venue was too close to call.
+
 **Verified at close (23 Aug):** **118 pytest** (103 + 15 new source checks) ·
 offline suite green **through both idempotency passes**, now nine files ·
 0 grants to `anon`, 0 write grants to `authenticated`, 0 grants of any kind to
@@ -215,15 +222,18 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Open work, most useful first
 
-1. **CREATE THE 11 MISSING DAME MAS SALES, or rule that they stay out** (D93).
-   They are in the workbook and not in the portal at all — verified month by
-   month, not guessed from a name mismatch. Three Feb 2026 reorders (Mullets,
-   Roasted Spirits, Fillin Station), five Mar 2026 placements (Executive Cigar,
-   Eden Lounge, Wine Bar George, Mullets, Campi), two Aug 2025 (Cypress Liquor,
-   Nick & Moes) and Ruby St Grille's Jul 2025 two-SKU placement. **They carry no
-   money** — `account sold` is unpriced by D51 — so this is venue status and
-   counts, not revenue. Several need their venue created too, which is why they
-   were left rather than written.
+1. **DECIDE THREE VENUES, then re-run `load_missing_dame_mas.py`** (D94). Nine
+   of the twelve missing sales are in. Three are held back because the venue is
+   too close to an existing one to decide automatically, and D81 says a matcher
+   confident enough to fold them would fold different premises together:
+   - **"Mullets" (30 Mar) and "Mullets Sprots Bar" (15 Feb, a reorder)** against
+     the existing **Mullets Cigar and Bar (Clermont)**. The depletion summary
+     lists "MULLETS SPORTS BAR, CLERMONT" — so is the cigar bar the same
+     premises, or two Mullets in one town?
+   - **"Fillin Station" (18 Feb, a case reorder)** against **Johnny's Filling
+     Station (Orlando)** and **4th Street Fillin Station (Cocoa Beach)**.
+   Say which, and the loader picks them up — it is idempotent and re-running is
+   safe.
 2. **Tick `bottle_reorder` as a reorder** on the Activity types page. There are
    now FIVE Dame Mas `bottle_reorder` rows (D93) on top of the 11 pairs it was
    worth this morning, and every one of those accounts demonstrably bought again
@@ -236,8 +246,11 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
    CSV — download, edit in Excel, upload, confirm the diff. A blank grade means
    not graded yet; nothing reads it as a bad grade.
 5. **Enter the remaining missing pay rates and the 5 expense amounts** (D78).
-   **Mileage is DONE** — it pays out 100 percent (D91), which took the uncosted
-   figure from $6,568.90 to **$5,325.00 across 30 activities**. What is left is
+   **Mileage is DONE** (D91) and **Dame Mas is DONE** (D93/D94). What is left is
+   **$5,125.00 uncosted across the other brands** — `5l barrel` ($1,395),
+   `single barrel sale` ($1,000), `aspen green fresh market incentive` ($900),
+   `tap cocktail` ($700). Where work is deliberately free, give it an explicit
+   **0.00 rate line rather than no line** (D94), so it stops reading as a gap. What is left is
    led by `5l barrel` ($1,395), `single barrel sale` ($1,000) and
    `aspen green fresh market incentive` ($900). Not a fault — unfinished. Both
    are operator data by D60.

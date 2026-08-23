@@ -1152,6 +1152,28 @@ to the cent.
 portal at all**, verified month by month. They carry no money but would change
 venue status; several need venues created, which is the operator's call.
 
+**And the Dame Mas pay rate, which was wrong (D94).**
+
+Dame Mas had no brand-specific `1st case sale` line, so the shared `(all
+brands)` pay rate of $25.00 reached its six case sales — **$325.00 of contractor
+cost against no charge at all**. All Dame Mas sales are paid as a percentage of
+commission; there is no per-case rate.
+
+Fixed with two explicit 0.00 / 0.00 lines, which also solves the other half of
+the same question: 56 rows that were unpriced BY DESIGN (D51) were being flagged
+as a fault, because *unpriced* and *deliberately free* looked identical. They
+now read as priced at zero. **Dame Mas unpriced falls 63 → 7; portal-wide
+152 → 96.** Charge unchanged at $5,872.43, cost $5,214.40 → $4,889.40.
+
+Nine missing sales created, three venues with them, and three rows deliberately
+held back where the venue is too close to an existing one to decide (D81).
+
+Two faults found by running the loader a second time — a shared ratio is not a
+shared identity ("Cypress Liquor and Wine" is not "Tony's Liquor and Lounge"),
+and the duplicate check ran on the workbook's spelling rather than the resolved
+venue, so "Eden Loung" would have been created twice. **A loader that has only
+been run once is not known to be idempotent.**
+
 ---
 
 ## Known data problems to resolve before seeding

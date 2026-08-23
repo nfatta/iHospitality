@@ -205,6 +205,15 @@ reproduces it; keep it that way.
   discounting. Any month already carrying percentage-priced rows is skipped, so
   loading a depletion summary stops the monthly row automatically. Never write
   both: that is D51's double-count.
+- **DAME MAS PAYS NO PER-UNIT RATE ON A SALE** (D94). All Dame Mas sales are
+  10 percent charged and 8 percent paid off the monthly commission, and nothing
+  per case or per placement. `account sold` and `1st case sale` carry explicit
+  0.00 / 0.00 brand lines for exactly this — do not remove them, or the shared
+  `(all brands)` $25.00 pay line reaches back in and invents $325 of cost.
+- **"Priced at zero" and "unpriced" are different, and the difference matters**
+  (D94). Work that is deliberately free should carry a 0.00 rate line, not no
+  line — otherwise a decision reads as a gap and sits in the admin's warnings
+  for ever. `account visit` has always done this; Dame Mas placements do now.
 - **Reclassifying an activity must not move money** (D93). Set
   `activity_type_id`; leave `source_activity_type` alone. The rate card keys on
   the raw string (D74), so that one rule is what makes classification safe.

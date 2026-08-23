@@ -3703,3 +3703,79 @@ on Dame Mas, and `bottle_reorder.is_reorder` is still unticked (D86) — so five
 accounts that demonstrably bought again still read `placed`. Ticking that box on
 the Activity types page is now worth considerably more than the 11 pairs it was
 worth this morning.
+
+---
+
+**D94 — Dame Mas pays no per-case rate, and "unpriced" was hiding a decision
+behind a gap.** ✅ operator-ruled 23 Aug 2026
+
+> *"Dame Mas shouldn't have 1st case. All Dame Mas sales are paid out as a
+> percentage of commission, there is no $25 on that."*
+
+**He was right, and it was costing $325.00.** Dame Mas had no brand-specific
+`1st case sale` line, so the shared `(all brands)` **pay** rate of $25.00 reached
+its six case sales — $325.00 of contractor cost against **no charge at all**.
+Exactly the cross-row pairing D90 was written to find, in a direction D90's
+check does not look: there the brand line set the charge and the shared line set
+the pay; here there is no brand line whatsoever.
+
+**And the second half of the same question.** The operator was reading 60-odd
+activities as "not costed" and asking why, having been told they were fine.
+Both readings were correct, which is the problem: the rows are unpriced **by
+design** (D51 — the commission carries the money), and the portal was flagging
+that design as a fault. *Unpriced* and *deliberately free* looked identical.
+
+**THE FIX IS ONE MECHANISM FOR BOTH: price them at an explicit 0.00 / 0.00.**
+Two Dame Mas rate lines, `account sold` and `1st case sale`, doing three things
+at once:
+
+| | |
+|---|---|
+| overrides the shared pay line | the phantom $325.00 is gone |
+| turns 56 rows from *unpriced* into *priced at zero* | Dame Mas 63 → **7**, portal-wide 152 → **96** |
+| states the rule where the operator can reach it | D60 — no rule compiled into a script |
+
+The same mechanism `account visit` has used since the beginning. The seven Dame
+Mas rows still unpriced are genuinely no-charge admin types — `zoom call`,
+`market favors n/c`, `tasting event n/c`, `drink development`.
+
+Money unchanged where it should be, corrected where it was wrong: **charge stays
+$5,872.43, cost falls $5,214.40 → $4,889.40, margin $983.03.** The placement
+rows still earn nothing, which remains the point — the month's 10 percent is
+already booked and the contractor's 8 percent with it, so paying per placement
+would pay twice for one sale.
+
+---
+
+**THE NINE MISSING SALES ARE IN**, unpriced, with three venues created. **Three
+are deliberately held back**: "Mullets" and "Mullets Sprots Bar" against an
+existing "Mullets Cigar and Bar" (both Clermont), and "Fillin Station" against
+both "Johnny's Filling Station" and "4th Street Fillin Station". D81 is explicit
+that a matcher confident enough to fold those would fold `Executive Cigar` into
+`Executive Cigar Sanford`, which are different premises forty miles apart. **A
+skipped row costs a minute of attention; a wrong merge costs a venue's history
+and does not come back.**
+
+**Two faults, both found by running the loader a SECOND time** — which is the
+only thing that would have found either:
+
+1. **A shared ratio is not a shared identity.** "Cypress Liquor and Wine" scored
+   0.62 against "Tony's Liquor and Lounge" and was held back as ambiguous. They
+   have nothing to do with each other; they both sell liquor. Half the venues in
+   this business share a word like that, so the raw ratio says almost nothing.
+   Ambiguity now requires a shared **distinctive** word — which still catches
+   "Fillin Station" against "Johnny's Filling Station" and no longer catches
+   every liquor store in Florida.
+
+2. **The duplicate check ran on the workbook's spelling, not the resolved
+   venue.** "Eden Loung" was written to "Eden Lounge"; the next run looked for
+   "Eden Loung", did not find it, and would have created it a second time.
+   Resolve the venue first, then check whether the row exists. **A loader that
+   has only ever been run once is not known to be idempotent** — the same shape
+   as D62, and the reason the offline suite applies the schema twice.
+
+**And a consequence on the Rate card page.** The D90 no-spread check counts
+`charge_rate <= pay_rate`, and 0.00 ≤ 0.00 is true — so the new lines put 65
+rows into a warning about work priced at a loss, burying the 58 that really are.
+A line charging nothing and paying nothing is a no-op, not a leak, and is now
+excluded.
