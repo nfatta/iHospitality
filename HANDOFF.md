@@ -291,28 +291,19 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Open work, most useful first
 
-1. **ENTER THE GLENEAGLE AMOUNT — $21.08 of June commission is unbilled.**
-   The Health canary reads **12 months tying, 1 DRIFTED**: June 2026 has portal
-   $388.05 against invoice $409.13. The gap is one bottle at **Gleneagle
-   Country Club** whose `amount` is NULL, so its 10 percent rate charges $0.00
-   while looking perfectly priced (D98). The figure is **$210.75** — one Extra
-   Añejo, ruled by the operator (D101). Type it into **Amount (gross)** on
-   Review and edit (Dame Mas, 2026-06). Ten percent is $21.075, which the
-   invoice rounds to the $21.08 that is missing, so the canary should return to
-   13 tying. **Never infer a unit price from a row's average** — there are TWO
-   SKUS, not a discount curve (D101), so a blended figure is a mix of the two.
+1. **`Executive Cigar`, 31 Jul 2026 — amount $210.80 should be $210.75.**
+   One bottle is one SKU and neither SKU is $210.80 (D101). Five cents, and the
+   last row on file that does not fit the pricing model. Fix it on Review and
+   edit → Dame Mas → 2026-07, or with the bottle calculator (1 Extra Añejo).
 
-   Two things fell out of checking that (D101), both open:
-   - **`Executive Cigar`, 31 Jul 2026, one bottle, amount $210.80.** One bottle
-     is one SKU and neither SKU is $210.80. Should be **$210.75**.
-   - **Six multi-bottle rows do not decompose** into whole bottles of $123.00
-     and $210.75 — London House (10), Barrel & Blend (24), Eden Lounge (13),
-     Second Rodeo and Rachels (12 each), Dancers Royale (6). Those amounts came
-     from the depletion report, so the two-price model is likelier incomplete
-     than the money is wrong (D56). **Ask the operator; change nothing.**
+   **The Gleneagle row is DONE** (D102): $210.75, one loose Extra Añejo, and
+   **June 2026 now ties exactly at $409.13.** The Health canary should read 13
+   months tying again.
 
-   Then the same field clears **the five `is_expense` rows**, all NULL, which
-   is why `reimbursements` reads $0.00 against $2,456.20 of expense lines.
+   Still open on the same field: **the five `is_expense` rows**, all carrying a
+   NULL `amount`, which is why `reimbursements` reads $0.00 against $2,456.20
+   of expense lines on the Dame Mas invoices alone (D78). The Amount column on
+   Review and edit is where they go.
 
 2. **Tick `bottle_reorder` as a reorder** on the Activity types page. There are
    now FIVE Dame Mas `bottle_reorder` rows (D93) on top of the 11 pairs it was

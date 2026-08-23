@@ -4080,3 +4080,113 @@ month's gross and are not expected to decompose.
 **AND THE GLENEAGLE FIGURE IS $210.75, NOT $210.80.** One Extra Añejo. Ten
 percent of it is $21.075, which the invoice rounds to the $21.08 that D98
 measured as missing — the two agree.
+
+---
+
+**D102 — `brand_product`: what the bottles sold for, which is not what we
+charge.**
+✅ operator-ruled and built 23 Aug 2026
+
+The operator asked how to program the SKU prices in, and proposed four
+entries: a Reposado case and an Extra Añejo case at six times the bottle, plus
+a Reposado bottle at $123.00 and an Extra Añejo bottle at $210.75.
+
+**TWO THINGS WERE CHANGED, and both are the point.**
+
+**1. "Six times the bottle" would bake breakage into a case that has none.**
+$123.00 and $210.75 are the LOOSE prices — they already include the $3.00. Six
+of them is $738.00; a real case is **$720.00**. The base prices are **$120.00
+and $207.75** and breakage is a **$3.00 surcharge on loose bottles only**, so a
+loose Reposado is derived as $120.00 + $3.00 and never stored as $123.00 where
+the two could drift apart.
+
+**2. THESE ARE NOT RATE-CARD LINES, AND PUTTING THEM THERE MISBILLS BY THE SIZE
+OF THE COMMISSION.** `rate_card` says what iHospitality charges a brand FOR ITS
+WORK — for Dame Mas, ten percent of depletions (D94). A SKU price says what the
+PRODUCT sold for: the gross that ten percent is taken OF. Enter a case of
+Reposado as a $720.00 rate line and the next invoice bills Dame Mas $720.00 for
+its own stock instead of the $72.00 earned — and nothing downstream would
+notice, because the row would be fully priced, `unpriced` false, `uncosted`
+false, and the margin magnificent.
+
+So `brand_product` feeds `activities.amount` and NOTHING ELSE. `v_activity_money`
+is untouched and still resolves charge as `charge_pct * amount`. There remains
+ONE pricing implementation (D90).
+
+**BREAKAGE IS PER SKU, and the operator's own wording said otherwise.** He
+described it as "if they didn't get a 6 pack of each at the time of order",
+which reads as a condition on the whole order. The data disagrees: **Eden
+Lounge, 10 Añejo + 3 Reposado = $2,458.50**, which needs breakage on 4 + 3 = 7
+bottles. Per order it would be $2,437.50, because the order does contain a full
+case. He confirmed per SKU when asked.
+
+**THE MODEL WAS CONFIRMED BEFORE IT WAS BUILT.** Every venue-level depletion on
+file was tested against whole bottles of the two SKUs at these prices:
+**16 of 17 resolve to exactly one composition**, including the full-case rows
+that correctly pay nothing — Dancers Royale's 6 at $1,246.50, Rachels' and
+Second Rodeo's 6+6 at $1,966.50, Barrel & Blend's 12+12 at $3,933.00. The
+seventeenth is `Executive Cigar`'s five-cent typo (D101). After building, the
+live `product_line_amount()` was asked to reproduce all ten distinct
+compositions and matched every one.
+
+**Prices are effective-dated from 2025-06-01**, the start of scope, because the
+operator confirmed they have been the same all along. The admin form defaults
+`effective_from` to TODAY, which for a stable price is the wrong answer and was
+corrected on entry — a price dated today prices nothing that already happened.
+
+**`10_brand_product_test.sql` asserts the rule and, more importantly,
+DISCRIMINATES.** Three wrong implementations were checked against the assertions:
+breakage on every bottle differs on 4 of 5 cases, breakage on none-if-a-case-is-
+present on 2 of 5, and **breakage per ORDER on exactly ONE — Eden Lounge**.
+Without that row in the test, the variant the operator's own wording suggested
+would pass silently. That is why real compositions were used rather than
+invented ones.
+
+**WHAT IT FIXED:** the Gleneagle bottle is one loose Extra Añejo at $210.75,
+entered through the calculator, and **June 2026 now ties exactly — $409.13
+against $409.13.** Portal charge rose $21.08 and contractor cost $16.86; nothing
+else moved.
+
+---
+
+**D103 — A constant `key` on a writing button, and the row it destroyed.**
+❌ caused, found and fixed 23 Aug 2026
+
+**THE WORST FAULT OF THE SESSION, and it was mine.** The bottle calculator saved
+its result to the activity chosen in a selectbox, behind
+`st.button(..., key="calc_save")`. A constant key.
+
+**A STREAMLIT RERUN CAN REPLAY A BARE BUTTON PRESS.** Saving Gleneagle's one
+bottle called `st.rerun()`; the target selectbox fell back to the FIRST row in
+its list; the bottle counts survived in session state; and the replayed press
+wrote that composition onto a different activity. **Dancers Royale's six bottles
+at $1,246.50 silently became one at $210.75.** Both writes reported success.
+
+**IT WAS CAUGHT BY THE CANARY, NOT BY LOOKING.** June went from $21.08 short to
+**$103.57 short** — the drift got worse after a fix that was supposed to close
+it, which is the only reason anybody looked. Restored from the invoice, which is
+D56 earning its place: the billing is the truth and the truth was recoverable.
+
+**THE LESSON WAS ALREADY WRITTEN DOWN AND THAT WAS NOT ENOUGH.**
+`lib.confirm_and_run`'s docstring has said "a rerun can replay one" since it was
+created, and the promote button repeats the warning beside itself. Both were
+read during this session. Neither was applied, because nothing checked.
+
+**THE FIX IS THE KEY, NOT THE CHECKBOX.** A checkbox resets on rerun and helps;
+a key carrying the target id makes the widget a DIFFERENT WIDGET the instant the
+selection changes, so a press belonging to one row cannot be delivered to
+another. Both are now used; only the key is structural.
+
+**`test_admin_sql.py` gains a fifth check** — a constant-keyed `st.button` whose
+body writes using a value a SELECTOR produced. Deliberately narrow: a constant
+key is only dangerous when the write is aimed at something that has a fallback.
+Verified to flag the exact shape that shipped, and to clear the fix, a
+redraw-only button, and a button that writes values typed beside it.
+
+**118 → 148 tests.**
+
+**And a note for the next person, because this is the fifth of its family:**
+every one of D89, D92, D99 and D103 was invisible to a person reading the code
+and obvious within a minute of a person USING it. This one went further — it was
+invisible while USING it too, because the page did exactly what it said. Only
+the reconciliation caught it.

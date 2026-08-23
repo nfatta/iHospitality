@@ -205,6 +205,23 @@ reproduces it; keep it that way.
 - **The fresh market incentive is a PASS-THROUGH like mileage** (D100). Charged
   $100.00, paid $100.00, keeps nothing. Its $0.00 margin is correct and it
   belongs in the at-or-below-cost list. Do not "fix" it.
+- **A WRITING BUTTON'S `key` MUST CARRY WHAT IT WRITES TO** (D103). A Streamlit
+  rerun can REPLAY a button press, so `st.button(key="save")` beside a
+  selectbox delivers the replayed press to whatever the selector fell back to.
+  It destroyed a real depletion — Dancers Royale's six bottles at $1,246.50
+  became one at $210.75 — and reported success both times. Interpolate the
+  target id: `key=f"calc_save_{target}"`. A confirm checkbox helps and is the
+  house pattern, but only the key is structural. Checked by `test_admin_sql.py`.
+- **`brand_product` IS NOT `rate_card`** (D102). The rate card says what we
+  charge a brand for our WORK; `brand_product` says what the PRODUCT sold for —
+  the gross a percentage is taken of. It feeds `activities.amount` and nothing
+  else. A case of Reposado entered as a $720.00 rate line would bill Dame Mas
+  $720.00 instead of the $72.00 earned, and every flag would read clean.
+- **Breakage is a SURCHARGE ON LOOSE BOTTLES, PER SKU** (D102). $3.00 on every
+  bottle outside a full case of ITS OWN SKU — ten Extra Añejo pay it on four.
+  Base prices are $120.00 and $207.75; the loose price is DERIVED, never stored,
+  so it cannot drift from the case price. Per-order breakage is wrong and only
+  Eden Lounge's 10+3 proves it, which is why that row is in the test.
 - **Never `disabled=<another widget>` inside `st.form`** (D92). A form does not
   rerun until submit, so the expression keeps the value it had at the start of
   the run and the widget can NEVER be enabled by clicking. It cost the Rate
