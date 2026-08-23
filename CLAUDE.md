@@ -194,6 +194,17 @@ reproduces it; keep it that way.
 - **The sync cannot overwrite a venue NAME, only its city** (D97). `apply()`
   skips any venue already resolved by company id and its `on conflict` touches
   only `updated_at`. Renaming in the admin is safe and sticks.
+- **TWO SKUS, NOT CASE DISCOUNTING** (D101, correcting D93). Dame Mas sells
+  **Reposado at $123.00** and **Extra Añejo at $210.75**. A blended per-bottle
+  figure is a MIX of the two, not a discount — "$163.88 a bottle" is not a price
+  anyone charged. Never infer a unit price from a row's average and never reason
+  about a discount curve; ask which SKUs were in the order. Six multi-bottle
+  rows do not decompose into whole bottles of the two prices — the amounts come
+  from the depletion report, so the model is likelier incomplete than the money
+  is wrong (D56). Ask before touching them.
+- **The fresh market incentive is a PASS-THROUGH like mileage** (D100). Charged
+  $100.00, paid $100.00, keeps nothing. Its $0.00 margin is correct and it
+  belongs in the at-or-below-cost list. Do not "fix" it.
 - **Never `disabled=<another widget>` inside `st.form`** (D92). A form does not
   rerun until submit, so the expression keeps the value it had at the start of
   the run and the widget can NEVER be enabled by clicking. It cost the Rate

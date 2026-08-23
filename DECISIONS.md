@@ -4020,3 +4020,63 @@ opens with — is correct and stays clean.
 is how the rule is written and how a person reading the page reasons about it.
 
 **118 → 134 tests.**
+
+---
+
+**D100 — The fresh market incentive is a pass-through, like mileage.**
+✅ operator-ruled 23 Aug 2026
+
+The question D95 left open is answered: `aspen green fresh market incentive` is
+charged $100.00 and paid $100.00 **on purpose**. Every cent charged goes to the
+contractor and iHospitality keeps none — the same shape as mileage (D91).
+
+**So its $0.00 margin across 9 activities is the CORRECT answer, not a missing
+pay rate**, and it belongs in the Rate card page's "priced at or below what it
+pays" list rather than being hidden from it. Do not "fix" it, and do not read it
+as a slip. Two of the entries in that list are now deliberate pass-throughs
+(mileage, fresh market incentive) and the rest are prices worth arguing about.
+
+---
+
+**D101 — There is no case discounting. There are TWO SKUS, and this corrects
+D93.**
+✅ operator-ruled 23 Aug 2026
+
+D93 recorded that the Dame Mas bottle price "runs $123.00 to $210.75 with case
+discounting". **That is wrong, and the correction matters.** There is no
+discounting. There are two different products:
+
+| SKU | price |
+|---|---|
+| Reposado | **$123.00** |
+| Extra Añejo | **$210.75** |
+
+A blended per-bottle figure is therefore a MIX, not a discount — which is why
+"$163.88 a bottle" is not a price anybody ever charged. **Never infer a unit
+price from a row's average**, and never reason about a discount curve: ask which
+SKUs were in the order.
+
+**Checked against the data, and it holds where it can be checked.** Ten of the
+venue-level rows decompose into whole bottles of the two SKUs exactly — 1 Añejo
+at Mullets ($210.75), 2 + 2 at El Patron and Vineyard ($667.50), 3 Reposado at
+City Dog ($369.00), and so on. The nine month-level rows (D93) carry a whole
+month's gross and are not expected to decompose.
+
+**TWO THINGS DO NOT FIT, and they are recorded rather than explained away:**
+
+- **`Executive Cigar`, 31 Jul 2026, one bottle, `amount` = $210.80.** One bottle
+  can only be one SKU, and neither is $210.80. **It should be $210.75** — five
+  cents, and almost certainly the same rounding that made the June commission
+  read $21.08 rather than $21.075.
+- **Six multi-bottle rows do not decompose into whole bottles of the two
+  prices** — London House (10 / $1,387.50), Barrel & Blend (24 / $3,933.00),
+  Eden Lounge (13 / $2,458.50), Second Rodeo and Rachels (both 12 / $1,966.50)
+  and Dancers Royale (6 / $1,246.50). These amounts came from the depletion
+  report, so **the amounts are more likely right than the two-price model is
+  complete** (D56). Either larger orders carry a different price, or there is a
+  third SKU, or quantity is not counting what it appears to. **Ask before
+  touching any of them.**
+
+**AND THE GLENEAGLE FIGURE IS $210.75, NOT $210.80.** One Extra Añejo. Ten
+percent of it is $21.075, which the invoice rounds to the $21.08 that D98
+measured as missing — the two agree.
