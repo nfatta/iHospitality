@@ -4190,3 +4190,58 @@ every one of D89, D92, D99 and D103 was invisible to a person reading the code
 and obvious within a minute of a person USING it. This one went further — it was
 invisible while USING it too, because the page did exactly what it said. Only
 the reconciliation caught it.
+
+---
+
+**D104 — Finished work kept coming back, and a short dropdown that was right.**
+✅ both reported by the operator, 23 Aug 2026
+
+**THE 11 UNDECIDED DAME MAS ROWS WERE NOT UNDECIDED. All 60 had been
+classified** — 46 from the workbook notes (D93), the rest by hand and by the
+loader — and **zero remain typed `account_sold`.**
+
+The Account sold page re-derived a verdict from the NOTE on every load and put
+every row into a queue regardless. Eleven of them read "cannot be decided"
+because their notes carry neither a sale word nor a visit word and never will:
+*"Dame Mas backbar"*, *"Dame Mas xAnejo at Ember & Oak"*, *"New Dame Mas Repo
+placement"*. Every one of those is a real placement. The reader simply has no
+phrase to match, and no amount of rule-editing will change that.
+
+**THE PAGE WAS ASKING THE WRONG COLUMN.** `source_activity_type` stays
+`'account sold'` for ever — it is the raw string HubSpot sent and D74 forbids
+rewriting it, because the rate card keys on it. So it can never say whether the
+work is done. `activity_type_id` can, and it is what every other path on this
+page writes. The queue is now rows STILL TYPED `account_sold`; the rest move to
+an *Already classified* tab, listed with both what they were classified as and
+what the reader thought, so the reasoning stays auditable (D80).
+
+**THE OPERATOR'S WORRY WAS DOUBLE-COUNTING, AND IT WAS CHECKED RATHER THAN
+REASONED ABOUT.** His premise — that the invoices already tie, so these must
+not be new sales — is correct. His conclusion, that none of the 11 are sales,
+does not follow, and the data settles it three ways:
+
+- **All 60 charge $0.00 and cost $0.00.** `account sold` carries Dame Mas's
+  explicit 0.00 / 0.00 lines (D94), so none of them can move money whatever
+  they are typed as. The commission lives in the monthly rows and the
+  venue-level depletions.
+- **No venue holds two depletions on one date.** There is no double entry to
+  find — the specific thing he asked to be checked for.
+- **The canary reads 13 months tying, 0 billed-but-missing, 0 drifted.**
+
+So the 11 ARE sales, they are ALREADY recorded as sales, and they are worth
+nothing — which is exactly D94's design: these rows change the ACCOUNT LIST,
+not the accounts.
+
+---
+
+**THE HEALTH PAGE'S BRAND DROPDOWN OFFERS ONE BRAND, AND THAT IS CORRECT.**
+Reported as "only dame mas appears in the drop down". The list is
+`distinct brand_name from invoice_recap`, and only Dame Mas has ever been
+loaded (13 months) — so the canary, which compares the portal to WHAT WAS
+INVOICED, has nothing to compare the others against. That is open item 10, not
+a fault.
+
+**But a control that silently offers one option and does not say why is a
+broken-looking page**, which is what the operator correctly reported. It now
+names the brands with no recap — computed from `brands`, so the message cannot
+go stale the moment a second one is loaded.
