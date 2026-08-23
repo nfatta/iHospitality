@@ -146,6 +146,13 @@ inside the merge tab had been killing the whole script run on every page load,
 so **"Edit a venue" had rendered blank since the day it was written** — clean
 console, no exception, page looked perfect.
 
+And **D90**, from the operator asking why Aspen Green looked wrong: it is
+charged $5.00 per case and pays $5.00 per case, so it earns exactly nothing —
+against $60 for four other brands. Worse, the Rate card page now measures the
+whole family: **51 activities charged $2,040.00 against $3,335.00 of pay, a
+margin of MINUS $1,295.00**, led by Wodka's `1st case sale` at −$1,140.
+Clicking a brand-month on the Analysis page now opens every row behind it.
+
 **Verified at close (23 Aug):** 103 pytest · offline suite green **through both
 idempotency passes**, now eight files including `08_account_status_test.sql` ·
 0 grants to `anon`, 0 write grants to `authenticated`, 0 grants of any kind to
@@ -193,39 +200,56 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
    CSV — download, edit in Excel, upload, confirm the diff. A blank grade means
    not graded yet; nothing reads it as a bad grade.
 3. **Enter the 12 missing pay rates and the 5 expense amounts** (D78). Both are
-   listed in the admin; both are operator data by D60.
-4. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
+   listed in the admin; both are operator data by D60. This is where the
+   $6,568.90 all-time (or $2,676.40 on the page's default filter) of uncosted
+   charge comes from — it is not a fault, it is unfinished.
+4. **DECIDE THE PRICES THAT LOSE MONEY** (D90). New, measured, and listed on
+   the Rate card page: **51 activities charged $2,040.00 against $3,335.00 of
+   pay — minus $1,295.00.**
+   - **Wodka `1st case sale`: charged $10.00, paid $25.00, 33 activities,
+     −$1,140.** The charge is on Wodka's own line; the pay comes from the shared
+     `(all brands)` line. The single biggest item.
+   - **Aspen Green `1st case sale` and `recurring case`: $5.00 charged, $5.00
+     paid, 14 activities, $0.00.** Four brands charge $60 for the same work.
+     This is why every Aspen Green month reads a flat zero margin.
+   - **Dame Mas `staff training`: $0.00 charged, $50.00 paid, −$150.** May be
+     correct — n/c work still costs.
+   - **44 North `recurring case`: −$5.00. Known and deliberate**, on no invoice
+     by design. Nothing to do.
+
+   Not all of it is wrong, and none of it is mine to decide (D60).
+5. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
    (117). Investigate — do not delete to make it tie.
-5. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
+6. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
    3114, 3119 (work months Mar–Jul 2025, none paid).
-6. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
+7. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
    invoice, not a sale. A bookkeeping question outside this system.
-7. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It still
+8. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It still
    holds ONE brand and seven months. Aug 2025 commission is typed `375.75`
    where the invoice bills `354.75`; a $455 Dame Mas tasting invoice (3203) is
    in neither the workbook nor the portal.
-8. **Widen the Health canary further.** It compares commission to commission
+9. **Widen the Health canary further.** It compares commission to commission
    correctly (D73) and now actually runs (D79), but still ignores consulting,
    billable and total.
-9. **Run the sync for real.** Never run with the staging code. Use `--month` on
+10. **Run the sync for real.** Never run with the staging code. Use `--month` on
    one month and watch the review queue. **Check afterwards that no venue came
    back**: the merges of 22 Aug depend on `venue_hubspot_alias` being consulted
    by the pre-load loop (D82), and that path has never run against live HubSpot.
-10. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
+11. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
    6; it should be **1**. Matters more since D65, because quantity multiplies.
-11. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
+12. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
     unclassified (D76).
-12. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
+13. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
     activity charge against real contractor cost.
-13. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
+14. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
     It bounds the QuickBooks comparison at the last invoiced work month (D79).
     It needs bumping when a new month is invoiced, alongside `QB_RETAINER_TOTAL`
     and `QB_RETAINER_MONTHS` — or, better, derived from `invoice_recap` once
-    item 7 lands.
-14. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
+    item 8 lands.
+15. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
     in the city column, straight from HubSpot. Editing it in the admin now
     STICKS (D84); it did not before today.
-15. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
+16. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
     merging PR #1 when the portal should go live.
 
 ---
@@ -266,6 +290,17 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 - **Two `$` in one Streamlit markdown string renders as LaTeX** (D79). One is
   fine, which is why it is easy to miss. Use a raw f-string and escape them.
   Same test file.
+- **CHECK PRICES AGAINST `v_activity_money`, NEVER AGAINST `rate_card` ROWS**
+  (D90). The charge and the pay for the same work need not sit on the same row —
+  a brand line can set the charge while `(all brands)` sets the pay. A check
+  that compared columns within a `rate_card` row found two lines worth $0 and
+  **missed 33 Wodka activities worth −$1,140, the largest instance of the exact
+  thing it was written to find.** The view already resolves the precedence the
+  way the billing does; re-implementing it is a second pricing implementation.
+- **Charge ≤ pay is a THIRD failure mode and has no flag on the activity**
+  (D90). `unpriced` and `uncosted` both mean data is missing. This one means the
+  data is present and says we work at or below cost. It cannot be flagged on the
+  row because it is not a fault — it is a price.
 - **A reimbursement earns nothing, and that is enforced in the view, not in the
   data** (D78). Do not "simplify" the `is_expense` branch out of
   `v_activity_money` — it is first in both CASE expressions so that no rate-card

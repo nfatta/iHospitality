@@ -1052,6 +1052,33 @@ schema suite, `verify_live.py` and `test_admin_sql.py` all pass on the broken
 version, because the fault is control flow rather than SQL. D79 said open every
 page. **The rule is now: open every tab.**
 
+**Later still — "the Aspen Green numbers don't make sense" (D90).**
+
+They made perfect sense, which was the problem. Aspen Green's `1st case sale`
+and `recurring case` are charged at $5.00 and paid at $5.00, so every case earns
+exactly nothing and the margin column reads $0.00 month after month. The one
+month that was not flat, June 2026 at $1,154.90, is worse rather than better:
+$1,079.90 of it is uncosted.
+
+The $2,676.40 of uncosted charge on the same screen is D78's measurement
+filtered to active brands and the last thirteen months. All time it is
+$6,568.90 across 37 activities — already open work, not a new fault.
+
+Two things were built. **Clicking a brand-month now opens it**, below the table
+rather than in another tab, and says in words which of three things happened —
+because `unpriced` understates revenue, `uncosted` overstates margin, and
+charge-at-or-below-pay is neither. The money tab became a fragment so a click
+re-runs that table alone.
+
+**And the Rate card page now finds work priced at a loss: 51 activities charged
+$2,040.00 against $3,335.00 of pay, a margin of minus $1,295.00.** The first
+version of that check read `rate_card` rows and was wrong. A charge and a pay
+need not live on the same row — Wodka charges $10.00 on a brand line and pays
+$25.00 from the shared line — so it found two Aspen Green lines worth $0 and
+missed 33 Wodka activities worth minus $1,140: the largest instance, invisible
+to the check written to find it. Rewritten against `v_activity_money`, which
+already resolves the pairing the way the billing does.
+
 ---
 
 ## Known data problems to resolve before seeding

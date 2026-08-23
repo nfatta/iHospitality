@@ -3356,3 +3356,92 @@ suite, `verify_live.py`, and `test_admin_sql.py` — which exists specifically t
 catch render-time faults in this app's source, and which passes on the broken
 version because the bug is control flow, not SQL.
 
+---
+
+**D90 — "The Aspen Green numbers don't make sense." They made perfect sense, and
+that was the problem.** ⚠️ operator-reported 23 Aug 2026
+
+Two questions off the Analysis page: where did $2,676.40 of uncosted charge come
+from, and why does Aspen Green look wrong. Neither was a bug. Both were the
+rate card telling the truth about figures nobody had looked at.
+
+**THE $2,676.40 IS NOT NEW AND NOT A FAULT.** It is D78's measurement, filtered
+to what the page was showing — active brands, the last thirteen months. All
+time it is **$6,568.90 across 37 activities and 12 types**. Every one is a
+rate-card line with a `charge_rate` and no `pay_rate`, so contractor cost
+resolves to $0 rather than to unknown. Entering those twelve pay rates is
+already open item 3 in the handoff, and some of them correctly have none —
+work covered by base pay, which is a company cost (D67).
+
+**ASPEN GREEN READ $0.00 MARGIN MONTH AFTER MONTH, and the cause was two
+numbers.** `1st case sale` and `recurring case` are charged at **$5.00** and
+paid at **$5.00**. Every case Aspen Green sells earns exactly nothing. For
+comparison, the same work is charged $60 by four brands, $50 by 44 North and
+$10 by Wodka.
+
+The one month that was NOT flat — June 2026, $1,154.90 — is worse rather than
+better: **$1,079.90 of it is uncosted**, nine Fresh Market incentives at $100
+with no pay rate plus $179.90 of mileage. The only Aspen Green month showing a
+margin shows one because most of it has no cost recorded.
+
+---
+
+**RULING 1 — clicking a brand-month opens it.** ✅ operator-asked, 23 Aug
+
+> *"Are we able to make it where if I click on a brand row... it either opens up
+> that month or brings me to that month for that brand?"*
+
+A total is the shape that hides its own explanation. The detail opens **below
+the table, not in another tab**: the question being asked is "what is in this
+number", and answering it somewhere else means losing the number while you look.
+
+It does not only list rows. It states **which of three things happened**,
+because each misleads in a different direction and they are easy to confuse:
+
+| | what it means | which way it lies |
+|---|---|---|
+| `unpriced` | no rate-card line at all | revenue **understated** — someone chases the invoice |
+| `uncosted` | charged, no pay rate | margin **overstated** — nothing looks wrong (D78) |
+| charge ≤ pay | fully priced, earns nothing | neither. The arithmetic is right; the RATE is the problem |
+
+The third has no flag on the activity and cannot have one: it is not a data
+fault. It is a priced decision that loses money.
+
+The money tab became an `st.fragment` at the same time, so a click re-runs that
+table and nothing else — not the venue grouping, the city grouping or the full
+activity list, none of which a click changes.
+
+**RULING 2 — the Rate card page now finds work priced at a loss.** And the
+number is much larger than the case that prompted it: **51 activities charged
+$2,040.00 against $3,335.00 of pay — a margin of MINUS $1,295.00.**
+
+| brand | type | charge | pay | n | margin |
+|---|---|---|---|---|---|
+| Wodka | `1st case sale` | $10.00 | $25.00 | 33 | **−$1,140.00** |
+| Dame Mas | `staff training` | $0.00 | $50.00 | 3 | −$150.00 |
+| 44 North | `recurring case` | $0.00 | $5.00 | 1 | −$5.00 |
+| Aspen Green | `1st case sale` | $5.00 | $5.00 | 12 | $0.00 |
+| Aspen Green | `recurring case` | $5.00 | $5.00 | 2 | $0.00 |
+
+**THE CHECK READS `v_activity_money`, NOT `rate_card`, AND THE FIRST VERSION OF
+IT GOT THAT WRONG — which is the lesson worth keeping.** A charge and a pay for
+the same work **do not have to live on the same row**. Wodka's `1st case sale`
+carries a brand line charging $10.00 with no pay at all; the $25.00 comes from
+the shared `(all brands)` line. Comparing `charge_rate` to `pay_rate` *within* a
+`rate_card` row cannot see that pairing — so the first version reported the two
+Aspen Green lines worth $0.00 and **missed 33 Wodka activities worth −$1,140,
+the largest instance, invisible to the very check written to find it.** It was
+caught only because the drill-down computes the same thing per activity and
+disagreed.
+
+The rule that generalises: **when a check and the money disagree, the money is
+right.** The view already resolves the brand-line-over-shared-line precedence
+exactly as the billing does. Any check that re-implements that precedence is a
+second pricing implementation, and D48 already established what happens to
+those.
+
+**NOT ALL OF IT IS WRONG, and the page says so.** Work done at no charge still
+costs what the contractor is paid, and 44 North's `recurring case` is paid and
+never charged **by design** — it is on no invoice on purpose, and the handoff
+has said so since 21 Aug. The page lists and quantifies; which figure to change
+is business data and belongs to the operator (D60).

@@ -133,6 +133,18 @@ reproduces it; keep it that way.
   so no rate-card line can make a reimbursement earn. Reimbursements sit BESIDE
   revenue, never in it. Do not simplify that branch away; `04_money_test.sql`
   builds the dangerous case on purpose and will fail.
+- **Three ways the rate card goes wrong, and they lie in different
+  directions** (D78, D90). `unpriced` — no line at all — UNDERSTATES revenue.
+  `uncosted` — charged, no pay rate — OVERSTATES margin. **Charge ≤ pay is
+  neither**: fully priced, arithmetic correct, work loses money. That third one
+  has no flag on the activity and cannot have one; it is a priced decision, not
+  a data fault. 51 activities are in it, at −$1,295.
+- **Check prices against `v_activity_money`, NEVER against `rate_card` rows**
+  (D90). A charge and a pay for the same work need not sit on the same row — a
+  brand line can set the charge while `(all brands)` sets the pay, which is how
+  Wodka loses $15 a case. A check comparing columns within a `rate_card` row is
+  a second pricing implementation, and it already missed the largest instance
+  of the thing it was written to find.
 - **A charge with no pay rate is `uncosted`, not free** (D78). `unpriced`
   understates revenue and someone chases it; a missing pay rate overstates
   margin and nobody notices. Both are surfaced in the admin.
