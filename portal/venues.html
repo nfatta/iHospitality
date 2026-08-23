@@ -93,8 +93,23 @@
     }
 
     function renderStats(rows) {
+      // THESE CARDS COUNT `status_stored`, AND THE TABLE BELOW DISPLAYS
+      // `status`. That split is deliberate and it is the whole reason
+      // status_stored is on the view (D86).
+      //
+      // Dormancy is layered over the stored status at read time, so a stocking
+      // account that nobody has walked into for six months reads `dormant`.
+      // Counting "stocking your brand" off the DISPLAYED status therefore drops
+      // it out of the number a brand cares about most — 102 pairs on the day
+      // this landed — and quietly re-scopes "quiet 90+ days" to mean "quiet
+      // between 91 and 180 days", because everything past 180 has become
+      // dormant and stopped matching. Both cards keep their old, correct
+      // meaning by reading what the trigger set.
+      //
+      // The dormant pill in the table is how a brand SEES the quietness. These
+      // cards are how they see the account.
       const counts = {};
-      for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
+      for (const r of rows) counts[r.status_stored] = (counts[r.status_stored] || 0) + 1;
       // "Placed" is the number that matters commercially — accounts actually
       // stocking the brand.
       const placed = (counts.placed || 0) + (counts.reordering || 0);
@@ -103,7 +118,7 @@
       // has gone quiet, and lumping them together hides both.
       const quiet = rows.filter(r =>
         r.days_since !== null && Number(r.days_since) > 90 &&
-        (r.status === 'placed' || r.status === 'reordering')).length;
+        (r.status_stored === 'placed' || r.status_stored === 'reordering')).length;
 
       const el = document.getElementById('stats');
       el.className = 'stat-grid';

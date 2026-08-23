@@ -3188,3 +3188,79 @@ the point of the column.
 - `lost` stays a human judgement. Nothing proposed here sets it.
 - `venues.html` already renders `reordering` and `dormant` pills and orders by
   them (`STATUS_ORDER`), so the front end needs no work for either ruling.
+
+---
+
+**BUILT 23 Aug 2026.** Both rulings are live and the numbers came out exactly as
+D86 predicted: **21 pairs advanced to `reordering`** (20 Wodka, 1 44 North) and
+**360 of 689 pairs read `dormant`**. 1,255 activities and $39,201.65 of activity
+charge unchanged — this moved no money, only what the account list says.
+
+How each half landed, and why:
+
+- **The reorder is a FLAG ON THE TYPE, not a code in the trigger.**
+  `activity_types.is_reorder`, read exactly the way `is_depletion` already is.
+  Writing `code = 'recurring_case'` into the trigger would have been shorter and
+  would have been a rule the operator cannot reach (D60) — and the business
+  already has a SECOND reorder type. `bottle_reorder` (Dame Mas, 11 pairs) is a
+  reorder by every plain reading of the word and is deliberately **left
+  unticked**: turning it on is a checkbox on the Activity types page, not a
+  decision smuggled in with the mechanism. Ticking it applies retroactively,
+  which is the point — see the last bullet.
+- **The reorder branch is FIRST in the trigger, and that ordering is the whole
+  ruling.** Every reorder type is also a depletion, so testing depletion first
+  sets `placed` and stops there for ever. That failure is invisible in the data:
+  `placed` is a perfectly plausible status for an account that reordered. It is
+  asserted in `08_account_status_test.sql` rather than eyeballed.
+- **Dormancy is derived, in ONE function** — `account_status_effective(stored,
+  days_since, dormant_after_days default 180)` — called by both
+  `v_brand_venue_counts` and `v_venue_performance`. Two views working it out
+  separately is how they come to disagree, and the account list is the one
+  screen where a brand would notice. The 180 lives in that default and nowhere
+  else. `lost` passes through untouched; a NULL `days_since` (24 pairs never
+  visited) is not quietness and does not become dormant.
+- **The un-dormanting is the assertion the test exists for.** A stored `dormant`
+  copying the trigger's advance-only logic passes every other check in the file
+  and fails that one. Walk back into the bar and the row comes back to life on
+  the next page load.
+- **The 21 frozen pairs needed a backfill, and so does every future tick of the
+  flag.** The trigger only fires on write, so accounts that had already bought
+  again would have sat at `placed` for ever. `schema.sql` carries an idempotent
+  backfill, and the Activity types page runs the same update when the operator
+  turns `is_reorder` ON for a type — otherwise ticking the box would only
+  affect work logged from that moment, which is not what ticking it means.
+
+---
+
+**D87 — D86's "the front end needs no work" was half true, and the half that was
+wrong is the number brands care about most.** ⚠️ found 23 Aug 2026, while
+building D86
+
+The pills were fine. **The stat cards on `venues.html` were not**, and nothing
+about them would have looked broken.
+
+Three of the four cards counted `r.status`, which is now the EFFECTIVE status.
+The moment 360 pairs began reading `dormant`:
+
+| card | said | would have said | why |
+|---|---|---|---|
+| Stocking your brand | 218 | **116** | 102 stocking accounts went quiet and left the count |
+| Pitched | 471 | **213** | 258 pitched accounts went quiet |
+| Quiet 90+ days | 148 | **46** | everything past 180 became `dormant` and stopped matching |
+
+Read the third row again: a card **labelled "Quiet 90+ days" would have counted
+only accounts quiet between 91 and 180**, dropping the ones that had been quiet
+longest — the exact accounts it exists to surface. It would have gone DOWN as
+the situation got worse, and the page would have rendered perfectly.
+
+**THE RULING: the account list DISPLAYS the effective status and COUNTS the
+stored one.** `status_stored` is appended to both views for that, and the cards
+read it. A brand still sees the dormant pill on the row; the account is still
+counted as stocking, because it is.
+
+The general shape, and it is the third time this project has met it (the D78
+expenses branch and the business-page filter were the others): **layering a
+derived value over a stored one silently re-scopes every filter and count
+already written against it.** Adding the derivation is the easy half. Finding
+what was counting on the old meaning is the work — and a page that keeps
+rendering is not evidence that it did not happen.

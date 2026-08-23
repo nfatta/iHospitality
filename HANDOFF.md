@@ -1,6 +1,6 @@
 # HANDOFF — start here
 
-Written at the close of **22 Aug 2026**. This is the "what now" document;
+Written at the close of **23 Aug 2026**. This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
 they are. Read this first, then **D65 through D86**.
 
@@ -20,6 +20,17 @@ D73, and Review and edit, broken by a comment warning about the very bug it
 caused. **Revenue is unchanged at $116,752.** The margin figure is still not
 quotable: base pay covers one person, and $6,568.90 of charge has no cost behind
 it.
+
+23 Aug **built D86**, which had been ruled and left sitting. The account list
+now moves past `placed`: **21 pairs read `reordering`** and **360 of 689 read
+`dormant`**, derived rather than stored so a visited account comes back to life
+by itself. It moved no money — 1,255 activities and $39,201.65 of activity
+charge unchanged. **D87 is what the plan missed**: three of the four stat cards
+on `venues.html` counted the displayed status, so adding dormancy would have cut
+"Stocking your brand" from 218 to 116 and turned a card labelled "Quiet 90+
+days" into one that counted 91-to-180 only — falling as the situation got worse,
+on a page that rendered perfectly. The account list now **displays the effective
+status and counts the stored one**.
 
 ---
 
@@ -60,20 +71,13 @@ Paste this to pick up exactly where we stopped:
 > is an `is_expense` row with an empty type**; D78 means classifying it can no
 > longer make it start earning, but check that it lands somewhere sensible.
 >
-> **5. IMPLEMENT D86 — both rulings are made, neither is built.** The account
-> status stops at `placed` and never moves again, so the portal never shows a
-> brand that they bought again, and never shows an account going cold.
-> - **A case reorder must advance the status to `reordering`.** 21 brand/venue
->   pairs have reorders and all still read `placed` (20 Wodka, 1 44 North). A
->   reorder is a FACT, not a judgement — the original note grouping it with
->   `dormant`/`lost` was wrong on this one.
-> - **A venue quiet 180 days must read `dormant`.** 360 of 689 pairs — over
->   half the account list, chosen deliberately over the 1-year option (42).
->   **It must NOT be sticky**: a dormant account that gets visited has to come
->   back to life, so do not copy the trigger's advance-only logic. Best derived
->   in the view from `days_since`, which makes it self-correcting. `lost` stays
->   a human judgement. `venues.html` already renders both pills — no front-end
->   work needed.
+> **5. D86 IS BUILT — nothing to do, one tick to consider.** 21 pairs read
+> `reordering`, 360 read `dormant`, and dormancy is derived so it un-sets
+> itself. The one open question is yours: **`bottle_reorder` is a reorder by
+> every plain reading of the word and is deliberately left unticked.** Ticking
+> "Bought again (reorder)" on the Activity types page moves 11 more Dame Mas
+> pairs to `reordering` and backfills them. It was left for you because it is a
+> business call, not a mechanism. See D86 and D87.
 >
 > **6. Venue duplicates are DONE** — all 17 merged, zero duplicate names left,
 > 353 → 336 venues with activities and revenue unchanged (D81, D82). Nothing to
@@ -134,12 +138,19 @@ python -m http.server 8123                    # portal at /portal/login.html
 | website (`…/ihospitality/`) | `portal-v1` | `git log` — unpushed vs `origin/portal-v1` |
 | `Hubspot/portal_seed/` | `main` | local only, no remote by design |
 
-**Verified at close:** 103 pytest (73 + 30 new source checks) · offline
-schema/RLS/staging/retainer/money suite green **through both idempotency
-passes**, and confirmed to **fail** when the D78 guard is removed · 0 grants to
-`anon`, 0 write grants to `authenticated` (30 SELECT grants) · 1,255 activities ·
-**all nine admin pages opened in a browser and checked for exceptions** · Dame
-Mas canary Apr +$0.01 (D48), May/Jun/Jul tying exactly, Jan–Mar the known hole.
+**Verified at close (23 Aug):** 103 pytest · offline suite green **through both
+idempotency passes**, now eight files including `08_account_status_test.sql` ·
+0 grants to `anon`, 0 write grants to `authenticated` · 1,255 activities and
+$39,201.65 activity charge unchanged by D86 · both account views agreeing
+status-for-status across all 689 pairs · **all nine admin pages opened in a
+browser and checked for exceptions**, including the new reorder checkbox.
+
+**NOT verified: the logged-in `venues.html`.** It is behind a brand login and
+there was no session to hand, so the corrected stat cards were not seen
+rendering. The module parses and redirects with no console errors and the view
+columns are confirmed present — but D79 is explicit that this is not the same
+evidence as opening the page. **Open it once you are logged in**; the four
+numbers at the top are what changed.
 
 **The money:**
 
@@ -160,44 +171,41 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Open work, most useful first
 
-1. **Implement D86** — a reorder should read `reordering` (21 pairs), and a
-   venue quiet 180 days should read `dormant` (360 pairs). Both RULED, neither
-   BUILT. Dormant must not be sticky; derive it in the view. See D86 for why.
-2. **Finish the contractors.** One person on file. Base pay understated.
-3. **Enter the 12 missing pay rates and the 5 expense amounts** (D78). Both are
+1. **Finish the contractors.** One person on file. Base pay understated.
+2. **Enter the 12 missing pay rates and the 5 expense amounts** (D78). Both are
    listed in the admin; both are operator data by D60.
-4. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
+3. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
    (117). Investigate — do not delete to make it tie.
-5. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
+4. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
    3114, 3119 (work months Mar–Jul 2025, none paid).
-6. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
+5. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
    invoice, not a sale. A bookkeeping question outside this system.
-7. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It still
+6. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It still
    holds ONE brand and seven months. Aug 2025 commission is typed `375.75`
    where the invoice bills `354.75`; a $455 Dame Mas tasting invoice (3203) is
    in neither the workbook nor the portal.
-8. **Widen the Health canary further.** It compares commission to commission
+7. **Widen the Health canary further.** It compares commission to commission
    correctly (D73) and now actually runs (D79), but still ignores consulting,
    billable and total.
-9. **Run the sync for real.** Never run with the staging code. Use `--month` on
+8. **Run the sync for real.** Never run with the staging code. Use `--month` on
    one month and watch the review queue. **Check afterwards that no venue came
    back**: the merges of 22 Aug depend on `venue_hubspot_alias` being consulted
    by the pre-load loop (D82), and that path has never run against live HubSpot.
-10. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
+9. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
    6; it should be **1**. Matters more since D65, because quantity multiplies.
-11. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
+10. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
     unclassified (D76).
-12. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
+11. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
     activity charge against real contractor cost.
-13. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
+12. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
     It bounds the QuickBooks comparison at the last invoiced work month (D79).
     It needs bumping when a new month is invoiced, alongside `QB_RETAINER_TOTAL`
     and `QB_RETAINER_MONTHS` — or, better, derived from `invoice_recap` once
-    item 6 lands.
-14. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
+    item 5 lands.
+13. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
     in the city column, straight from HubSpot. Editing it in the admin now
     STICKS (D84); it did not before today.
-15. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
+14. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
     merging PR #1 when the portal should go live.
 
 ---
@@ -256,9 +264,22 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
   upserts brands and venues DIRECTLY, before the staging zone is reached — no
   review queue, no `hand_edited_at`, no conflict state. D64 is intact; its
   scope is narrower than its name suggests.
-- **`pitched` vs `placed` is decided by ONE fact: `activity_types.is_depletion`**
-  (D86). Any non-depletion activity makes a venue `pitched`; any depletion makes
-  it `placed`. It only ever advances, never downgrades, and stops at `placed`.
+- **The account status is TWO LAYERS and they are easy to confuse** (D86/D87).
+  STORED by the trigger: non-depletion → `pitched`, depletion → `placed`,
+  reorder → `reordering`, off `is_depletion` and `is_reorder`. It only ever
+  advances. DERIVED at read time: `dormant` is 180 days quiet, computed in
+  `account_status_effective()` and **never stored**, so a visited account
+  un-dormants itself. Do not move it into the table and do not give it the
+  trigger's advance-only logic.
+- **DISPLAY `status`, COUNT `status_stored`** (D87). This is the one that will
+  catch you. Dormancy layers OVER the stored value, so any count or filter
+  written against the displayed status silently loses every account that has
+  gone quiet — 102 stocking pairs on the day it landed, out of the number brands
+  care about most. Both account views carry `status_stored` for exactly this.
+- **The reorder branch is FIRST in the trigger, on purpose.** Every reorder type
+  is also a depletion, so the other order sets `placed` and stops there for
+  ever — and `placed` looks entirely plausible for an account that reordered, so
+  nothing about the data would tell you.
 - **"The Wildflower" (Baldwin Park) and "Wildflower Sanford" are DIFFERENT
   BARS**, 40 miles apart with different HubSpot ids (D86). The Baldwin Park row
   reads `pitched` correctly — one drink list, no depletion. Do not merge them.

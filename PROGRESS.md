@@ -959,6 +959,72 @@ reads are confirmed present with the right values.
 
 ---
 
+## Session of 23 Aug 2026 — D86 built, and the counters it would have broken
+
+**Both D86 rulings are implemented.** They had been ruled on 22 Aug and left
+unbuilt, which meant the account list stopped at `placed` and never moved again:
+the portal could not show a brand that they had bought again, and could not show
+an account going cold.
+
+**The numbers came out exactly as D86 predicted.** 21 pairs advanced to
+`reordering` (20 Wodka, 1 44 North); 360 of 689 pairs read `dormant`. 1,255
+activities and $39,201.65 of activity charge unchanged — this moved no money,
+only what the account list says.
+
+| | before | after |
+|---|---|---|
+| stored `pitched` / `placed` / `reordering` | 471 / 218 / 0 | 471 / 197 / **21** |
+| what the account list DISPLAYS | 471 / 218 / 0 / 0 dormant | 213 / 95 / 21 / **360 dormant** |
+| activities · activity charge | 1,255 · $39,201.65 | unchanged |
+
+**What was built:**
+
+- `activity_types.is_reorder`, a flag the trigger reads exactly as it reads
+  `is_depletion`, with a checkbox on the Activity types page. `recurring_case`
+  is ticked. **`bottle_reorder` is deliberately NOT** — it is a reorder by every
+  plain reading of the word and worth 11 more Dame Mas pairs, and that is the
+  operator's tick to make, not a decision to ship inside a migration. Ticking it
+  backfills every account already on file.
+- The reorder branch **first** in `sync_brand_venue_status()`. Every reorder type
+  is also a depletion, so the other order sets `placed` and stops for ever — a
+  failure that is invisible in the data, because `placed` looks entirely
+  plausible for an account that reordered.
+- `account_status_effective(stored, days_since, dormant_after_days default 180)`
+  — one function, called by `v_brand_venue_counts` and `v_venue_performance`.
+  Dormancy is derived and never stored, so it is self-correcting: walk back into
+  the bar and the row comes back to life on the next page load. The 180 lives in
+  that default and nowhere else.
+- An idempotent backfill for the 21 pairs that had reordered before the trigger
+  knew what a reorder was.
+- `db/test/08_account_status_test.sql`, wired into `run.sh`. Eleven assertions;
+  the one it exists for is that **a dormant account that gets visited comes back
+  to life**. A stored implementation passes every other check in the file.
+
+**D87 — and this is the part that was not in the plan.** D86 said the front end
+needed no work. True of the pills, **false of the stat cards**, and nothing
+about them would have looked broken. Three of the four counted the effective
+status, so the moment 360 pairs read `dormant`: "Stocking your brand" would have
+fallen 218 → 116, "Pitched" 471 → 213, and — worst — a card labelled **"Quiet
+90+ days" would have counted only 91-to-180**, dropping the accounts quiet
+longest, the exact ones it exists to surface. It would have gone DOWN as the
+situation got worse. Fixed by appending `status_stored` to both views: the list
+**displays the effective status and counts the stored one**.
+
+**Verified at close:** 103 pytest · offline suite green through BOTH idempotency
+passes, now eight files · `verify_live.py` clean, 0 anon grants and 0 write
+grants to `authenticated` · both views agreeing status-for-status on all 689
+pairs · **all nine admin pages opened in a browser**, including the new reorder
+checkbox on the Activity types edit form.
+
+**Not verified:** the logged-in `venues.html`. It is behind a brand login and
+there was no session to hand, so the corrected stat cards were not seen
+rendering. The module parses and redirects cleanly with no console errors, and
+the view columns it reads are confirmed present with the right values — the same
+gap `business.html` had on 22 Aug, and the same one D79 warns is not the same
+evidence as opening the page.
+
+---
+
 ## Known data problems to resolve before seeding
 
 Found by profiling the six `hubspot-crm-exports-*.csv` files (315 rows):

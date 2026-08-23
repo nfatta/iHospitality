@@ -72,10 +72,25 @@ reproduces it; keep it that way.
 - **Shared CSS is in `css/site.css`.** Page-specific CSS stays inline *after*
   the link so pages can override (gallery.html relies on this). Change brand
   colours in `:root` in that file only.
-- **`pitched` vs `placed` turns on ONE fact: `activity_types.is_depletion`**
-  (D86). Non-depletion work makes a venue `pitched`; a depletion makes it
-  `placed`. The trigger only ever advances and stops there. `reordering` and
-  `dormant` are RULED but NOT BUILT — see D86 and open item 1.
+- **The account status is two layers, and mixing them up is the live trap.**
+  STORED, by the trigger: non-depletion work makes a venue `pitched`, a
+  depletion makes it `placed`, a **reorder** makes it `reordering` — one fact
+  each, off `activity_types.is_depletion` and `activity_types.is_reorder`
+  (D86). The reorder branch is FIRST because every reorder is also a depletion.
+  It only ever advances; `lost` is a human judgement it never touches.
+  DERIVED, at read time: **`dormant` is 180 days quiet, computed in
+  `account_status_effective()` and never stored** — deliberately, so a visited
+  account comes back to life by itself. Do not copy the trigger's advance-only
+  logic into it, and do not "simplify" it into the table.
+- **The account list DISPLAYS `status` and COUNTS `status_stored`** (D87).
+  Dormancy layers over the stored value, so counting stocking accounts off the
+  displayed status drops every one that has gone quiet — 102 pairs, out of the
+  number brands care about most. Both views carry `status_stored` for this.
+  Reach for it in any new count or filter over account status.
+- **A reorder type is a FLAG THE OPERATOR TICKS, not a code in the trigger**
+  (D60/D86). `recurring_case` is ticked; `bottle_reorder` is deliberately not —
+  that is his call on the Activity types page. Ticking it there backfills every
+  account already on file, which is what ticking it means.
 - **Two markets only:** `central_florida`, `palm_beach_county`. Never "South
   Florida" — the database enum enforces it.
 - **Internal notes are never brand-facing.** `activities.notes` is internal;
