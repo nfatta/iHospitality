@@ -4245,3 +4245,72 @@ a fault.
 broken-looking page**, which is what the operator correctly reported. It now
 names the brands with no recap — computed from `brands`, so the message cannot
 go stale the moment a second one is loaded.
+
+---
+
+**D105 — Venue ownership, from the CSV exports rather than the API.**
+✅ operator-ruled and built 23 Aug 2026
+
+**I WAS WRONG THAT THE DEAL OWNER WAS UNAVAILABLE, and the correction matters
+because it changed the whole shape of the job.** The handoff records that
+`hubspot_owner_id` is not in `DEAL_PROPERTIES`, so who owns a deal is not in
+Postgres — the stored payloads carry no properties at all. That is true, and I
+concluded from it that this needed a sync change and a live re-sync (item 12,
+never run with the staging code).
+
+The operator pointed at his own extraction script, and the answer was in the
+file it reads: **the HubSpot UI exports carry a "Deal owner" column.** 25 CSVs
+on disk, **953 distinct deals, every single one naming an owner.** No API call,
+no sync run, no risk.
+
+**The lesson is not about HubSpot.** "Not in the database" was treated as "not
+available", and the operator's own working files were never looked at. The data
+was already on the same disk.
+
+**NOT WHO CREATED THE VENUE** (the operator was explicit): he imported hundreds
+of companies from Google Drive when HubSpot was set up, so creator is
+meaningless. The question is whose DEALS happen there.
+
+**MAJORITY WITH A THRESHOLD, AND A REFUSAL.** A venue goes to the owner holding
+more than 60 percent of its deals, or its only owner. Closer than that is
+reported and skipped, the same shape as `_resolve_venue` (D81). Deals are mapped
+through `activities.hubspot_deal_id` — the portal's own resolution — so the
+merges of D81/D82 are respected; going back to the raw company id would split a
+merged venue's deals across two rows.
+
+**RULING — ALAN MERRICK'S ACCOUNTS GO TO PHIL KING.** A fourth owner nobody had
+mentioned held 30 venues; he no longer works for iHospitality and Phil took them
+on. Passed as `--reassign "Alan Merrick=Phil King"` rather than compiled in
+(D60), and the note on each venue records the transfer so a row reading "Phil"
+can still explain that it was Alan's. **He is deliberately NOT added to
+`contractors`** — nothing points at him, and a person nobody owns anything for
+would only clutter the owner dropdown.
+
+**THE CSV DATA CONFIRMED THE OPERATOR'S OWN DESCRIPTION, INDEPENDENTLY:**
+
+| region | Phil | Eric | Alan | Nick |
+|---|---|---|---|---|
+| Palm Beach County | 1 | **39** | 0 | 0 |
+| Orlando metro | **105** | 0 | 0 | 10 |
+| Space Coast | 31 | 0 | **27** | 7 |
+| Tampa / Jacksonville | **27** | 0 | 0 | 0 |
+
+He described Eric as Palm Beach, Phil as Orlando plus Tampa/Jax/Miami, and
+himself as mostly liquor stores. All three hold. **And it explains the gap the
+geography could not**: the Space Coast — 66 venues, bigger than Eric's whole
+territory and mentioned in none of the rules — was half Alan's. Folding him
+into Phil closes it, and resolved two of the four tied venues on its own.
+
+**RESULT: 296 of 337 active venues have an owner** — Phil 234, Eric 40, Nick 22.
+Contractors went from one to three. **No grade was written**: `venue_grading`
+holds both and a blank grade means NOT GRADED YET (D88), so a default here would
+turn "nobody has looked" into a judgement. Re-running writes the same 296.
+
+**LEFT FOR THE OPERATOR, deliberately:**
+- **2 venues tied 1–1 between Nick and Phil** — `Bronson Liquors 192`
+  (Kissimmee) and `Orlando Whiskey Fest`. Both are the liquor-store-versus-
+  geography question in miniature, which is his to settle.
+- **41 venues have activity and no deal owner at all**, led by
+  `Bronson Liquors 192` (8 activities), `In and Out psl` (4) and four with 3.
+  Several are not venues (`Cypress Liquor and Wine`, `Fillin Station` and
+  `WINE BAR GEORGE` have no city because the workbook loader created them).
