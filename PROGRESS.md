@@ -1023,6 +1023,35 @@ the view columns it reads are confirmed present with the right values — the sa
 gap `business.html` had on 22 Aug, and the same one D79 warns is not the same
 evidence as opening the page.
 
+**Later the same day — venue grading, and a tab that had never rendered.**
+
+The operator asked for an A/B/C/D grade per venue and an owning contractor,
+editable in a grid and loadable from a CSV. Ruled venue-level, staff-only, and
+scoped to the columns plus the grid and CSV — HubSpot's deal owner is a later
+job, and is **not in this database at all**: `hubspot_owner_id` is not in
+`DEAL_PROPERTIES`, so it is not even in the stored payload.
+
+Built as `venue_grading`, its own table rather than two columns on `venues`, and
+that is the design rather than a preference — `venues_select` lets a brand read
+any venue row it relates to and the grant is table-wide, so a column there is a
+column a brand can `select *`. `merge_venue()` now carries the grade across a
+merge; the `ON DELETE CASCADE` would otherwise have destroyed it invisibly, the
+same trap D85 found with photos. The CSV round trip is keyed on the venue id,
+never the name, and refuses bad values rather than coercing them. The tab is an
+`st.fragment`, so editing one cell no longer re-runs the whole page.
+
+**And the new tab rendered blank — as did "Edit a venue", on the unmodified
+page.** `st.stop()` halts the entire script run, not the tab it sits in. It sat
+in the merge tab's "you have not picked two venues yet" branch, which is the
+state on every page load, so the run died before `with edit_tab:` was ever
+reached. **That tab had been empty since the day it was written.** Clean
+console, no exception, and a page that looked completely normal.
+
+Nothing automated found it and nothing automated could have: 103 pytest, the
+schema suite, `verify_live.py` and `test_admin_sql.py` all pass on the broken
+version, because the fault is control flow rather than SQL. D79 said open every
+page. **The rule is now: open every tab.**
+
 ---
 
 ## Known data problems to resolve before seeding

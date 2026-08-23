@@ -3264,3 +3264,95 @@ derived value over a stored one silently re-scopes every filter and count
 already written against it.** Adding the derivation is the easy half. Finding
 what was counting on the old meaning is the work — and a page that keeps
 rendering is not evidence that it did not happen.
+
+---
+
+**D88 — Venue grading and ownership, and why they are a table of their own.**
+✅ operator-ruled 23 Aug 2026
+
+The operator asked for an A/B/C/D grade per venue and a contractor who owns it,
+editable in a grid and loadable from a CSV. Three questions were put to him and
+all three were answered the conservative way:
+
+| question | ruling |
+|---|---|
+| grain | **Venue-level**, not per brand/venue pair. A bar's calibre does not change because a different brand is on the back bar, and "who owns the venue" is one person. |
+| visibility | **Staff only**, both. |
+| scope | Columns, grid and CSV now. HubSpot's deal owner is a later job. |
+
+**THE VISIBILITY RULING IS WHY THIS IS ITS OWN TABLE, and it is not a stylistic
+choice.** Two columns on `venues` would have been readable by every brand login
+and no view could have stopped it: `venues_select` lets a brand read any venue
+row it is related to, and **the grant is on the TABLE, not on a column list** —
+so `select *` through PostgREST returns whatever columns exist there. A brand
+discovering we graded them a D is a conversation to choose, not one the schema
+starts. Column-level grants would technically work and are the wrong tool: every
+future column would have to remember to opt out, and the one that forgets is
+silent.
+
+So `venue_grading` follows the shape `rate_card`, `contractors` and
+`contractor_pay` already set — own table, RLS on, revoked from `anon` and
+`authenticated`, gated behind `is_staff()` — and
+`09_venue_grading_test.sql` asserts the lockdown rather than trusting it (D62).
+
+**A merge would have destroyed the grade, silently.** `venue_grading.venue_id`
+is `ON DELETE CASCADE`, so folding a graded venue into an ungraded one deletes
+the grade along with the row, and the result is indistinguishable from a venue
+nobody ever graded. Exactly the trap D85 found with photos. `merge_venue()` now
+carries it across: the **target wins** where both are graded, because it is the
+row the operator chose to keep and a grade is a judgement rather than a fact to
+be combined the way the statuses are; a **gap on the target is filled** from the
+source rather than thrown away. Confirmed by deliberately regressing the
+function and watching the test fail.
+
+**The CSV is keyed on the venue id, never on the name.** A name key breaks the
+first time a venue is renamed or merged, and it breaks by matching the WRONG row
+rather than by failing — the one outcome worth engineering against. Unrecognised
+ids, invalid grades and unknown contractor names are reported and skipped, never
+coerced, and nothing is written until the dry-run diff is confirmed. A CSV
+restates all 336 rows at once, so the diff is the only thing standing between a
+stray Excel fill-down and eighty venues silently regraded.
+
+**A blank grade means NOT GRADED YET.** Both columns ship empty and null must
+never be read as a bad grade. Noted here because it is the kind of thing a
+future query gets wrong.
+
+**Still open, and deliberately:** `bottle_reorder`-style ownership from HubSpot.
+`hubspot_owner_id` is not in `DEAL_PROPERTIES`, so **deal ownership is not in
+this database at all** — not even in the `payload` jsonb, because HubSpot only
+returns the properties you ask for. Deriving "who actually worked this account"
+needs a sync change plus the owners API, and then the D84 shape: the declared
+owner wins, HubSpot's disagreement becomes a review queue for the venues where
+two contractors both have activity.
+
+---
+
+**D89 — `st.stop()` had been killing an entire admin tab since the day it was
+written, and the page looked perfect.** ⚠️ found 23 Aug 2026
+
+While adding the grading tab, it rendered blank. So did **"Edit a venue"**, on
+the unmodified page — which meant it was not the new code.
+
+`st.stop()` **halts the entire script run**, not the block it sits in and not
+the tab it sits in. It sat inside the merge tab's "you have not picked two
+venues yet" branch — **which is the state on every single page load** — so the
+run died before `with edit_tab:` was ever reached. The tab LABEL rendered,
+because `st.tabs()` had already been called. The tab was empty. Nothing raised,
+nothing was logged, the Streamlit console was clean, and the page looked
+entirely normal: three labels across the top, one of them dead.
+
+Replaced with an `else:`. It was the **only** instance in the admin that sits
+after an `st.tabs()` call — every other `st.stop()` guards a page before its
+tabs exist, which is the correct use.
+
+**THE RULE THIS CHANGES.** D79 established: open every PAGE in a browser, every
+session. That rule would never have caught this, and did not — the Venues page
+opens fine and reports 336 venues. **Open every TAB.** A tab is a page you
+cannot see, and this project now has two separate faults (D79's four pages, this
+one) that were invisible to everything except a human clicking.
+
+Worth noting what did NOT find it: 103 pytest, the eight-file offline schema
+suite, `verify_live.py`, and `test_admin_sql.py` — which exists specifically to
+catch render-time faults in this app's source, and which passes on the broken
+version because the bug is control flow, not SQL.
+

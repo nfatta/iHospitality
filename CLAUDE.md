@@ -140,8 +140,18 @@ reproduces it; keep it that way.
   two `$` in one Streamlit markdown string** (D79). The first raises in
   psycopg — a COMMENT counts — and the second renders as LaTeX. Both broke real
   pages for a month. `test_admin_sql.py` checks the source for both.
-- **Open every admin page in a browser before calling a session done** (D79).
-  It is the highest-yield check in this project and nothing else covers it.
+- **Open every admin page — AND EVERY TAB — in a browser before calling a
+  session done** (D79, D89). It is the highest-yield check in this project and
+  nothing else covers it. Tabs matter because `st.stop()` halts the WHOLE
+  script run, not the block it sits in: one inside a tab killed "Edit a venue"
+  from the day it was written, with a clean console and a page that looked
+  perfect. Never `st.stop()` after `st.tabs()` — use `else:`.
+- **Venue grade and owning contractor are STAFF ONLY and live in
+  `venue_grading`, not on `venues`** (D88). Not a style choice: `venues_select`
+  lets a brand read any venue row it relates to and the grant is table-wide, so
+  a column there is a column a brand can `select *`. A blank grade means NOT
+  GRADED YET, never a bad grade. `merge_venue()` carries grading across a merge
+  — the cascade would otherwise destroy it invisibly.
 - **Merging goes through a FUNCTION, never hand-written UPDATEs** —
   `merge_activity_type()` and `merge_venue()` (D81). The venue merge was five
   lines in the admin and had never once succeeded: it updated `photos.venue_id`,

@@ -138,12 +138,26 @@ python -m http.server 8123                    # portal at /portal/login.html
 | website (`…/ihospitality/`) | `portal-v1` | `git log` — unpushed vs `origin/portal-v1` |
 | `Hubspot/portal_seed/` | `main` | local only, no remote by design |
 
+Later that day: **venue grading and ownership** (D88) — an A/B/C/D grade and an
+owning contractor per venue, staff-only, in their own table because a column on
+`venues` is a column a brand can read. Editable grid plus a CSV round trip
+keyed on the venue id. And **D89**: adding that tab revealed that `st.stop()`
+inside the merge tab had been killing the whole script run on every page load,
+so **"Edit a venue" had rendered blank since the day it was written** — clean
+console, no exception, page looked perfect.
+
 **Verified at close (23 Aug):** 103 pytest · offline suite green **through both
 idempotency passes**, now eight files including `08_account_status_test.sql` ·
-0 grants to `anon`, 0 write grants to `authenticated` · 1,255 activities and
-$39,201.65 activity charge unchanged by D86 · both account views agreeing
-status-for-status across all 689 pairs · **all nine admin pages opened in a
-browser and checked for exceptions**, including the new reorder checkbox.
+0 grants to `anon`, 0 write grants to `authenticated`, 0 grants of any kind to
+`anon` on `venue_grading` · 1,255 activities and $39,201.65 activity charge
+unchanged by D86 · both account views agreeing status-for-status across all 689
+pairs · `venue_grading`'s write path driven against live and rolled back,
+including clearing a field back to empty · **all nine admin pages AND every tab
+on them opened in a browser** — which is how D89 was found.
+
+**Not covered by any test, and it bit today:** control flow in the admin.
+`test_admin_sql.py` checks the source for two render-time faults and passes on
+the version where a whole tab renders blank.
 
 **NOT verified: the logged-in `venues.html`.** It is behind a brand login and
 there was no session to hand, so the corrected stat cards were not seen
@@ -171,47 +185,68 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Open work, most useful first
 
-1. **Finish the contractors.** One person on file. Base pay understated.
-2. **Enter the 12 missing pay rates and the 5 expense amounts** (D78). Both are
+1. **Finish the contractors.** One person on file. Base pay understated. It now
+   feeds a second thing: the owner dropdown on the Venues page's **Grade and
+   ownership** tab lists active contractors, so until they are entered there is
+   nobody to assign a venue to.
+2. **Grade the venues, and assign owners** (D88). 336 venues, all blank. Grid or
+   CSV — download, edit in Excel, upload, confirm the diff. A blank grade means
+   not graded yet; nothing reads it as a bad grade.
+3. **Enter the 12 missing pay rates and the 5 expense amounts** (D78). Both are
    listed in the admin; both are operator data by D60.
-3. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
+4. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
    (117). Investigate — do not delete to make it tie.
-4. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
+5. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
    3114, 3119 (work months Mar–Jul 2025, none paid).
-5. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
+6. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
    invoice, not a sale. A bookkeeping question outside this system.
-6. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It still
+7. **Load `invoice_recap` from QuickBooks, not the spreadsheets.** It still
    holds ONE brand and seven months. Aug 2025 commission is typed `375.75`
    where the invoice bills `354.75`; a $455 Dame Mas tasting invoice (3203) is
    in neither the workbook nor the portal.
-7. **Widen the Health canary further.** It compares commission to commission
+8. **Widen the Health canary further.** It compares commission to commission
    correctly (D73) and now actually runs (D79), but still ignores consulting,
    billable and total.
-8. **Run the sync for real.** Never run with the staging code. Use `--month` on
+9. **Run the sync for real.** Never run with the staging code. Use `--month` on
    one month and watch the review queue. **Check afterwards that no venue came
    back**: the merges of 22 Aug depend on `venue_hubspot_alias` being consulted
    by the pre-load loop (D82), and that path has never run against live HubSpot.
-9. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
+10. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
    6; it should be **1**. Matters more since D65, because quantity multiplies.
-10. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
+11. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
     unclassified (D76).
-11. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
+12. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
     activity charge against real contractor cost.
-12. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
+13. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
     It bounds the QuickBooks comparison at the last invoiced work month (D79).
     It needs bumping when a new month is invoiced, alongside `QB_RETAINER_TOTAL`
     and `QB_RETAINER_MONTHS` — or, better, derived from `invoice_recap` once
-    item 5 lands.
-13. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
+    item 7 lands.
+14. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
     in the city column, straight from HubSpot. Editing it in the admin now
     STICKS (D84); it did not before today.
-14. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
+15. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
     merging PR #1 when the portal should go live.
 
 ---
 
 ## Things that will bite you if you don't know them
 
+- **OPEN THE PAGES — AND EVERY TAB ON THEM. In a browser, every session.**
+  D89 is why the rule grew: `st.stop()` halts the WHOLE script run, not the tab
+  it sits in, and one inside the Venues merge tab had been killing "Edit a
+  venue" since it was written. The page opened fine and reported 336 venues.
+  Never `st.stop()` after `st.tabs()` — use `else:`. Nothing automated caught
+  it and nothing automated could: the fault is control flow, not SQL, so
+  `test_admin_sql.py` passes on the broken version.
+- **A venue's grade and owner are STAFF ONLY and are not on `venues`** (D88).
+  They live in `venue_grading` because `venues_select` lets a brand read any
+  venue row it relates to and the grant is table-wide — a column there is a
+  column a brand can `select *`. Do not "simplify" them onto the venue.
+- **`hubspot_owner_id` is NOT in `DEAL_PROPERTIES`**, so who created a deal is
+  not in this database at all — not even in the stored `payload`, because
+  HubSpot returns only the properties you ask for. Any ownership-from-HubSpot
+  work starts with a sync change.
 - **OPEN THE PAGES. Every one, in a browser, every session.** This is now the
   highest-yield check in the project and it is not covered by anything else.
   D74, D76 and D77 were found by the operator using a page; D79 found four more
