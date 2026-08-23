@@ -4314,3 +4314,93 @@ turn "nobody has looked" into a judgement. Re-running writes the same 296.
   `Bronson Liquors 192` (8 activities), `In and Out psl` (4) and four with 3.
   Several are not venues (`Cypress Liquor and Wine`, `Fillin Station` and
   `WINE BAR GEORGE` have no city because the workbook loader created them).
+
+---
+
+**D107 — The bottom-line check, and three things that had to be true before it
+meant anything.**
+✅ operator-framed and built 23 Aug 2026
+
+The operator's own framing, and the right one: *"each invoice has a total at the
+bottom … just make sure each brand month to month matches that total."* An
+invoice states one number, it was sent and paid, and everything the portal holds
+for that brand and month has to add up to it. Line-by-line finds WHERE a
+difference is; **the total says WHETHER there is one**, and it cannot be fooled
+by a mapping mistake, a mis-split line, or a billing name this code has never
+seen. If the totals tie, nothing else can be hiding.
+
+`check_invoice_totals.py` compares **invoice total less itemised expenses**
+against **activity charge + retainer + reimbursements**. Read-only. Expenses
+come off the invoice side on the operator's instruction — the portal holds none
+of them (D78/D98), so leaving them in makes every month differ by exactly its
+pass-throughs and say nothing about the work.
+
+**THREE STRUCTURAL FAULTS HAD TO BE FIXED FIRST, and each one alone made the
+comparison meaningless:**
+
+1. **A billing name can cover SEVERAL brands.** `Coors Whiskey Company` bills
+   Five Trail, Barmen 1873 **and its own retainer** on one invoice and splits
+   them nowhere. Modelled as a NULL brand — "deliberately unmapped" — which is
+   true and useless: it said the invoice belonged to nobody, so $21,880 of real
+   billing sat outside every total while Five Trail and Barmen read as work
+   that was never invoiced. `brand_billing_member` says what is true, and that
+   line went from **−$13,806 to −$81.09.**
+2. **A name identifying ONE brand beats a shared payer.** Blue Run's invoices
+   are headed *"Blue Run Whiskey c/o Park Street Imports / Coors Whiskey Co"*,
+   so a longest-match handed all ten to the Coors pool and left Blue Run
+   reading **$0 invoiced against $18,228** of real billing. Same fault, twice,
+   in two different functions.
+3. **A structural charge is told from a pass-through by SHAPE, not
+   vocabulary.** On the nested invoices the retainer line is bare —
+   `1 1,450.00 1,450.00`, its name on a line the item scanner never sees — so
+   `startswith("retainer")` missed it and **$1,450 a month fell into expenses
+   for every brand except Dame Mas**. An itemised expense is a description and
+   ONE amount; anything carrying QTY, RATE and AMOUNT is priced work.
+
+**And an invoice whose `ACTIVITY DATE` is unusable now falls back to the month
+before its issue date**, because billing is in arrears (D93). 3123 says "2024"
+and 3178 contains a UPS tracking number; both dropped out of every total in
+silence, which is worse than being a month wrong.
+
+**WHERE IT STANDS — 38 of 83 brand-months tie to the cent.**
+
+| brand | months | tie | invoiced | portal | gap |
+|---|---|---|---|---|---|
+| Starr Rum | 7 | **7** | 4,440.00 | 4,440.00 | **0.00** |
+| Dame Mas | 15 | 10 | 15,929.73 | 16,372.43 | +442.70 |
+| Barmen + Coors + Five Trail | 10 | 1 | 19,276.09 | 19,195.00 | −81.09 |
+| Blue Run | 10 | 5 | 16,479.31 | 16,832.50 | +353.19 |
+| 44 North | 15 | 7 | 31,967.10 | 35,967.10 | +4,000.00 |
+| Aspen Green | 7 | 0 | 2,129.90 | 7,034.90 | +4,905.00 |
+| Wodka | 10 | 1 | 16,543.03 | 15,062.00 | −1,481.03 |
+| Heavens Door | 3 | 1 | 5,794.50 | 4,945.00 | −849.50 |
+| **TOTAL** | **83** | **38** | **112,559.66** | **119,848.93** | **+7,289.27** |
+
+**THE RESULT IS SAVED AS DATA**, at
+`portal_seed/reconciliation/invoice_vs_portal_2026-08-23.csv`, so nobody has to
+re-derive it. It is in the PYTHON repo and never the website one — that root is
+the Netlify publish directory and this is every client's billing (D12).
+
+**RULING — THE INVOICE WINS, AND THE PORTAL GETS CHANGED.** The operator: *"the
+portal is new and is currently being built, it is not active yet. The invoices
+are already sent out and done. If there is something different the invoice is
+correct."* This sharpens D56 rather than replacing it: D56 said investigate the
+portal, and this says the portal is what gets corrected — **without creating
+duplicate deals**, which was his other instruction.
+
+**NOTHING HAS BEEN CHANGED YET, deliberately.** The remaining $7,289 is four
+different problems wanting four different treatments, and three of them must
+NOT be closed:
+
+- **Months with no invoice**: Aug 2026 everywhere is current-month work, not
+  yet billed, and correct as it stands. Aspen Green Feb–May 2026 is
+  `source='uninvoiced'` on purpose (D71) — deleting it destroys $2,000 of real
+  revenue and has nearly happened once already.
+- **Wodka is consistently about −$450 a month across eight months.** That
+  regularity is one wrong or missing rate, not scattered data errors — the
+  cheapest thing on the list and probably a single rate-card line.
+- **44 North: seven months tie exactly**, the rest differ by 10, 20, 50, 210,
+  250 and 300, plus one outlier of $1,260 in Dec 2025. Small, specific,
+  individually checkable.
+- **Invoice 3210, $1,235.33, Jul 2026, billed to "Chris Nicolas"** — brand
+  unknown. One row in `brand_billing_name` once the operator says which.

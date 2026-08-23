@@ -1,7 +1,9 @@
 # HANDOFF — start here
 
-Written at the close of **23 Aug 2026 (second session)**. Read **D97–D99**
-first — they are this session, and D98 is money that is currently unbilled. This is the "what now" document;
+Written at the close of **23 Aug 2026 (second session)**. Read **D97–D107**
+first — they are this session. **D107 is the one that matters most: the
+invoice-vs-portal reconciliation is DONE and its result is saved as data. Do
+not re-run that analysis from scratch.** This is the "what now" document;
 `PROGRESS.md` is the full build log and `DECISIONS.md` is why things are the way
 they are. Read this first, then **D86 through D95** — 23 Aug was a long session
 and those ten entries are the current state of the system.
@@ -67,6 +69,27 @@ so D87's fix is doing its job on live data. `business.html` reads
 **−$1,265.00 across 66 activities**, not the −$1,295.00/58 this file predicted —
 the figure had moved with the operator's own later rate entries, and it ties to
 `v_activity_money` brand for brand.
+
+
+**Later on 23 Aug, the invoices.** The operator asked whether the portal ties to
+the invoices before running an analysis on them, and the answer was that the
+question could not be asked: **the invoice parser only ever worked for Dame
+Mas** (D106). It discarded 26 of 91 pages because a continuation page carries no
+`INVOICE` header; it read "September 11" as the year 2011; "Dec 2025" and
+"Septrmber 2025" returned no month at all; and the item table was DOUBLE-COUNTING
+because six of seven brands bill on a nested layout where each parent charge is
+followed by a breakdown of itself. **Invoices tying to their own stated subtotal
+went from 17 of 64 to 64 of 64.**
+
+Then **D107**, the check the operator asked for: invoice TOTAL against the
+portal, brand by month. **38 of 83 tie to the cent; Starr Rum ties on all
+seven.** The result is SAVED AS DATA at
+`portal_seed/reconciliation/invoice_vs_portal_2026-08-23.csv` — **do not
+re-derive it.**
+
+**Nothing in the portal was changed for any of that**, deliberately: the
+remaining $7,289 is four different problems and three of them must not be
+closed. Open item 1 says which.
 
 ---
 
@@ -291,19 +314,53 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Open work, most useful first
 
-1. **`Executive Cigar`, 31 Jul 2026 — amount $210.80 should be $210.75.**
-   One bottle is one SKU and neither SKU is $210.80 (D101). Five cents, and the
-   last row on file that does not fit the pricing model. Fix it on Review and
-   edit → Dame Mas → 2026-07, or with the bottle calculator (1 Extra Añejo).
+1. **MAKE THE PORTAL MATCH THE INVOICES — the analysis is DONE, start from it.**
 
-   **The Gleneagle row is DONE** (D102): $210.75, one loose Extra Añejo, and
-   **June 2026 now ties exactly at $409.13.** The Health canary should read 13
-   months tying again.
+   **DO NOT RE-DERIVE THIS.** The result is saved at
+   `portal_seed/reconciliation/invoice_vs_portal_2026-08-23.csv`, one row per
+   brand-month, with a README beside it saying what is already settled. To
+   refresh it:
 
-   Still open on the same field: **the five `is_expense` rows**, all carrying a
-   NULL `amount`, which is why `reimbursements` reads $0.00 against $2,456.20
-   of expense lines on the Dame Mas invoices alone (D78). The Amount column on
-   Review and edit is where they go.
+   ```bash
+   cd Hubspot/portal_seed
+   python check_invoice_totals.py                 # the summary
+   python check_invoice_totals.py --brand Wodka   # one brand
+   ```
+
+   **OPERATOR RULING (D107):** the portal is not live, the invoices are sent
+   and paid, so **where they differ the invoice is right and the portal gets
+   corrected** — and **without creating duplicate deals**, which was his other
+   instruction. This sharpens D56: it is still the portal that gets
+   investigated, and now also the portal that gets changed.
+
+   **38 of 83 brand-months tie to the cent. Starr Rum ties on all seven.**
+   Portal $119,848.93 against $112,559.66 invoiced — **+$7,289.27**.
+
+   **START WITH WODKA.** It is consistently about **−$450 a month across eight
+   months**, and that regularity is one wrong or missing rate rather than
+   scattered errors. One rate-card line probably closes eight months at once,
+   and it touches no activity rows at all.
+
+   Then **44 North**: seven months already tie, the rest differ by 10, 20, 50,
+   210, 250, 300 and one outlier of **$1,260 in Dec 2025**.
+
+   **THREE THINGS IN THAT GAP MUST NOT BE "FIXED":**
+   - **August 2026 everywhere** — current-month work, not yet billed. Billing
+     is in arrears; those rows are correct.
+   - **Aspen Green Feb–May 2026** — `source='uninvoiced'` on purpose (D71).
+     Deleting it destroys $2,000 of real revenue and has nearly happened once.
+   - **The Coors pool** — Five Trail, Barmen 1873 and Coors Whiskey's own
+     retainer bill on ONE invoice that splits them nowhere. It ties to
+     **−$81.09** as a pool and cannot be split (D107).
+
+   **ONE QUESTION FOR THE OPERATOR:** invoice **3210, $1,235.33, Jul 2026,
+   billed to "Chris Nicolas"** — which brand? It is the only invoice that
+   cannot be placed, and it is one row in `brand_billing_name` once he says.
+
+   Still open from earlier, same field: **`Executive Cigar`, 31 Jul 2026, amount
+   $210.80 should be $210.75** (D101), and **the five `is_expense` rows** all
+   carry a NULL amount, which is why `reimbursements` reads $0.00 against
+   $2,456.20 of expense lines (D78/D98). Both are Review and edit.
 
 2. **Tick `bottle_reorder` as a reorder** on the Activity types page. There are
    now FIVE Dame Mas `bottle_reorder` rows (D93) on top of the 11 pairs it was
@@ -388,7 +445,24 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 17. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
     in the city column, straight from HubSpot. Editing it in the admin now
     STICKS (D84); it did not before today.
-18. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
+18. **THE LAYOUT — the operator has asked three times and we never got to it.**
+    He wants to change the site's layout and wanted to talk it through rather
+    than be handed a design. **Ask these before building anything:**
+    - **Which surface?** The public marketing site (`index.html`, gallery) or
+      the brand portal (`portal/`, the five logged-in pages)? They are very
+      different jobs.
+    - **What is prompting it** — something hard to find, something that looks
+      dated, phone rendering, or showing it to someone specific soon? That
+      answer usually matters more than the layout itself.
+    - **How far does it go** — a re-skin inside the current structure, a
+      re-think of what lives on which page, or a new page?
+
+    The binding constraint to name up front: **no build step, no npm** (locked).
+    Plain static HTML with shared tokens in `css/site.css`, page-specific CSS
+    inline AFTER the link so pages can override. That rules out reaching for a
+    framework; it rules out very little visually.
+
+19. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
     merging PR #1 when the portal should go live.
 
 ---

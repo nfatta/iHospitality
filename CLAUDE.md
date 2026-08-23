@@ -222,6 +222,26 @@ reproduces it; keep it that way.
   Base prices are $120.00 and $207.75; the loose price is DERIVED, never stored,
   so it cannot drift from the case price. Per-order breakage is wrong and only
   Eden Lounge's 10+3 proves it, which is why that row is in the test.
+- **THE INVOICE-VS-PORTAL RECONCILIATION IS DONE AND SAVED** (D107). Result at
+  `portal_seed/reconciliation/invoice_vs_portal_2026-08-23.csv`; refresh with
+  `python check_invoice_totals.py`. **Do not re-derive it by hand.** All 64
+  invoices tie to their own stated SUBTOTAL — if that ever drops below 64 the
+  parser broke, so fix the parser and never the numbers.
+- **A BILLING NAME CAN COVER SEVERAL BRANDS** (D107). Coors Whiskey bills Five
+  Trail, Barmen 1873 and its own retainer on ONE invoice and splits them
+  nowhere — `brand_billing_member` says so, and the pool is the finest grain
+  that exists. And **a name identifying one brand beats a shared payer**: Blue
+  Run's invoices also say "Coors Whiskey Co", and a longest-match rule handed
+  all ten of them to the wrong pool.
+- **An invoice's structural charges are told from pass-throughs by SHAPE**
+  (D107). A pass-through is a description and ONE amount; anything with QTY,
+  RATE and AMOUNT is priced work. Vocabulary does not work — on the nested
+  layout the retainer line is bare and its name is on a line the item scanner
+  never sees.
+- **The invoice wins and the PORTAL gets corrected** (D107, sharpening D56).
+  The portal is not live; the invoices are sent and paid. But **never by
+  creating duplicate deals**, and never by deleting Aug 2026 (billed in
+  arrears) or Aspen Green Feb–May 2026 (`uninvoiced` on purpose, D71).
 - **Never `disabled=<another widget>` inside `st.form`** (D92). A form does not
   rerun until submit, so the expression keeps the value it had at the start of
   the run and the widget can NEVER be enabled by clicking. It cost the Rate
