@@ -4706,3 +4706,64 @@ programme invoice for its month. Blue Run's Jan 2026 is $205 short for exactly
 this reason: invoice 3177 bills a 10L barrel for Black Hawk Bistro that the
 portal does not hold. **This wants a rate line and an activity, both of which are
 the operator's data (D60).**
+
+---
+
+**D116 — BASE PAY IS NOW SHOWN PER BRAND, AND D67 STILL GOVERNS WHERE IT LIVES.**
+✅ operator-requested 24 Aug 2026
+
+D67 ruled that base pay is a company cost and must not be pushed into per-brand
+margin, because doing so means *"inventing an allocation nobody agreed to."* The
+operator has now agreed to one, and asked for it on the Analysis page.
+
+**Both things are true, and the split is deliberate.** The allocation is computed
+in `1_Analysis.py`, in the page, and is **not** in any view. `v_month_business`
+still holds base pay one level up against the business as a whole; every other
+tab, every other page and every stored margin figure is unchanged by this. So
+D67 still describes the DATABASE, and D116 describes one screen that draws on it.
+Nothing downstream inherits the allocation by accident — which was D67's actual
+fear, and it remains guarded.
+
+**The method: each contractor's own monthly base pay, split across the brands
+THEY worked that month, by their own share of activities.** Not an even split
+and not one pooled rate — Phil's salary follows Phil's route. Month by month, so
+a mid-window raise or a new hire lands in the right months instead of being
+smeared across the whole range. Attribution runs through
+`venue_grading.owner_contractor_id` (D88), which is the only person-to-work link
+that exists.
+
+**Four ways it is weak, all stated on the page rather than left to be found:**
+
+- It counts **activities, not hours**. A three-hour tasting weighs the same as a
+  twenty-minute account visit, so a brand carrying the project work is
+  UNDER-charged. 44 North is the brand this understates.
+- Attribution is who owns the venue **now**, not who made the visit.
+- Rows with no venue — the month-level commission rows — have no owner and are
+  excluded, counted, and reported.
+- **Serving a brand less makes it look more profitable.** Dame Mas reads −$11 on
+  a six-month window and **+$18** on the same window allocated month by month,
+  and **+$368** on Jun–Jul alone, because its activity fell by a third. The sign
+  flips on method and window. The honest statement about Dame Mas is *"it is at
+  break-even"*, never *"it loses money"*.
+
+**A CONTRACTOR-MONTH WITH NO ATTRIBUTED ACTIVITY HAS NOWHERE TO LAND, AND THAT
+GAP HAD TO BE MADE VISIBLE.** The first version of the page claimed each column
+summed to that person's full pay. Over a fourteen-month window it did not:
+$15,841 of $53,720 had no brand to sit against. Dropping it silently would
+understate payroll and flatter every brand on the table, so the page now measures
+and reports it. It is not a fault — it is real pay for a real month that no brand
+caused, which is D67's point arriving from the other direction.
+
+**The page carries a spread selector**, and it is the difference between two
+legitimate answers. *"The brands selected above"* assumes the ones you did not
+select are gone, so their share of payroll lands on the ones you kept — the
+forward-looking view, and the one that says 44 North's $1,450 retainer does not
+cover the $1,510 of payroll on it. *"Every brand they worked"* leaves departed
+brands carrying their share, which is what actually happened at the time. On the
+same window those two differ by $10,141 of allocated pay and change which brands
+appear in the retainer warning.
+
+**Nothing is hardcoded (D60).** Contractors, pay rates, pay frequency and the
+brand list are all read from tables. Adding a contractor on the Contractors page,
+or giving a venue an owner on the Venues page, changes this table with no edit to
+Python.
