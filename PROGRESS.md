@@ -1328,7 +1328,7 @@ the Wodka pay rate is still wrong, and `venues.market` is still NULL for 186 of
 **D119.** Open item 2, "teach `canary()` to pool brands", described in the
 handoff as one query change. The query change was real. It was not the finding.
 
-**The Coors pool ties 9 of 9, and portal-wide went 49 → 60 of 83.**
+**The Coors pool ties 9 of 9, and portal-wide went 49 → 64 of 83.**
 
 **The finding: an early-payment discount is not work, and neither is a card
 fee.** `check_invoice_totals.py` compared the invoice TOTAL, but
@@ -1366,6 +1366,44 @@ rest:
   billed."* Set to **quantity 0** — the row, venue, photo and deal survive and
   the money is zero. 44 North already had two such rows; nobody had spotted they
   were the pattern.
+
+**Then the same mistake turned up in three more costumes**, and closing them
+took 60 → 64. Each was something on the invoice that is not field work being
+compared against field work:
+
+- **A goods invoice is not a month of work.** 3159 (Blue Run, $584.56) and 3178
+  (Coors, $720.00) carry no commission, no retainer and SALES TAX — barrels
+  shipped to the brand, which the operator confirmed were "done separately".
+  Folded into a work month they made $1,304.56 of phantom gaps.
+- **But not every one-off is goods**, which is why the tax test earns its keep.
+  Invoice 3203 also has no commission and no retainer and is **two tasting
+  events, real work, separately invoiced** — *"Dame Mas has us charge for
+  activities separately but they are logged."* Untaxed, so it stays in its month.
+- **An ACTIVITY DATE equal to the issue date says nothing.** 3203 reads
+  "7/8/2026" against an issue date of 07/08/2026. Read literally it put $455 in
+  July, where it made a month that ties read −$455 while June — which holds the
+  work — read +$455.20. The work is the 25 Jun Festival of Speed tasting at
+  $180 and the 11 Jun River & Post trip, whose **$200.20 of mileage and $75.00
+  of staff training the invoice bills as one round $275.00 "Tasting Event"**.
+  Both months now tie but for that $0.20 of rounding.
+- **A balance carried forward is money already counted.** Wodka's 3200 re-bills
+  $90 from an earlier invoice.
+
+**Nineteen rows still differ and eleven of them should not move:** August 2026
+for four brands (arrears, $5,525), Aspen Green Feb–May (D71, $2,165), Wodka's
+±$150 April/May pair — which **invoice 3195 explains in writing** — and Dame
+Mas June's $0.20.
+
+**The eight that are open all have their causes found**, led by **Heaven's
+Door**: it **bills ACCOUNT VISITS at $20** inside the consulting block, where
+every other brand's invoice says "no charge" and the rate card prices them at
+$0.00 for all eight brands. Its commission ties exactly in both checked months,
+so that and a "Smoke Tops" line are the entire difference — on the brand with
+$16,361.08 outstanding. The rest: Blue Run's Black Hawk 10L barrel (three
+operator calls first — the venue on file is Black Hawk *Social*, there is no
+`cwc 10l barrel` activity type, and the rate disagrees $150 against $205), Dame
+Mas's $300 "KPIs" line, 44 North's held June, Aspen Green's 79 cases against 75
+billed, and two months carrying work with no invoice at all.
 
 **Two corrections to earlier entries.** **Wodka's $25 case pay is CORRECT** —
 handoff item A said to lower it to $5 and would have cut $915 of real contractor
