@@ -5135,8 +5135,10 @@ month that otherwise ties. Folded into the same not-work bucket as the payment
 fees. One invoice in the file does this.
 
 **WHAT IS LEFT, AND MOST OF IT MUST NOT BE TOUCHED.** 19 rows differ, and
-**nine are the three protected categories**: August 2026 everywhere (arrears,
-$5,525) and Aspen Green Feb–May (uninvoiced on purpose, D71). Two more are
+**eight are protected**: August 2026 for four brands (arrears, $5,525) and
+Aspen Green Feb–May (uninvoiced on purpose, D71). Starr Rum's deliberately
+unbilled Nov–Dec 2025, the third protected category, does not appear at all —
+Starr Rum ties 4 of 4. Two more are
 explained and correct as they stand — Wodka's ±$150 April/May pair, which
 **the invoice itself explains** (*"New Cocktail on tap From April but not on
 previous invoice"*), and Dame Mas June's $0.20 of rounding.
