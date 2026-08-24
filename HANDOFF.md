@@ -1,29 +1,62 @@
 # HANDOFF — start here
 
-Written at the close of **24 Aug 2026**, after a SECOND session that day.
+Written at the close of **24 Aug 2026**, after a THIRD session that day.
 
-**READ THIS FIRST: the second session did NO invoice work.** It was business
-analysis, and open items 1–7 below are exactly where the first session left
-them. What it added is **D116** (a Cost to serve tab, built and committed),
-**D117** (the venue grading system and routed week — DESIGNED, not agreed, and
-nothing applied) and **D118** (44 North is billed on 63 of 291 cases). See
-"Later on 24 Aug — the business analysis" below.
+**THE THIRD SESSION CLOSED THE COORS POOL — 9 of 9 months tie, and portal-wide
+went 49 → 60 of 83.** It was open item 2, described there as "one query change".
+The query change was real, but it was not the finding. **See D119.**
 
-Then read **D108–D115** — they are the first session of the day, and four of
-them are rules rather than events. **D108 matters most: 63 synthetic `Invoice-derived` rows exist across nine brands, $7,035, and
-THEY ARE NOT ALL WRONG — there is a test, and bulk-deleting them breaks months
-that currently tie.** Then read **D107** (the reconciliation is saved as data;
-do not re-derive it) and **D86–D95** for the account list, venue grading and the
-editable rate card. This is the "what now" document; `PROGRESS.md` is the full
-build log and `DECISIONS.md` is why things are the way they are.
+**Three things from it outrank everything else here:**
 
-**The single most dangerous command in this project right now:**
+1. **AN EARLY-PAYMENT DISCOUNT AND A CARD FEE ARE NOT WORK.** The reconciliation
+   compared the invoice TOTAL, but `TOTAL = SUBTOTAL − DISCOUNT + TAX`. Every
+   Coors invoice carries a discount, and those nine discounts *were* the
+   **−$81.09** D115 recorded as a gap. Both scripts now compare
+   **`SUBTOTAL − expenses − payment fees`**, discount excluded. That one change
+   fixed **seven** months and broke none — including **Wodka's "$106.03 of card
+   fees"** and **Dame Mas's $112.51**, both of which had been carried as open
+   gaps and were never gaps at all.
+
+2. **`quantity = 0` IS THE HOUSE WAY TO SAY "THIS HAPPENED AND WAS NOT BILLED".**
+   ⚠️ operator ruling: *"If it is in the workbook it's to be there, but if it
+   isn't on the invoice then it wasn't billed. The invoices are the dues —
+   whatever it says is true, so I want the portal to copy that."* Since D65 the
+   quantity is the multiplier, so zero keeps the row, its venue, its photo and
+   its HubSpot deal while contributing nothing. **Reach for it before
+   considering a deletion** — it satisfies D85 and D107 at once and is
+   reversible. 44 North already had two such rows; nobody had noticed they were
+   the pattern.
+
+3. **WODKA'S $25 CASE PAY IS CORRECT — the old item A would have cost $915.**
+   *"Wodka reorder is $5, initial is $25."* Lowering it to $5 would have cut
+   real contractor pay. The −$915 is the **charge** side and is the operator's
+   decision, not a data fault. **A brand falling through to the shared
+   `(all brands)` pay line is a fact to check, not a fault to fix** — which
+   inverts what D94 seemed to teach.
+
+**Also ruled: only data back to the portal.** QuickBooks holds 16 Coors invoices
+going back to Dec 2024; the portal's activity starts 2025-06-06. The six older
+ones — **$17,036.02** — are not a gap and are not to be chased.
+`check_invoice_totals.py` reads the horizon from `min(activity_date)`.
+
+**The Phil conversation happened and he agreed with the operator's position;
+changes are coming.** What exactly was agreed has NOT been written down yet, and
+it is the missing input for D117 (grading) and D118 (the 44 North fee model).
+**Ask for the specifics before acting on either.**
+
+Then read **D108–D115** (the first session of that day) — **D108 matters most:
+63 synthetic `Invoice-derived` rows exist across nine brands, $7,035, and THEY
+ARE NOT ALL WRONG.** There is a test, and bulk-deleting them breaks months that
+currently tie. One of them was resolved this session and it is a good worked
+example: the Feb 2026 barrel row claimed *"the portal held 0"* and was written
+without looking at the adjacent month, where the real row sat.
+
+**The single most dangerous command in this project is unchanged:**
 `python parse_invoices.py --brand "<anything but Dame Mas>" --apply`. Its
 double-count guard only recognises PERCENTAGE-priced months, so for a per-unit
 brand it duplicates the whole brand — $11,667.10 for 44 North, $5,652.10 for
-Blue Run, $2,990 for Wodka. See D108.
-
----
+Blue Run, $2,990 for Wodka (D108). **Use `load_pool_recap.py`, or write the rows
+directly.**
 
 ## The one-paragraph version
 
@@ -178,7 +211,7 @@ payroll on that account, and Dame Mas's $750 does not cover its $858.**
 
 **D117 is designed and NOT agreed.** Grading, cadence, caps and a four-day
 routed week. The constraint that drives all of it: **Phil owns 260 venues, does
-61 visits a month, and 260 venues at the CHEAPEST cadence would cost 130.** He
+62 visits a month, and 260 venues at the CHEAPEST cadence would cost 130.** He
 is 2× over capacity even if everything is graded D, and 132 of his 260 have
 never bought anything. So grading is mostly about deciding what stops being
 visited on a schedule.
@@ -205,63 +238,77 @@ honest word for Dame Mas is **break-even**, never "loses money".
 
 Paste this to pick up exactly where we stopped:
 
-> Read `CLAUDE.md`, `HANDOFF.md`, and **D108–D115** in `DECISIONS.md` (24 Aug
-> corrected four brands against the invoices; four of those entries are rules,
-> not events).
+> Read `CLAUDE.md`, `HANDOFF.md`, and **D119 plus D108–D115** in `DECISIONS.md`.
+> The Coors pool is closed (9 of 9) and portal-wide is 60 of 83.
 >
-> **Before anything else, know two things.** First: **never run
-> `parse_invoices.py --brand "<x>" --apply` for a per-unit brand** — its
-> double-count guard only recognises percentage-priced months and will duplicate
-> the whole brand (D108). Write `invoice_recap` directly. Second: **the 63
-> synthetic `Invoice-derived` rows are not all wrong** (D108). There is a test —
-> does the work already exist elsewhere in the portal? — and 44 North's June 2025
-> ties at exactly 0.00 while holding $660 of them.
+> **Before anything else, know four things.**
+> 1. **Never run `parse_invoices.py --brand "<x>" --apply` for a per-unit
+>    brand** — the guard only recognises percentage-priced months and will
+>    duplicate the whole brand (D108). Use `load_pool_recap.py` or write
+>    `invoice_recap` directly.
+> 2. **`quantity = 0` is how a row says "this happened and was not billed"**
+>    (D119). Reach for it before considering a deletion; it keeps the row, its
+>    photo and its deal, and satisfies D85 and D107 at once.
+> 3. **Do not touch Wodka's $25 `1st case sale` pay.** It is correct; the old
+>    handoff item A was withdrawn and would have cost $915.
+> 4. **The 63 synthetic `Invoice-derived` rows are not all wrong** (D108).
+>    There is a test — does the work already exist elsewhere in the portal? —
+>    and 44 North's June 2025 ties at exactly 0.00 while holding $660 of them.
 >
-> **Start with open item 2, the Coors pool.** It is the only brand group whose
-> invoices cannot be loaded at all, it is roughly a third of the billing, and the
-> fix is one query change that was already half-made this session.
+> **Start by asking what Phil agreed to.** The conversation happened and he
+> agreed with the operator's position, but the specifics were never written
+> down, and they are the missing input for **D117** (venue grading and the
+> routed week) and **D118** (the 44 North fee model). Both are designed and
+> neither is agreed. Do not hand anyone a grading sheet before reading D117 —
+> and when you do, send the **128 venues that have ever sold**, not all 260.
 >
-> **The method that worked four times running, in this order:**
+> **Then finish the invoice reconciliation: three brands left.** Aspen Green,
+> Heaven's Door and the two barrel-only invoices. **The method, which has now
+> worked six times running:**
 > 1. Pull the brand's invoices from QuickBooks (`qbo_sales_get_invoices`) — its
->    totals are complete even though its service lines come back blank (D70).
+>    totals are complete even though its service lines come back blank (D70),
+>    and it is the only independent proof no invoice was missed.
 > 2. Check them against the PDF parse. Every invoice must tie to its own stated
 >    subtotal or the parser is broken — fix the parser, never the numbers (D93).
-> 3. Check both against the operator's EOM workbook
->    (`Ihospitality/EOM reports/`, and `Ihospitality/Wodka/` for Wodka). **The
->    workbook decides ACTIVITY; QuickBooks decides TOTALS** — barrels were never
->    entered in the workbooks (D110).
+> 3. Check both against the operator's EOM workbook (`Ihospitality/EOM
+>    reports/`). **The workbook decides ACTIVITY; QuickBooks decides TOTALS** —
+>    barrels were never entered in the workbooks (D110), and the Coors workbook
+>    was also missing a whole month's commission (D119).
 > 4. Only when all three agree, write `invoice_recap`.
 > 5. Then diff the portal's activity against the workbook, venue by venue.
 >
 > **What that diff keeps finding**, in descending order of money: a wrong
-> QUANTITY on a real row (D113 — four found, $1,110); a case sale filed as an
-> account visit or the reverse (four found); a NULL `source_activity_type` so the
-> rate card cannot price real work (D111 — 63 rows on Starr Rum alone); and a
-> synthetic row duplicating something already on file (D108).
+> QUANTITY on a real row (D113); a case sale filed as an account visit or the
+> reverse (D112); a NULL `source_activity_type` so the rate card cannot price
+> real work (D111); a brand whose rate line is $0.00 where the invoice charged
+> real money (D119 — Barmen's barrel prep); and a synthetic row duplicating
+> something already on file (D108).
 >
-> **Corrections go on the rows already there.** Change the quantity or the type;
-> do not add an offsetting row and do not delete one that has photos or a HubSpot
-> deal (D85). Where a corrected row was a venue's only depletion, walk
-> `brand_venue_status` back by hand — the trigger only advances (D86). Note the
-> HubSpot deal id in the row's note; HubSpot still holds the wrong figure and a
-> promote could revert the fix.
+> **Corrections go on the rows already there** — the operator's own words:
+> *"I would rather change what's in the portal than create a new thing. If
+> there is an account sold but it should be an account visit, just change it.
+> Do not create an account visit."* Where the invoice bills work the portal
+> never received, **create it** (operator-ruled 24 Aug). Where a corrected row
+> was a venue's only depletion, walk `brand_venue_status` back by hand — the
+> trigger only advances (D86). Note the HubSpot deal id in the row's note;
+> HubSpot still holds the old figure and a promote could revert the fix.
 >
-> **Three things must NOT be "fixed":** August 2026 everywhere (arrears — it is
-> $5,525 of the $7,424 headline), Aspen Green Feb–May 2026 (`uninvoiced` on
-> purpose, D71), and Starr Rum Nov–Dec 2025 (real work, deliberately never
-> billed — the operator: *"we were trying somethign with Starr and wont be doing
-> that again"*).
+> **Three things must NOT be "fixed":** August 2026 everywhere (arrears —
+> billed a month behind, and it is most of the remaining headline gap), Aspen
+> Green Feb–May 2026 (`uninvoiced` on purpose, D71), and Starr Rum Nov–Dec 2025
+> (real work, deliberately never billed).
+>
+> **And nothing before 2025-06** — the portal's own horizon. QuickBooks holds
+> older invoices; they are not gaps and are not to be chased (D119).
 >
 > Standing rules that outrank convenience: the billing is the truth (D56), no
 > hardcoded business data (D60), the brand portal stays read-only by
-> construction (D61), base pay is never allocated to a brand (D67), a
-> reimbursement never earns (D78), and reclassifying must not move money unless
-> moving it is the point (D93/D112).
+> construction (D61), base pay is never allocated to a brand in a view (D67),
+> a reimbursement never earns (D78), and reclassifying must not move money
+> unless moving it is the point (D93/D112).
 >
-> Before you finish: `python -m pytest test_normalize.py test_sync.py
-> test_admin_sql.py -q`, `bash db/test/run.sh`, `python verify_live.py`, and
-> **open all nine admin pages in a browser** — that last one is not optional
-> (D79/D89/D92).
+> Before calling a session done: **open every admin page AND every tab in a
+> browser, and type into anything that takes input** (D79/D89/D92).
 
 ---
 
@@ -420,13 +467,16 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 Lettered so nothing below has to be renumbered. **The numbered list after these
 is the first session's and none of it was advanced.**
 
-**A. FIX WODKA'S CASE SALE PAY RATE. Five minutes, no client conversation, $915
-already lost.** Wodka has no `1st case sale` pay rate of its own, so it falls
-through to the shared `(all brands)` **$25.00** line while charging **$10.00**:
-61 cases, $610 charged, $1,525 paid, **−$915**. Its reorders are correct at
-$10/$5. Add a Wodka pay row at **$5.00** on the Rate card page — the grid shows
-the money impact before saving (D91). Same failure shape as D94, and worth
-checking whether any OTHER brand is falling through to that line.
+**A. ~~FIX WODKA'S CASE SALE PAY RATE~~ — WITHDRAWN, AND DOING IT WOULD HAVE
+COST $915.** ✅ operator-ruled 24 Aug 2026. This item said to add a Wodka
+`1st case sale` pay row at $5.00. **Do not.** The operator: *"Wodka reorder is
+$5, initial is $25."* The $25.00 arriving through the shared `(all brands)` line
+is CORRECT, and lowering it would have cut real contractor pay. The −$915 is
+real but it is the **charge** side — Wodka pays $25 to place a first case and
+bills $10 for it — which is a priced decision for the operator, not a data
+fault (D60). See the D118 correction at the end of `DECISIONS.md`. **The general
+rule this leaves: a brand falling through to the shared pay line is a fact to
+check, not a fault to fix.**
 
 **B. STOP GIVING AWAY TAP AND KEG WORK BY CLASSIFICATION** (D118). 51 tap/keg
 activities are logged as **Market Favor (26), Account Visit (19), Drink
@@ -513,28 +563,25 @@ on the Cost to serve tab without comment.
    NULL amount, which is why `reimbursements` reads $0.00 against $2,456.20 of
    expense lines (D78/D98). Both are Review and edit.
 
-2. **TEACH `canary()` TO POOL BRANDS — it is the only thing blocking a third of
-   the billing.** ⚠️ operator has not ruled yet
+2. **~~TEACH `canary()` TO POOL BRANDS~~ — DONE, AND THE POOL TIES 9 OF 9.**
+   ✅ 24 Aug 2026 (third session). See **D119**.
 
-   `invoice_recap` is keyed on `brand_name` and `canary()` compares one brand's
-   recap against that same brand's activity. **The Coors invoices belong to no
-   single brand**: `brand_billing_name` has both "coors whiskey" and
-   "five trail/barmen" deliberately unmapped, covering Barmen 1873 + Five Trail +
-   Coors Whiskey (D107). Load them under any one name and the page compares
-   $19,276 of billing against that brand's activity — zero — and fabricates a gap
-   on a pool that **ties to −$81.09**.
+   `canary()` now derives a pool **label** for every brand and applies it to
+   both sides of the comparison; `admin/app.py` selects on it. Nine months are
+   loaded under `Barmen 1873 + Coors Whiskey + Five Trail` by the new
+   `load_pool_recap.py` — **never `parse_invoices.py --apply`** for a per-unit
+   brand (D108). **Every other brand's numbers are unchanged.**
 
-   The fix is the change `check_invoice_totals.py` already makes: pool via
-   `brand_billing_member` before comparing. It touches `admin/lib.py:canary()`
-   and the brand selector in `admin/app.py`, and it changes every brand's row on
-   that page, which is why it was not done unasked.
+   The −$81.09 the pool was recorded as owing was **nine early-payment
+   discounts** and never a gap. Both scripts now compare
+   `SUBTOTAL − expenses − payment fees`, with the discount excluded entirely.
+   That alone fixed seven months, three of which were long-standing handoff
+   items: Wodka's "$106.03 of card fees" and Dame Mas's $112.51 ACH fee.
 
-   **The pool's data is already gathered** (D115): 11 invoices Jun 2025 – Feb
-   2026, QuickBooks customer **824**. Four of its nine months differ from the
-   portal by **exactly their early-payment discount** and nothing else. The
-   workbook disagrees on 3 of 9 — Aug is $205 light (a 10L barrel), Sep is
-   $69.56 heavy (Blue Run's UPS barrel shipping, booked to the wrong brand), Feb
-   2026 is $635.13 light.
+   **`verify_live.py` now asserts that each brand resolves to exactly ONE pool
+   label.** The join is on the brand, so two labels would double-count its
+   activity silently. It holds today only because the two billing names
+   reaching those three brands name the same three.
 
 3. **DECIDE THE BARRELS.** ⚠️ operator has ruled they SHOULD be portal
    activities; the mechanics are not there yet.
@@ -585,7 +632,8 @@ on the Cost to serve tab without comment.
    drops out of every allocation on the Cost to serve tab (D116).
 
 9. **GRADE THE VENUES — owners are done, grades are not** (D88, and now D117).
-   339 of 340 venues have an owning contractor; **339 of 340 have no grade.**
+   339 of 339 rows in `venue_grading` carry an owning contractor; **not one
+   carries a grade.**
    Grid or CSV — download, edit in Excel, upload, confirm the diff. A blank
    grade means not graded yet; nothing reads it as a bad grade.
 

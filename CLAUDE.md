@@ -300,6 +300,42 @@ reproduces it; keep it that way.
   **90-day floor** on every venue that has ever bought is the only version whose
   arithmetic fits. And a B graded on POTENTIAL **drops to D after 90 days
   without a sale**, or the grade and its cost persist for ever.
+- **AN INVOICE'S DISCOUNT AND ITS CARD FEE ARE NOT WORK** (D119).
+  `TOTAL = SUBTOTAL − DISCOUNT + TAX`, and all three are payment mechanics.
+  Reconcile against **`SUBTOTAL − expenses − payment fees`**, with the discount
+  excluded entirely. Every Coors invoice carries an early-payment discount, and
+  those nine discounts *were* the −$81.09 D115 recorded as a gap. A fee is the
+  mirror image — usually charged and then discounted straight back off, so
+  comparing TOTALS hides it and comparing SUBTOTALS leaves it in. The one
+  definition handles both, and fixed seven months across three brands.
+  **Fee lines are the ONLY keyword match allowed** (D93 bans the rest): they
+  come from QuickBooks' product catalogue, not the operator's keyboard.
+- **`quantity = 0` MEANS "THIS HAPPENED AND WAS NOT BILLED"** (D119, operator
+  ruling). *"If it is in the workbook it's to be there, but if it isn't on the
+  invoice then it wasn't billed. The invoices are the dues."* Since D65 the
+  quantity is the multiplier, so zero keeps the row, its venue, its photo and
+  its HubSpot deal while contributing nothing to the money. **Reach for it
+  before considering a deletion** — it satisfies D85 and D107 at once and is
+  reversible. Never delete real work to make a month tie.
+- **A BRAND FALLING THROUGH TO THE SHARED `(all brands)` PAY LINE IS A FACT TO
+  CHECK, NOT A FAULT TO FIX** (D119, correcting D118). Wodka's `1st case sale`
+  pays $25.00 off the shared line and **that is correct** — *"reorder is $5,
+  initial is $25"*. Handoff item A told the next session to lower it to $5 and
+  would have cut $915 of real contractor pay. The −$915 is the CHARGE side:
+  $25 to place a case, $10 billed. That is a priced decision for the operator
+  (D60), not a data fault, and it carries no flag because it cannot.
+- **THE CANARY POOLS BRANDS, AND ONE BRAND MUST RESOLVE TO ONE LABEL** (D119).
+  A Coors invoice covers Barmen 1873, Five Trail and Coors Whiskey and splits
+  them nowhere, so `canary()` derives a pool label and applies it to **both**
+  sides of the comparison — pool one side only and the two do not meet. The
+  join is on the brand, so two labels for one brand double-counts its activity
+  silently. `verify_live.py` asserts it. Write pool recaps with
+  `load_pool_recap.py`, never `parse_invoices.py --apply` (D108).
+- **NOTHING BEFORE THE PORTAL'S OWN HORIZON** (D119, operator ruling).
+  QuickBooks holds Coors invoices back to Dec 2024; the portal's activity
+  starts 2025-06-06. Those six invoices, $17,036.02, are **not a gap** — there
+  is no activity to compare them against and never will be. The horizon is read
+  from `min(activity_date)`, never hardcoded (D60).
 - **The portal does not yet model the retainer**, which is most of what every
   brand pays, so no revenue or margin figure here is complete. See `HANDOFF.md`.
 - **The invoice PDFs are the billing source, and `parse_invoices.py` reads

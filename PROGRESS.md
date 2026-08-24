@@ -1323,6 +1323,72 @@ had not happened when this was written, no venue was graded, no route exists,
 the Wodka pay rate is still wrong, and `venues.market` is still NULL for 186 of
 187 44 North venues.
 
+## 24 Aug 2026, third session — the Coors pool, and the discount that was never a gap
+
+**D119.** Open item 2, "teach `canary()` to pool brands", described in the
+handoff as one query change. The query change was real. It was not the finding.
+
+**The Coors pool ties 9 of 9, and portal-wide went 49 → 60 of 83.**
+
+**The finding: an early-payment discount is not work, and neither is a card
+fee.** `check_invoice_totals.py` compared the invoice TOTAL, but
+`TOTAL = SUBTOTAL − DISCOUNT + TAX`. Molson Coors pays early, so every Coors
+invoice carries a discount of $8.99–$31.44 — and those nine discounts were
+*exactly* the **−$81.09** D115 had recorded as a reconciliation gap. The mirror
+image is a fee: Wodka's 3184 charges $56.44 of processing and discounts $56.44
+straight back off. Comparing totals hides the fee; comparing subtotals leaves it
+in. Both scripts now compare **`SUBTOTAL − expenses − payment fees`** with the
+discount excluded outright. **Seven months fixed, none broken** — including
+Wodka's "$106.03 of card fees" and Dame Mas's $112.51, both of which had been
+carried as open gaps and were never gaps.
+
+**The pool is loaded** under `Barmen 1873 + Coors Whiskey + Five Trail` by a new
+`load_pool_recap.py`, which checks that its five buckets add back to each
+invoice's own stated subtotal before writing and refuses if two invoices share a
+month. `canary()` derives a pool label and applies it to **both** sides of the
+comparison; `verify_live.py` now asserts that each brand resolves to exactly one
+label, because the join is on the brand and two labels would double-count
+silently.
+
+**How the nine months were closed.** Four tied once the discount came off. The
+rest:
+
+- **Sept**: Barmen's `barrel prep` rate was $0.00 while the invoice charged $40 —
+  the figure Five Trail and Blue Run already carried. Set to $40.
+- **Jan/Feb**: invoice 3187 bills 2× 5L barrel *"For Executive cigar and Copper
+  Shaker"* in February; the portal had them in January. Moved, with the old date
+  and HubSpot deal recorded in the note. Before that, an `Invoice-derived`
+  synthetic row claiming *"the portal held 0"* turned out to duplicate the real
+  row in the adjacent month — deleted, D108's test positive.
+- **Aug/Oct**: two Hollerbach tap maintenances and a fourth Clermont printed
+  feature, all real, none invoiced. **Operator ruling:** *"If it is in the
+  workbook it's to be there, but if it isn't on the invoice then it wasn't
+  billed."* Set to **quantity 0** — the row, venue, photo and deal survive and
+  the money is zero. 44 North already had two such rows; nobody had spotted they
+  were the pattern.
+
+**Two corrections to earlier entries.** **Wodka's $25 case pay is CORRECT** —
+handoff item A said to lower it to $5 and would have cut $915 of real contractor
+pay; the −$915 is the charge side and the operator's decision (D60). And the
+workbook is wrong on two of the Coors pool's nine months: August 2025 records
+$0.00 commission against a real $205, and February 2026 is $310 light because
+**barrels were never entered in the workbooks** (D110, as predicted).
+
+**Operator ruling: only data back to the portal.** QuickBooks holds 16 Coors
+invoices from Dec 2024; the portal's activity starts 2025-06-06. The six older
+ones, $17,036.02, are not a gap and are not to be chased.
+
+**Verified:** 148 pytest · offline SQL suite green · 0 anon grants, 0 write
+grants to `authenticated` · every other brand's canary unchanged (Dame Mas
+13/13, 44 North 13/13, Starr Rum 4/4, Blue Run 8/9, Wodka 6/8) · all nine admin
+pages and every tab opened in a browser, and the Health page **driven** to the
+pool and read back at 9 tying / 0 missing / 0 drifted, 0 exceptions.
+
+**Not done:** the Phil conversation happened and he agreed, but the specifics
+were never written down and they gate D117 and D118 both. No venue is graded, no
+route exists, `venues.market` is still NULL for 186 of 187 44 North venues, and
+invoice 3178 ($720 of barrels, no work month) is still unplaced.
+
 ## Known data problems to resolve before seeding
 
 Found by profiling the six `hubspot-crm-exports-*.csv` files (315 rows):
