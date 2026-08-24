@@ -1266,6 +1266,63 @@ clean — anon locked out of all three objects, zero `authenticated` write grant
 36 SELECT grants. The admin's front page was opened in a browser and renders
 end-to-end; **the running instance predates the `lib.py` change and needs a
 rerun to pick it up.** `verify_live.py` was NOT run this session.
+## Session of 24 Aug 2026, later — the business analysis (D116–D118)
+
+**No invoice work, no data changed, one page added.** Open items 1–7 from the
+morning session are exactly where they were. This session was the operator
+asking what the numbers say about fees, capacity and contractor pay.
+
+**What was built: the Cost to serve tab** on the Analysis page (D116). Each
+contractor's own monthly base pay, split across the brands they worked that
+month by their own share of activities, month by month so a raise or a new hire
+lands in the right months. Attribution runs through
+`venue_grading.owner_contractor_id`; contractors, rates and brands are all read
+from tables, so a new contractor appears with no edit to Python (D60).
+
+**It is an ALLOCATION and it lives in the page, in no view.** D67 ruled base pay
+must not go into per-brand margin; the operator has now agreed to one specific
+allocation, so `v_month_business` and every stored margin figure are untouched
+and every other tab still excludes base pay entirely. D67 describes the
+database; D116 describes one screen.
+
+**Two faults were found in the first version of that tab by testing it, not by
+reading it.** A caption claimed every contractor column summed to that person's
+full pay — over a fourteen-month window **$15,841 of $53,720 had nowhere to
+land**, because a contractor-month with no attributed activity has no brand to
+sit against. Dropping it silently would understate payroll and flatter every
+brand, so the page now measures and reports the gap. And the "activities with no
+owner" note contradicted the warning directly above it.
+
+**Verified:** 75 admin tests pass; the page opened in a browser and the tab
+rendered against live data; the spread radio recomputed correctly (unallocated
+$5,700 → $15,841, retainer warning three brands → one). All three `st.stop()`
+calls sit before `st.tabs` and the tab uses `if/else` (D89). The From/To
+dropdowns could NOT be driven through the browser automation — the date window
+was verified by running the same arithmetic directly instead.
+
+**What was analysed but NOT changed.** D118: matching 44 North's distributor
+depletion sheet against the portal found **291 cases moved at accounts we
+service Jan–Jul 2026 against 63 billed** — structural, because reorders reach
+the venue through the distributor's rep with no visit to log, and `recurring
+case` charges $0.00 while paying $5.00. **One reorder exists in 44 North's
+entire history.** Also: **51 tap/keg activities logged as $0.00 types** when a
+$200 `tap cocktail` line exists, and **Wodka's case sales at −$915** because it
+has no pay rate of its own and falls through to the shared `(all brands)` $25.00
+line.
+
+**D117 designed the venue grading system and a four-day routed week, and it is
+NOT agreed.** The constraint that shapes it: **Phil owns 260 venues, records 61
+visits a month, and 260 venues at the cheapest cadence would cost 130.**
+
+**Two documents** are the reference and live in `Ihospitality/`:
+`iHospitality_Rate_Talking_Points.docx` and
+`iHospitality_Field_Routes_Phil.docx`.
+
+**Not done, and named so it is not mistaken for done:** the Phil conversation
+had not happened when this was written, no venue was graded, no route exists,
+the Wodka pay rate is still wrong, and `venues.market` is still NULL for 186 of
+187 44 North venues.
+
 ## Known data problems to resolve before seeding
 
 Found by profiling the six `hubspot-crm-exports-*.csv` files (315 rows):

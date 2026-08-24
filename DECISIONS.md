@@ -4767,3 +4767,194 @@ appear in the retainer warning.
 brand list are all read from tables. Adding a contractor on the Contractors page,
 or giving a venue an owner on the Venues page, changes this table with no edit to
 Python.
+
+---
+
+**D117 — THE VENUE GRADING SYSTEM AND THE ROUTED WEEK.**
+⚠️ designed 24 Aug 2026 — **NOT agreed with Phil, and nothing is applied.**
+Serves open item 9.
+
+The operator asked for a grading system: contractors grade their own venues
+A/B/C/D, and the grade sets a visit cadence. What follows is what the data
+supports. **It has not been put to Phil, no venue has been graded, and no route
+exists.** `venue_grading` still reads 339 of 340 ungraded.
+
+**THE CONSTRAINT THAT DECIDES EVERYTHING, AND IT IS NOT THE CADENCE.**
+Phil owns **260 venues** and records **61 visits a month**. At the cheapest tier
+in the proposed scheme — D, every two months — those 260 venues cost **130
+visits**. He is 2× over capacity *even if every venue is graded D.* And **132 of
+his 260 have never bought anything.**
+
+So the first job of grading is not to set a cadence. **It is to decide which
+venues stop being visited on a schedule.** Everything else follows from that.
+
+| | Phil | Eric | Nick |
+|---|---|---|---|
+| Venues owned | 260 | 50 | 29 |
+| Visits/month | 61 | 21 | 8 |
+| Ever sold | 128 | 12 | 13 |
+| Never sold | 132 | 38 | 16 |
+
+**THE CADENCE, AND WHAT EACH TIER COSTS.** A is not slightly dearer than D, it
+is **thirteen times** dearer. That ratio is why a flat cap fails.
+
+| Grade | Cadence | Visits/month |
+|---|---|---|
+| A | Weekly | 4.33 |
+| B | Twice a month | 2.00 |
+| C | Monthly | 1.00 |
+| D | Every two months | 0.50 |
+
+**CAP A AS A SHARE OF CAPACITY, NEVER AS A FLAT NUMBER.** The operator's first
+instinct was "cap A at 10". Ten A's is **43.3 visits a month — 71 percent of
+Phil on ten venues**, leaving 17.7 for the other 250. And Eric has only about 25
+visits in total, so he **could not hold 10 A's under any circumstance.** At 25
+percent of capacity: Phil 3, Eric 1, Nick 0.
+
+**A IS A CAMPAIGN, NOT A STATUS.** Three permanent A's is three venues a year.
+Three A *slots* run as six-to-eight week campaigns around a menu change or a
+competitor switch is roughly **26 conversion attempts a year** on the same
+capacity. Weekly presence is for while a decision is being made, not for ever.
+
+**THE 90-DAY FLOOR IS WHAT MAKES IT AFFORDABLE**, and it came from the operator.
+A floor is cheap and intensity is expensive: covering 153 venues at 0.33
+visits/month costs 51 visits, while lifting ONE venue from floor to A costs 4 —
+as much as twelve venues on the floor. So budget it as a base plus upgrades:
+
+| | Venues | Visits |
+|---|---|---|
+| 90-day floor, every venue that has ever bought | 153 | 51.0 |
+| Upgrade to A (+4.0 each) | 3 | +12.0 |
+| Upgrade to B (+1.67 each) | 10 | +16.7 |
+| Upgrade to C (+0.67 each) | 20 | +13.4 |
+| **Total, against 94 visits/month of capacity** | **153** | **93.1** |
+
+A universal 90-day floor across all 340 venues is **113 visits** and does not
+fit. Restricted to venues that have ever bought, it does — and it covers **153
+venues instead of the 83** a pure tiered scheme reaches.
+
+**THE CRITERIA — TWO QUESTIONS, NOT FOUR.** The operator proposed BANT (budget,
+authority, need, timeline). **Authority and fit survive; budget and timeline do
+not.** Every bar has a liquor budget and spends it weekly, so budget returns
+"yes" 340 times and discriminates nothing. And an account that reorders for
+years has no "timeline" — it has a rhythm. Four axes will also not survive one
+person scoring 128 venues; two is the realistic ceiling.
+
+But BANT catches something a pure behaviour rule gets wrong: **a venue that
+opened last month has bought nothing, grades D, gets a visit every two months,
+and therefore never buys.** Potential has to count somewhere. Hence:
+
+| Grade | Test |
+|---|---|
+| **A** | Buys every month **and** the contact can change the back bar or the menu. Buys monthly but you only know a bartender? That is a B. |
+| **B** | Buys most months — **or** the programme fits and you have the decision-maker. **The only grade where potential counts.** |
+| **C** | Has bought, reorders sometimes, no obvious lever. |
+| **D** | Placed once, no reorder. Or a good venue with no access past the bartender. |
+| **—** | Never bought and no access, ghosting, or nothing in 180 days. |
+
+**THE RULE THAT STOPS OPTIMISM EATING THE CALENDAR:** a venue graded B on
+POTENTIAL rather than purchases **drops to D after 90 days without a sale.**
+BANT ends when a deal closes or dies; a cadence system has no ending, so the
+grade and the spending behind it persist for ever unless something retires them.
+That is the most important line in this entry.
+
+**UNSCHEDULED VENUES PROMOTE THEMSELVES, AND IT IS FREE.** Anything showing
+cases on the monthly depletion sheet returns to a route next month. Nobody has
+to notice; the data notices. **Do not sweep the unscheduled list** — 257 venues
+touched once a year is 21 visits a month, a fifth of total capacity spent on
+venues that by definition are not buying.
+
+**THE ROUTED WEEK: FOUR DAYS ROUTED, ONE THE CONTRACTOR'S.** The operator's idea,
+and the arithmetic says the fifth day is free. Phil averages **2.8 visits/day
+across five unrouted days.** Four geographically clustered days at **3.5/day is
+61 a month — exactly his current output**, so the discretionary day costs
+nothing. At 4/day he is **ahead by eight visits a month** and still gets the day
+back. **Break-even is 3.5 visits per routed day**, and that is the number to put
+to him.
+
+Phil's 128 ever-sold venues cluster as: **Orlando core 44** (too big for one
+day — split it, or let the low-volume half sit on the floor), **Orlando south
+13**, **Sanford/Lake 17**, **Brevard 18**, **Tampa/west 12** (ninety minutes each
+way, so a monthly day rather than a weekly route), and **24 that are not routable
+at all** — Jacksonville, St Augustine, Daytona, Miami, Pensacola, Inlet Beach,
+The Villages, and 44 North's head office in **Boise**. Four have no city
+recorded. **That last group is NOT a drop list** — Serafina Miami (14 cases) and
+Sable (12) are real volume; they are quarterly, not weekly.
+
+**THE FLAG NO GRADE WOULD CATCH:** eight or more visits and one case or fewer in
+twelve months. By activity count these look like the most engaged accounts on the
+book. **Hollerbach is the worst and does not even appear on the flag list** — 16
+visits, zero depletions ever recorded, receiving monthly keg builds. Also
+flagged: Debauchery (14 visits, 1 case), Florida Cork & Bottle (10, 1), The
+Brevardian (10, 1), Root+Branch (10, 0).
+
+**Where this is soft.** Eric's 25-visit budget is a projection from six months
+(recent average 21, best month 33) — if he settles at 21 he carries 18 venues,
+not 22. And **186 of 187 44 North venues have a NULL `market`**, so none of this
+could be filtered to the two real markets; the clustering is by city string and
+should be re-done once markets are populated.
+
+**Reference:** the routes with every venue named are in
+`Ihospitality/iHospitality_Field_Routes_Phil.docx`.
+
+---
+
+**D118 — 44 NORTH IS BILLED ON 63 OF 291 CASES, AND THE FEE MODEL THAT FOLLOWS.**
+⚠️ analysed 24 Aug 2026 — **nothing agreed, nothing changed in the portal.**
+
+Matching the distributor's depletion sheet
+(`Ihospitality/44 North/07_2026EOMFlash.xlsx - Customer Performance.csv`) against
+the portal's venues: **291 cases moved at accounts iHospitality services between
+Jan and Jul 2026. 63 were billed.** Theme parks excluded (Universal 58 + 22,
+Disney 41 — operator-confirmed not ours).
+
+**The cause is structural, not clerical.** The rate card charges $50 for a case
+sale and **$0.00 with a $5.00 pay rate for `recurring case`** — so a reorder
+*costs* $5 and earns nothing. **In the entire history of 44 North, exactly ONE
+reorder has ever been recorded** (Eric's, July 2026). Reorders reach the venue
+through the distributor's own rep without an iHospitality visit, so there is
+nothing to log: the gap is real work that was never billable by design, not a
+recording failure.
+
+| | Cases | Revenue/month |
+|---|---|---|
+| Today — $50/case, first case only | 63 | $464 |
+| 10 percent of every case, at $252/case | 291 | $1,048 |
+
+**A FLAT PERCENTAGE IS NOT A PRICE CUT ONCE IT REACHES THE REORDERS**, and the
+first pass at this got it backwards. $50 on a $252 case is **19.8 percent**, so
+10 percent looks like halving the rate — but it applies to 4.6× the volume.
+Wodka is already effectively 10 percent ($10 on a $100 case) and Aspen Green
+about 8 percent, so **44 North is the only brand with the placement-only hole.**
+
+**THE REFERENCE PRICE MUST BE FIXED IN THE CONTRACT, NOT TAKEN FROM THE INVOICE**
+(the operator's own instinct). $21/bottle × 12 = $252, chosen conservatively so
+discounting cannot erode the fee, reviewed annually. **It is unverified** — every
+dollar of it is worth about $12/month. And if 44 North argues the base should be
+their own FOB rather than a wholesale figure, **let them win that and ask for
+double the rate**: 10 percent of $252 and 20 percent of $126 are the same $25.20
+a case. Decide the walk-away in dollars per case, never in percent.
+
+**THE RISK, AND IT IS REAL:** 44 North's Florida business is **down 26.5 percent
+year over year (687 cases FYTD against 934), and points of distribution have
+fallen from 1,501 to 633.** A percentage model on that trajectory is a scheduled
+pay cut, which is why it needs a monthly floor — $400 was the figure proposed.
+
+**TAP AND KEG WORK IS BEING GIVEN AWAY BY CLASSIFICATION.** 51 tap/keg
+activities are logged as Market Favor (26), Account Visit (19) or Drink
+Development (5) — **all rate-carded at $0.00** — against 9 billed as tap work.
+There is a `tap cocktail` line at **$200** for 44 North and $150 for Wodka.
+Nobody decided to give it away; the wrong bucket was picked 26 times. The rule
+that follows: **build where it moves cases, bill it as a tap cocktail, and stop
+where it does not.** The Whiskey is 14 cases on 12 visits and earns its keg
+build; Hollerbach is 0 cases on 16 visits and does not.
+
+**WODKA'S CASE SALES LOSE $15 EACH AND NEED NO CLIENT CONVERSATION.** Wodka has
+no pay rate of its own for `1st case sale`, so it falls through to the shared
+`(all brands)` $25.00 line while charging $10: **61 cases, $610 charged, $1,525
+paid, −$915.** Its *reorders* are correct at $10/$5. Setting a Wodka pay rate of
+$5 turns −$915 into +$305. Same failure shape as D94, and it is the rate card,
+not the contract.
+
+**Reference:** the fee argument, per-brand detail and objection handling are in
+`Ihospitality/iHospitality_Rate_Talking_Points.docx`.

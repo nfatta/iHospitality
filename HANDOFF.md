@@ -1,8 +1,16 @@
 # HANDOFF — start here
 
-Written at the close of **24 Aug 2026**. Read **D108–D115** first — they are
-this session, and four of them are rules rather than events. **D108 matters
-most: 63 synthetic `Invoice-derived` rows exist across nine brands, $7,035, and
+Written at the close of **24 Aug 2026**, after a SECOND session that day.
+
+**READ THIS FIRST: the second session did NO invoice work.** It was business
+analysis, and open items 1–7 below are exactly where the first session left
+them. What it added is **D116** (a Cost to serve tab, built and committed),
+**D117** (the venue grading system and routed week — DESIGNED, not agreed, and
+nothing applied) and **D118** (44 North is billed on 63 of 291 cases). See
+"Later on 24 Aug — the business analysis" below.
+
+Then read **D108–D115** — they are the first session of the day, and four of
+them are rules rather than events. **D108 matters most: 63 synthetic `Invoice-derived` rows exist across nine brands, $7,035, and
 THEY ARE NOT ALL WRONG — there is a test, and bulk-deleting them breaks months
 that currently tie.** Then read **D107** (the reconciliation is saved as data;
 do not re-derive it) and **D86–D95** for the account list, venue grading and the
@@ -134,6 +142,62 @@ blocker, not an oversight: see D114 and open item 2.
 decided by what the invoice bills, never by the label (D112); and the workbook
 decides ACTIVITY while QuickBooks decides TOTALS, because barrels were never
 entered in the workbooks at all (D110).
+
+---
+
+## Later on 24 Aug — the business analysis
+
+**Nothing in the database changed and no invoice work was done.** One page was
+added to the admin; everything else is analysis, two documents, and three
+decisions. Open items 1–7 are untouched.
+
+**D118 is the finding worth waking up for.** Matching 44 North's distributor
+depletion sheet against the portal's venues: **291 cases moved at accounts we
+service between Jan and Jul 2026, and 63 were billed.** Not a recording failure
+— reorders reach the venue through the distributor's own rep with no
+iHospitality visit, so there has never been anything to log. The rate card makes
+it structural: `recurring case` charges **$0.00 and pays $5.00**, so a reorder
+costs five dollars and earns nothing. **One reorder has been recorded in the
+entire history of 44 North.** Moving to 10 percent of every case takes 44 North
+from $464/month of case revenue to about $1,048.
+
+Two more from the same pass, neither needing a client conversation:
+**51 tap/keg activities are logged as Market Favor, Account Visit or Drink
+Development — all rate-carded at $0.00 — when a `tap cocktail` line exists at
+$200.** And **Wodka's case sales lose $15 each** ($610 charged against $1,525
+paid, −$915) because Wodka has no pay rate of its own and falls through to the
+shared `(all brands)` $25.00 line. Same shape as D94.
+
+**D116 is the only thing built.** The Analysis page has a new **Cost to serve**
+tab: each contractor's base pay pushed down onto brands by their own share of
+activities, with the period and brand list already driven by the page's
+filters. It is an ALLOCATION and lives in the page, in no view — D67 still
+governs the database, and every other margin figure is unchanged. The most
+useful thing it says: **44 North's $1,450 retainer does not cover the $1,510 of
+payroll on that account, and Dame Mas's $750 does not cover its $858.**
+
+**D117 is designed and NOT agreed.** Grading, cadence, caps and a four-day
+routed week. The constraint that drives all of it: **Phil owns 260 venues, does
+61 visits a month, and 260 venues at the CHEAPEST cadence would cost 130.** He
+is 2× over capacity even if everything is graded D, and 132 of his 260 have
+never bought anything. So grading is mostly about deciding what stops being
+visited on a schedule.
+
+**Two documents were produced and are the reference for both**, in
+`Ihospitality/`: `iHospitality_Rate_Talking_Points.docx` (the fee conversation
+with Phil, opening with the fact that Phil is underpaid by $15–20k and how the
+three changes fund it) and `iHospitality_Field_Routes_Phil.docx` (every venue
+by route day).
+
+**The Phil conversation had not happened when this was written.** Nothing here
+is agreed. If it went ahead, what he said is the missing input for D117 and
+D118 both.
+
+**One number to be careful with.** Dame Mas reads **−$11** fully loaded on a
+six-month window pooled, **+$18** on the same window allocated month by month
+(which the tab does, and which is more correct), and **+$368** on Jun–Jul alone
+— because its activity fell by a third and the allocation rewards neglect. The
+honest word for Dame Mas is **break-even**, never "loses money".
 
 ---
 
@@ -351,6 +415,53 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
 
 ## Open work, most useful first
 
+### NEW — from the second session on 24 Aug (D116–D118)
+
+Lettered so nothing below has to be renumbered. **The numbered list after these
+is the first session's and none of it was advanced.**
+
+**A. FIX WODKA'S CASE SALE PAY RATE. Five minutes, no client conversation, $915
+already lost.** Wodka has no `1st case sale` pay rate of its own, so it falls
+through to the shared `(all brands)` **$25.00** line while charging **$10.00**:
+61 cases, $610 charged, $1,525 paid, **−$915**. Its reorders are correct at
+$10/$5. Add a Wodka pay row at **$5.00** on the Rate card page — the grid shows
+the money impact before saving (D91). Same failure shape as D94, and worth
+checking whether any OTHER brand is falling through to that line.
+
+**B. STOP GIVING AWAY TAP AND KEG WORK BY CLASSIFICATION** (D118). 51 tap/keg
+activities are logged as **Market Favor (26), Account Visit (19), Drink
+Development (5)** — all rate-carded at $0.00 — against 9 billed as tap work.
+There is a `tap cocktail` line at **$200** for 44 North, $150 for Wodka. This is
+a classification rule for three people, not a rate change: *if it involves
+building, batching or servicing a tap, it is a tap cocktail or tap maintenance
+line, never a favour.* Reclassifying moves money on purpose here, so D93's rule
+does not apply — but check each row before changing it.
+
+**C. THE PHIL CONVERSATION, and it gates D117 and D118 both.** The talking
+points are written (`Ihospitality/iHospitality_Rate_Talking_Points.docx`) and
+open with the fact that **Phil takes $32,188 against a $50–65k market rate**,
+and that the three changes on the table fund about $14,232/year of that. Until
+it happens, the grading scheme is a proposal and the 44 North fee model is a
+proposal. **What he says is the missing input for both.**
+
+**D. VERIFY THE $21/BOTTLE REFERENCE PRICE** before it reaches a contract
+(D118). It is the operator's conservative estimate and the whole 10 percent
+model rests on it — **every dollar is worth about $12/month**. Take it from an
+invoice or the depletion report, never from a per-bottle average (D101).
+
+**E. POPULATE `venues.market`.** **186 of 187 44 North venues have a NULL
+market**, so D117's routes had to be clustered by city string and nothing can be
+filtered to `central_florida` / `palm_beach_county` at all. It also means the
+route design silently includes Pensacola, Jacksonville and Miami venues. Two
+markets only, and the enum already enforces the vocabulary.
+
+**F. Decide whether the ONE unowned venue matters** (D116). 339 of 340 venues
+have an owning contractor. The one that does not drops out of every allocation
+on the Cost to serve tab without comment.
+
+---
+
+
 1. **FINISH MATCHING THE PORTAL TO THE INVOICES — four brands done, four to go.**
 
    **DO NOT RE-DERIVE THE ANALYSIS.** The current state is saved at
@@ -466,13 +577,29 @@ suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
    worth, and every one of those accounts demonstrably bought again while still
    reading `placed`.
 
-8. **Finish the contractors.** One person on file. Base pay understated. It also
-   feeds the owner dropdown on the Venues page's **Grade and ownership** tab, so
-   until they are entered there is nobody to assign a venue to.
+8. **Contractors — DONE, and the base pay figure moved with it.** Three people
+   are on file (Phil $619 weekly, Nick $375 semimonthly, Eric $350
+   semimonthly = **$4,132.33/month**), and 339 of 340 venues now have an owning
+   contractor. **Base pay is no longer understated.** What is still missing is a
+   pay row for anyone hired next, and note that the ONE unowned venue silently
+   drops out of every allocation on the Cost to serve tab (D116).
 
-9. **Grade the venues, and assign owners** (D88). 336 venues, all blank. Grid or
-   CSV — download, edit in Excel, upload, confirm the diff. A blank grade means
-   not graded yet; nothing reads it as a bad grade.
+9. **GRADE THE VENUES — owners are done, grades are not** (D88, and now D117).
+   339 of 340 venues have an owning contractor; **339 of 340 have no grade.**
+   Grid or CSV — download, edit in Excel, upload, confirm the diff. A blank
+   grade means not graded yet; nothing reads it as a bad grade.
+
+   **D117 designed the whole scheme and it is NOT agreed with Phil.** Read it
+   before handing anyone a spreadsheet. The four things that will otherwise be
+   got wrong: cap A as a **share of capacity, never a flat number** (ten A's is
+   71 percent of Phil); **A is a campaign, not a status**; a **90-day floor on
+   every venue that has ever bought** is what makes the arithmetic fit at all;
+   and a B graded on potential **must drop to D after 90 days without a sale**,
+   or the grade and its cost persist for ever.
+
+   **Do not send Phil 260 rows.** Send the **128 that have ever sold** — he will
+   grade 260 rows as C and you will learn nothing. The other 132 have never
+   bought and the answer for them is already known.
 10. **Enter the remaining pay rates and the 5 expense amounts** (D78).
    **Mileage is DONE** (D91), **Dame Mas is DONE** (D93/D94), and on 23 Aug the
    operator entered `aspen green fresh market incentive` and `single barrel

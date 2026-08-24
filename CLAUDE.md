@@ -265,6 +265,41 @@ reproduces it; keep it that way.
   `merge_activity_type()` and `merge_venue()` (D81). The venue merge was five
   lines in the admin and had never once succeeded: it updated `photos.venue_id`,
   a column that does not exist. Photos hang off ACTIVITIES, not venues.
+- **BASE PAY IS ALLOCATED TO BRANDS IN EXACTLY ONE PLACE, AND IT IS NOT A VIEW**
+  (D116, qualifying D67). The Analysis page's **Cost to serve** tab pushes each
+  contractor's base pay down onto brands by their own share of activities.
+  `v_month_business` still holds base pay one level up and every other margin
+  figure in the app and the database excludes it. **Do not "promote" the
+  allocation into a view** — D67's fear was that downstream numbers would
+  inherit it silently, and the page-only split is what still guards that. Its
+  weaknesses are on the page on purpose: it counts activities not hours, it
+  attributes by who owns the venue NOW, and **serving a brand less makes it look
+  more profitable** — Dame Mas reads −$11, +$18 or +$368 depending on window and
+  method, so the honest word for it is **break-even**.
+- **A REORDER IS NOT A VISIT, AND THAT IS WHY 228 CASES WENT UNBILLED** (D118).
+  Reorders reach the venue through the DISTRIBUTOR'S rep, with no iHospitality
+  visit — so there is nothing to log and no amount of contractor discipline
+  finds them. **The distributor's depletion sheet is the only source**, and 44
+  North's says 291 cases moved at our accounts Jan–Jul 2026 against 63 billed.
+  The rate card makes it structural: `recurring case` charges **$0.00 and pays
+  $5.00**. One reorder exists in 44 North's entire history. Never read a low
+  reorder count as a recording failure.
+- **CHECK WHETHER A BRAND IS FALLING THROUGH TO THE SHARED `(all brands)` PAY
+  LINE** (D118, same shape as D94). Wodka charges $10.00 a case and has no pay
+  rate of its own, so the shared `1st case sale` line pays **$25.00** — 61
+  cases, **−$915**, while its reorders at $10/$5 are correct. A brand line that
+  sets a CHARGE without a PAY silently inherits someone else's cost.
+- **TAP AND KEG WORK IS BILLABLE AND KEEPS BEING FILED AS A FAVOUR** (D118).
+  `tap cocktail` is **$200** for 44 North and $150 for Wodka; `market favor` is
+  rate-carded at **$0.00** for every brand. 51 tap/keg activities sit in the
+  $0.00 buckets against 9 billed correctly. If it involves building, batching or
+  servicing a tap, it is a tap line — never a favour.
+- **GRADING AND ROUTES ARE DESIGNED, NOT AGREED** (D117). Read D117 before
+  handing anyone a grading sheet. **Cap A as a share of capacity, never a flat
+  number** — ten A's is 71 percent of Phil. **A is a campaign, not a status.** A
+  **90-day floor** on every venue that has ever bought is the only version whose
+  arithmetic fits. And a B graded on POTENTIAL **drops to D after 90 days
+  without a sale**, or the grade and its cost persist for ever.
 - **The portal does not yet model the retainer**, which is most of what every
   brand pays, so no revenue or margin figure here is complete. See `HANDOFF.md`.
 - **The invoice PDFs are the billing source, and `parse_invoices.py` reads
