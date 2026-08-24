@@ -336,6 +336,23 @@ reproduces it; keep it that way.
   starts 2025-06-06. Those six invoices, $17,036.02, are **not a gap** — there
   is no activity to compare them against and never will be. The horizon is read
   from `min(activity_date)`, never hardcoded (D60).
+- **FOUR THINGS ON AN INVOICE ARE NOT WORK, AND EACH ONE FAKED A GAP** (D119).
+  Beside the discount and the card fee: a **balance carried forward** is money
+  already counted in the month it was first billed (Wodka's 3200, $90); a
+  **goods invoice** — no commission, no retainer, and SALES TAX — is barrels
+  shipped to the brand, not a month of work (3159 and 3178, $1,304.56); and an
+  **ACTIVITY DATE equal to the issue date** says nothing about when the work
+  happened, so the arrears rule applies (3203, which put $455 in the wrong
+  month). **Tax is what tells goods from services** — 3203 has no commission
+  and no retainer either, but it is two tasting events, untaxed, and stays in
+  its month: *"Dame Mas has us charge for activities separately but they are
+  logged."*
+- **HEAVEN'S DOOR BILLS ACCOUNT VISITS AT $20** (D119). Every other brand's
+  invoice reads "Sales call/buyer tasting - no charge"; Heaven's Door's reads
+  the same words with a $20 rate, inside the consulting block. The rate card
+  prices `account visit` at $0.00 for all eight brands, so those visits are
+  invisible. Its commission ties EXACTLY in both checked months, so this and a
+  "Smoke Tops" line are the whole of its difference.
 - **The portal does not yet model the retainer**, which is most of what every
   brand pays, so no revenue or margin figure here is complete. See `HANDOFF.md`.
 - **The invoice PDFs are the billing source, and `parse_invoices.py` reads

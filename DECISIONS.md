@@ -5098,6 +5098,60 @@ green; 0 anon grants, 0 write grants to `authenticated`. All nine admin pages
 and every tab opened in a browser, and the Health page driven to the pool and
 read back at 9 / 0 / 0 (D79/D89).
 
+**D119 (continued) — THREE MORE THINGS ON AN INVOICE THAT ARE NOT WORK.**
+The same session went on to reconcile the rest, 60 → 64 of 83, and every one
+of the four was the same mistake in a new costume: **something on the invoice
+that is not field work was being compared against field work.**
+
+**A GOODS INVOICE IS NOT A MONTH OF WORK.** Two invoices carry no commission,
+no retainer, and SALES TAX — 3159 (Blue Run, $584.56: two 5L, one 10L, UPS
+shipping) and 3178 (Coors, $720.00: two 5L and two 10L to Fred Fisher). Both
+are barrels shipped to the brand, which the operator confirmed were "done
+separately". Folded into a work month they made **$1,304.56** of phantom gaps
+in two months that otherwise tie. **Tax is the discriminator**, and it has to
+be: services are not taxed and goods are.
+
+**BUT NOT EVERY ONE-OFF IS GOODS**, which is why the tax test earns its keep.
+Invoice **3203** also has no commission and no retainer — and it is **two
+tasting events, real field work, separately invoiced**. Operator: *"Dame Mas
+has us charge for activities separately but they are logged."* It is untaxed,
+so it stays in its month.
+
+**AN ACTIVITY DATE EQUAL TO THE ISSUE DATE SAYS NOTHING.** 3203 reads
+"7/8/2026" against an issue date of 07/08/2026 — the day it was typed. Taken
+literally it put $455.00 into July, where it made a month that ties read
+−$455, while June — which holds the actual work — read **+$455.20**. The work
+is the 25 Jun Festival of Speed tasting at $180 and the 11 Jun River & Post
+trip, whose **$200.20 of mileage and $75.00 of staff training the invoice
+bills as one round $275.00 "Tasting Event"**. Both months now tie but for
+**$0.20 of rounding**, which is the whole of it. It is the only invoice in the
+file with a slashed activity date, so the rule costs nothing and it is
+shape-based: a date that equals the issue date carries no information.
+
+**A BALANCE CARRIED FORWARD IS MONEY ALREADY COUNTED.** Wodka's 3200 bills
+*"Remaining Balance — Balance from Previous Invoice — $90.00"*. It was first
+billed in an earlier month, so counting it again made June read −$90 against a
+month that otherwise ties. Folded into the same not-work bucket as the payment
+fees. One invoice in the file does this.
+
+**WHAT IS LEFT, AND MOST OF IT MUST NOT BE TOUCHED.** 19 rows differ, and
+**nine are the three protected categories**: August 2026 everywhere (arrears,
+$5,525) and Aspen Green Feb–May (uninvoiced on purpose, D71). Two more are
+explained and correct as they stand — Wodka's ±$150 April/May pair, which
+**the invoice itself explains** (*"New Cocktail on tap From April but not on
+previous invoice"*), and Dame Mas June's $0.20 of rounding.
+
+**The genuinely open ones, with their causes already found:**
+
+| | | |
+|---|---|---|
+| Heaven's Door | −$539.50, −$310 | **It bills ACCOUNT VISITS at $20** inside the consulting block, where every other brand's invoice says "no charge" — and the rate card prices `account visit` at $0.00 for all eight brands including this one. Its commission ties EXACTLY in both months (280, 965), so the visits and a "Smoke Tops" line are the whole difference. Needs a full pass. |
+| Blue Run 2026-01 | −$205 | A `CWC 10L Barrel` for **Black Hawk Bistro** — a venue, so a placed barrel and real activity, unlike 3159's shipment. Three judgement calls stacked: the venue on file is **Black Hawk Social**, there is **no `cwc 10l barrel` activity type at all**, and Barmen's rate says $150 against this invoice's $205. Operator's, not mine (D60/D81). |
+| Dame Mas 2025-07 | −$300 | A **`KPIs`** line. A service charge with no venue and no counterpart in the portal — closer to a retainer add-on than an activity. Needs a ruling on where it lives. |
+| Aspen Green 2026-06 | +$20 | The portal holds **79 cases** against 75 billed — four extra as `1st case sale`. There is no Aspen Green workbook to arbitrate, and handoff item 12 says explicitly: investigate, do not delete to make it tie. |
+| Blue Run 2026-03 | +$160 | A tasting event in a month with **no invoice at all** — Blue Run's invoices stop at 2026-02. |
+| Aspen Green 2026-07 | +$1,720 | No invoice in the PDFs, while 44 North and Dame Mas both have July ones. Either a later extension of D71 or a missing invoice — worth a QuickBooks check. |
+
 ---
 
 **D118 CORRECTION — WODKA'S $25 CASE PAY IS CORRECT AND MUST NOT BE CHANGED.**
