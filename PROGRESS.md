@@ -1198,6 +1198,74 @@ nothing in the data can tell which.
 
 ---
 
+
+## Session of 24 Aug 2026 — the portal corrected against the invoices, four brands deep
+
+**Brand-months tying: 38 → 49 of 83.** Portal $119,983.93 against $112,559.66
+invoiced. The headline +$7,424.27 is misleading — **$5,525 of it is August 2026**,
+current-month work billed in arrears. **Real gap $1,899.27.**
+
+Refreshed result saved at
+`portal_seed/reconciliation/invoice_vs_portal_2026-08-24.csv`, beside the 23 Aug
+file kept as the before-picture.
+
+### The method, established and repeated four times
+
+QuickBooks totals → PDF line detail → operator EOM workbook → write
+`invoice_recap` only when all three agree → then diff the portal's activity
+against the workbook, venue by venue. The operator's framing, and the reason it
+works: QuickBooks blanks service lines (D70) but its totals are complete, so it
+is the only independent proof that no invoice was missed.
+
+### What each brand needed
+
+**44 North** — finished at 13 of 15. Deleted a synthetic `tap cocktail` that
+duplicated real work already on file as `tap w/2 cases`; zeroed two
+`tap maintenance` rows that happened but were never billed (4 photos preserved);
+added a November-only `drink list 1` rate of $150 and a December row restoring
+$160, because a single row would have run November's price forward for ever;
+corrected the Sept `invoice_recap` row from 610.00 to 912.10 with its billable,
+mileage and expenses.
+
+**Wodka** — from −$2,856.03 to six of eight months tying exactly. The cause was
+never a rate (D109): a **$500/month `Expense Spend`** the portal did not model,
+now on the retainer at $1,725 from Jan 2026, with `QB_RETAINER_TOTAL` raised to
+74,625 from the QuickBooks line items. Then December's phantom 22 cases
+(Pourhouse Lounge logged as a 12-case sale when the workbook says Account Visit
+qty 1, plus a synthetic 10-case row), ten synthetic rows deleted, and five venue
+quantities corrected from the workbook. 8 months loaded to `invoice_recap`.
+
+**Starr Rum** — tied 7 of 7 before and still does, but now on real rows. **63 of
+its 84 activities had NO `source_activity_type`**, so the rate card could not
+price them and sixteen placeholder rows carried the money (D111). 46 rows
+classified, 16 deleted, **brand total unmoved to the cent**. 4 months loaded.
+
+**Blue Run** — 8 of 9. Its single biggest fault was a `tasting event` at
+**quantity 6** worth $800. A June tasting event that happened but was never
+billed was zeroed. **Its synthetic rows were tested and KEPT** — unlike Wodka's
+they stand in for barrels, barrel prep and half cases genuinely absent. 9 months
+loaded, taking `invoice_recap` from 26 months to 47.
+
+**Coors pool** — data gathered, **cannot be loaded** (D114). Ties to −$81.09;
+four of its nine months differ from the portal by exactly their early-payment
+discount.
+
+### Rules established, not just facts
+
+- **D108** — the 63 synthetic `Invoice-derived` rows are a question per brand,
+  not a fault; and `parse_invoices.py --apply` duplicates any per-unit brand.
+- **D110** — the workbook decides ACTIVITY, QuickBooks decides TOTALS.
+- **D112** — `account sold` is decided by what the invoice bills, never the label.
+- **D113** — a wrong quantity is wrong money and looks ordinary; four found,
+  $1,110.
+
+### Verified
+
+148 tests pass (`test_normalize`, `test_sync`, `test_admin_sql`); `db/test/run.sh`
+clean — anon locked out of all three objects, zero `authenticated` write grants,
+36 SELECT grants. The admin's front page was opened in a browser and renders
+end-to-end; **the running instance predates the `lib.py` change and needs a
+rerun to pick it up.** `verify_live.py` was NOT run this session.
 ## Known data problems to resolve before seeding
 
 Found by profiling the six `hubspot-crm-exports-*.csv` files (315 rows):

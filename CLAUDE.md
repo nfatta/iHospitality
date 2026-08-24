@@ -296,6 +296,63 @@ reproduces it; keep it that way.
   depletion report. Where the portal disagrees, investigate the portal.
   **QuickBooks is more the truth than the workbooks are** — they disagree, and
   the workbooks are the lossy copy.
+- **NEVER RUN `parse_invoices.py --apply` FOR A PER-UNIT BRAND** (D108). Its
+  double-count guard asks only `charge_pct is not null` — it recognises a month
+  as already-priced only when the pricing is a PERCENTAGE, which is the Dame Mas
+  model it was built for. Every other brand is priced per unit, so the guard sees
+  nothing and the script writes a month-level commission row on top of work
+  already there: **$11,667.10 of duplication for 44 North, $2,990 for Wodka,
+  $5,652.10 for Blue Run.** Write `invoice_recap` directly instead. The guard
+  needs widening to "any billable charge", not just a percentage one.
+- **A SYNTHETIC `Invoice-derived` ROW IS A QUESTION, NOT A FAULT** (D108). 63 of
+  them exist across nine brands, $7,035, all written in one pass on 21 Aug. Each
+  claims the invoice billed work the portal never received. **That is true for
+  some brands and false for others**, so there is exactly one test: *does the
+  work already exist elsewhere in the portal?* Wodka's ten were duplicates and
+  are gone; Blue Run's stand in for barrels and half cases that really are
+  missing and must stay. **Do not bulk-delete them** — 44 North's June 2025 ties
+  at exactly 0.00 and holds $660 of them.
+- **THE WORKBOOK DECIDES ACTIVITY; QUICKBOOKS DECIDES TOTALS** (D110). Check the
+  PDF parse against the QuickBooks totals BEFORE reasoning about lines — QB
+  blanks service lines (D70) but its totals are complete, so it is the only
+  independent proof that no invoice was missed. The operator's EOM workbooks are
+  reliable for what happened and unreliable for what was billed: **barrels were
+  never entered in them**, Blue Run's disagrees with QuickBooks on 6 of 14
+  invoices, and Starr Rum's carries a November row for an invoice that does not
+  exist.
+- **`account sold` IS DECIDED BY THE INVOICE, NEVER BY THE LABEL** (D112). A
+  contractor entered it for both visits and sales. The operator's test: *if the
+  month bills cases nothing else accounts for, the row IS that case sale; if the
+  billed cases are already accounted for, it is a visit.* There is **no
+  `account_sold` activity type** and one must not be created — it is a raw SOURCE
+  string that sits under Bottle Sale, Case Sale, Case Reorder or Account Visit
+  depending on the brand.
+- **A WRONG QUANTITY IS WRONG MONEY, AND IT LOOKS ORDINARY** (D113). Since D65
+  the quantity is always the activity multiplier. Four rows have been found
+  carrying inflated quantities — Pourhouse Lounge 12, Debauchery 3, Executive
+  Cigar 6, Meg O'Malley's 6 — worth $1,110, every one a real activity with a real
+  HubSpot deal. **The type and the quantity go wrong together**: two of those
+  were also case sales filed as visits. Correct them, never delete (D85), and
+  note the deal id — HubSpot still holds the wrong figure and a promote could
+  revert it.
+- **MONEY SITTING ON A VENUE-LESS ROW USUALLY MEANS A NULL `source_activity_type`**
+  (D111). Starr Rum tied 7 of 7 on placeholder rows because 63 of its 84
+  activities had no source string, so the rate card could not price them (D74).
+  The fix is CLASSIFICATION, not deletion: classify the real rows, confirm the
+  brand total does not move, and only then remove the placeholders.
+- **CHANGING A DEPLETION TO A NON-DEPLETION LEAVES THE STATUS WRONG** (D86/D113).
+  The trigger only ever ADVANCES, so it will not undo `placed`. Where the
+  corrected row was a venue's ONLY depletion, walk the status back by hand —
+  `status='pitched'`, `first_placed_on=null` — and guard it on `not exists` any
+  other depletion.
+- **THE CANARY COMPARES THE PORTAL AGAINST NUMBERS SOMEONE TYPED** (D114). Its
+  invoice side is `invoice_recap`, so where a figure was transcribed from the
+  same belief the portal holds, it ties by construction. It showed a false green
+  and a false red on 44 North in one morning. It now reads `commission +
+  billable + mileage` (all coalesced; `consulting` stays out because the retainer
+  is not activity) — but **the circularity is not fixed**, and it **cannot show
+  the Coors pool at all**, because `invoice_recap` is keyed on one brand and
+  those invoices belong to three.
 
 ## Where things are
 
