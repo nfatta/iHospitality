@@ -1,2 +1,23 @@
 Photos/
 .claude/
+
+# The repo root IS the Netlify publish directory: every committed file is
+# served at ihospitality.vip/<path>. Anything that must not be public therefore
+# does not belong in this repo at all — a redirect rule is not a substitute,
+# because Netlify's `*` is a trailing splat, not a filename glob.
+#
+# These patterns are a backstop, not the guarantee. Keep commercial documents
+# outside the repo.
+
+# Scripts and secrets
+*.py
+.env
+.env.*
+credentials.json
+
+# Commercial documents — proposals, rate cards, margin models, invoices.
+# A brand's rates must never be readable by another brand.
+proposals/
+*.docx
+*.xlsx
+*.pdf
