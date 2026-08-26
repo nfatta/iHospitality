@@ -5799,3 +5799,127 @@ path works where a pattern does not.
 **Verify by fetching, never by reading the rule.** That is the whole lesson of
 D12 and of this entry: both times the rule looked right and the file was served
 anyway.
+
+---
+
+**D134 — `activities.notes` WAS READABLE BY A BRAND LOGIN. THE GRANT IS PER
+COLUMN NOW.**
+⚠️ found and fixed 26 Aug 2026, while designing D135.
+
+The standing rule says internal notes are never brand-facing, and every
+brand-facing view honours it — omitting `a.notes` is the stated purpose of
+`v_brand_activity_log`. **The rule was true of the views and false of the
+table.** `grant select on ... activities ... to authenticated` was table-wide,
+so `select notes from activities` returned a brand's own rows: candid internal
+commentary about their accounts, the kind D17/D24 decided not to publish.
+
+**NOTHING LOOKED WRONG, WHICH IS WHY IT LASTED.** RLS was doing its job — a
+brand still saw only their own rows — and no portal page reads the table, so
+nothing exercised the hole. It needed someone to go and ask.
+
+**THE FIX IS A NARROWER GRANT, NOT NO GRANT.** The brand-facing views are
+`security_invoker`, so they execute with the CALLER's privileges and the caller
+must hold SELECT on the base table. Revoking outright blanks every brand page.
+So `activities` is granted column by column, and `notes` is not one of them.
+
+**THE OMISSION IS THE MECHANISM, so the list is written out in full** rather
+than as "everything except". A column added later is not granted, and a view
+selecting it fails loudly for brand users on their next page load instead of
+quietly publishing it. That is the failure direction worth having (D120).
+
+Verified by impersonation inside a rolled-back transaction BEFORE applying: all
+thirteen brand-readable views returned identical row counts, and
+`select notes from activities` moved from 119 rows to permission denied. Then
+verified again on live after applying.
+
+**`db/test/run.sh` asserts it now, and the first two attempts at that assertion
+were both broken** — instructive, so they are recorded. The first tested the raw
+ACL string for `authenticated=...r` and matched the **`r` in "postgres"**, so it
+could never pass. The second counted any privilege on `notes` and so counted
+REFERENCES, which grants no read at all. A check that cannot pass is as useless
+as one that cannot fail (D114). There is a third assertion as the control: at
+least fifteen columns must still be granted, or the check would pass simply by
+locking everyone out of everything.
+
+**The grant block is the LAST thing in `schema.sql`**, because `hand_edited_at`
+and `hand_edited_by` are added by `ALTER` far below the grant section and you
+cannot grant a column that does not exist yet. The throwaway cluster caught
+that on the first run, which is what that harness is for.
+
+---
+
+**D135 — WHO DID THE WORK LIVES IN `activity_contractor`, STAFF ONLY. NOT A
+COLUMN ON `activities`.**
+26 Aug 2026, operator request: *"I need to be able to assign a contractor to the
+activity."*
+
+There was no contractor link on an activity at all. The only attribution was
+`venue_grading.owner_contractor_id` — who owns the venue NOW — which is the
+weakness D116 already names in Cost to serve.
+
+**A SEPARATE TABLE, FOR THE SAME REASON `venue_grading` IS ONE (D88).** A brand
+login holds SELECT on `activities`, because the brand-facing views are
+`security_invoker` and run with the caller's privileges. So a `contractor_id`
+column there is a column a brand can read, and it would publish our staffing of
+every one of their accounts. The policy on the new table is `is_staff()`.
+
+Proved with real data, not with an empty table: a Blue Run activity assigned to
+a contractor inside a rolled-back transaction reads **1 row as service_role, 1
+as Phil, 0 as Blue Run**, with `is_superuser=off` throughout. Two empty tables
+comparing equal would have proved nothing (D114).
+
+**BLANK MEANS NOT RECORDED, NEVER "NOBODY"** — the same reading as a blank venue
+grade. The 1,236 activities already on file are deliberately NOT backfilled from
+whoever owns the venue today: that is precisely the assumption D116 flags as its
+weakest part, and freezing it into data would stop it looking like an
+assumption. **Cost to serve is deliberately unchanged and does not read this
+table yet** — with almost every row blank it would reattribute the business to
+nobody. Revisit when the field is populated.
+
+One contractor per activity: the activity id is the primary key. Shared work
+would need a composite key and a rule for splitting it — not a change to make
+speculatively.
+
+Settable in two places: the grid on Review and edit (so existing rows can be
+assigned) and the "Add a missing activity" form (D132). In the grid it is the
+one editable column that does not live on `activities`, so the save
+special-cases it — and skips the `update activities` entirely when the
+contractor was the only edit, because `update ... set where id = ...` is a
+syntax error rather than a no-op, and stamping `hand_edited_at` would wrongly
+tell the sync the activity itself had changed (D84).
+
+---
+
+**D136 — A PAY PERIOD CAN BE CORRECTED IN PLACE. THE PAGE WAS ONLY EVER HALF
+FINISHED.**
+26 Aug 2026. Operator: *"Eric, I need to change his start date but I can't seem
+to be able to just change it without deleting him and starting over."*
+
+He was right, and the page was right too. "Set or change pay" is add-only on
+purpose: a RISE is a new period, because editing the amount in place restates
+every month before it. **That is correct for a change and wrong for a mistake.**
+
+D91 drew this exact line for the rate card — *"Correcting a rate that was always
+wrong should reach back; changing a price from a date forward must not"* — and
+the rate card got both halves. The Contractors page got one. So the only route
+to a wrong start date was delete-and-recreate: losing the note, the id and any
+history hanging off it, to fix a typo.
+
+**"Correct a pay period" edits in place and says so loudly.** It restates
+history by design, and the impact is measured before saving the same way the
+rate card measures a rate edit: apply it, ask the views, roll back (D91). Never
+by recomputing pay in Python — `monthly_equivalent` spreads annual cost across
+months and a second implementation would drift.
+
+**THIS IS THE CONTROL D128 NEEDS.** Moving Eric Anderson's `effective_from` from
+2025-06-01 to April 2026 shows, before saving: his recorded base pay
+**−$7,000.00**, the months it covers 15 → 5, company base pay −$7,000.00 and
+**company net +$7,000.00**. D128 estimated $6,300–$7,000 of base pay he was
+never paid; the page now puts the exact figure on screen and asks for a
+confirmation that says *the old record was wrong* rather than *save*.
+
+It keyed its impact query on `contractor_id` at first and failed —
+`v_contractor_month_cost` exposes `contractor`, the NAME, and has no id column.
+The page caught it and showed the operator "Refused, and nothing was changed",
+which is the behaviour to keep: a preview that cannot compute must refuse, not
+guess.

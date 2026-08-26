@@ -160,6 +160,24 @@ reproduces it; keep it that way.
   account already on file, which is what ticking it means.
 - **Two markets only:** `central_florida`, `palm_beach_county`. Never "South
   Florida" — the database enum enforces it.
+- **`activities` IS GRANTED PER COLUMN, AND `notes` IS NOT ONE OF THEM** (D134).
+  A brand login holds SELECT on the TABLE — the brand-facing views are
+  `security_invoker`, so the caller needs it — which meant `select notes from
+  activities` worked for a brand until 26 Aug 2026 even though every view
+  carefully omits it. The grant is now a written-out column list: **a column
+  added to `activities` later is NOT granted**, and a view selecting it fails
+  loudly for brand users rather than quietly publishing it. `db/test/run.sh`
+  asserts it, with a control so the check cannot pass by locking everyone out.
+- **WHO DID THE WORK IS `activity_contractor`, STAFF ONLY — NEVER A COLUMN ON
+  `activities`** (D135, same trap as D88). A brand can `select *` on
+  `activities`, so a `contractor_id` there publishes our staffing of their
+  accounts. Blank means NOT RECORDED, never "nobody", and the 1,236 existing
+  rows are deliberately unassigned. **Cost to serve does NOT read it yet**
+  (D116) — with most rows blank it would reattribute the business to nobody.
+- **A PAY PERIOD CAN BE CORRECTED IN PLACE, AND A RISE STILL CANNOT** (D136,
+  D91's rule applied to `contractor_pay`). "Set or change pay" is add-only for a
+  RISE; "Correct a pay period" edits in place for a record that was never true,
+  and shows the money it restates before saving. Use it for D128's start dates.
 - **Internal notes are never brand-facing.** `activities.notes` is internal;
   `activities.brand_visible_summary` is what a client reads. The brand-facing
   views do not select `notes`. Do not add it.
