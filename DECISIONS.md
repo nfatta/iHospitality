@@ -5431,3 +5431,134 @@ impersonated counts DIFFER from the baseline. Both hold.
 
 **What this does NOT cover is rendering**, and no amount of SQL will. D79
 stands: a person still has to open every page.
+
+---
+
+**D126 — 44 NORTH'S REORDERS ARE BEING PAID FOR AND ARE NOT IN THE PORTAL, SO
+ITS MARGIN IS OVERSTATED TODAY.**
+⚠️ analysed 26 Aug 2026 — **nothing written to the database.**
+
+**This CORRECTS the framing in D118.** That entry read the 228 unbilled cases as
+revenue never captured, and treated the cost as a future problem. It is not.
+
+⚠️ **operator ruling, 26 Aug 2026:** *"we have started paying on reorders for
+44 North this started when we brought Eric on. he came on in March of this year.
+so we're paying him and we get depletion reports from the distributor so that's
+how we check."*
+
+So the cost is **real, being paid, and invisible**. The portal holds **exactly
+one** 44 North `recurring case` row in its entire history — one row, July 2026,
+$5.00.
+
+| 44 North, Mar 2026 onward | charged | paid | margin | |
+|---|---|---|---|---|
+| as the portal reports it | $5,580 | $2,960 | **$2,620** | 47.0% |
+| + 150 unrecorded reorders | $5,580 | $3,710 | $1,870 | 33.5% |
+| + 223 unrecorded reorders | $5,580 | $4,075 | **$1,505** | **27.0%** |
+
+**44 NORTH IS NOT THE BEST ACTIVITY MARGIN, AND THAT WAS THE WHOLE BASIS OF THE
+QUESTION.** All-time it reads 45.4 percent, which ranks it fourth. Corrected for
+reorder pay it lands near **36–39 percent**, behind Barmen 1873 (55.7),
+Blue Run (49.5), Five Trail (46.8) and Starr Rum (44.0). It looked best because
+its largest cost is not in the system.
+
+**DO NOT COPY THE WODKA MODEL FLAT.** Wodka is 10 percent ($10 on a ~$100 case);
+44 North is $50 on a ~$252 case, which is **19.8 percent**. A flat 10 percent
+would charge **$25.20** to place a case that pays **$25.00** — recreating, at
+44 North, the exact initial-case loss the change was meant to fix. Modelled per
+month on D118's volumes:
+
+| | charge | pay | margin |
+|---|---|---|---|
+| today, reorders invisible | $450 | $225 | $225 |
+| record reorders, still charge $0 | $450 | $388 | **$62** |
+| flat 10% of every case | $1,048 | $388 | $660 |
+| **$50 placement + 10% on reorders** | $1,271 | $388 | **$883** |
+
+Placement is the work; reorders are the annuity. **Pricing them identically is
+what creates the initial-case problem**, so keep the placement fee.
+
+**The $252 reference price is still unverified** and the answer swings roughly
+±50 percent across $200–$300 a case (D118 item D stands).
+
+---
+
+**D127 — MATCHING THE DEPLETION SHEET: SIX OPERATOR RULINGS, AND A NAME IS NOT
+AN ACCOUNT.**
+✅ 26 Aug 2026. Read-only; the decision sheet is
+`Ihospitality/44North_depletion_rulings_2026-08-26.csv`.
+
+44 North's state-wide sheet (`07_2026EOMFlash`) carries **342 customers and 678
+cases FYTD** against a stated total of 687 — nine cases sit in rows with no
+account number, so **the file does not fully reconcile to itself**.
+
+⚠️ **THE SHEET IS A ROSTER, NOT A CHANGE REPORT.** Its title says *"Customer
+Performance Declining / Gained"*, which reads as movers-only. Operator: *"it's
+anyone who has ordered in 2 years."* That matters in both directions and the
+second one is the valuable half — **152 of the venues we service for 44 North
+are absent from the sheet entirely, so they have not bought 44 North in two
+years.** That is a **grading input** (D117), not a billing one.
+
+**The rulings, each of which the matcher could not have inferred:**
+
+1. **Maggie McFly's is NOT ours** — two locations, 12 cases, excluded.
+2. **STARDUST LOUNGE is the portal's "Aku Aku"** — one premises, two names, at
+   431 E Central Blvd. The DB has no Stardust and the sheet has no Aku Aku.
+   Same shape as the Mullets ruling. **Rename or alias it or this recurs
+   monthly.**
+3. **Every Spirits2U location is one account** — *"we just normally meet at
+   their head office."* Three stores in the sheet, one venue in the portal.
+4. **Nine accounts ruled ours that are NOT venues yet** — The Station,
+   Rachel's, The Drinkery, Tony's Liquor, both Yarderys, Burtons, The Roasted
+   Spirit and FM Pizza Oven. **50 cases between them.** (The operator wrote
+   "buttons"; BURTONS, Orlando, is the only candidate that fits — confirm before
+   creating the venue.)
+5. **Territory is not the distributor's market column** — *"there might be a few
+   locations out of Jacksonville, Tampa and Pensacola that are on our sheet."*
+6. And the roster ruling above.
+
+**A CHAIN CUTS BOTH WAYS, AND ONLY A PERSON KNOWS WHICH.** Spirits2U's three
+stores are one account; Total Wine's nineteen may not be. Name-matching alone
+would have handed all three Spirits2U stores' cases to one venue, and a city
+guard would have wrongly split them. **Both behaviours are correct in different
+cases**, which is why each chain is a listed ruling rather than a rule the
+matcher infers (D81/D97).
+
+**Also: the distributor's "Miramar" market is NOT Palm Beach County.** It is the
+South Florida warehouse and spans Broward and Dade — the sheet puts Miami,
+Ft Lauderdale and Plantation in it, alongside Treasure Coast towns. Filtering on
+it overstates the candidate pool. Two markets only, and the enum's vocabulary
+does not map onto the distributor's.
+
+**Where it stands: 194 of ~223 cases accounted for** across 47 accounts — 123
+matched to venues on file, 21 Stardust, 50 newly ruled. **287 rows are undecided but only 120 carry
+any cases at all**; the other 167 are zeroes and can be skipped. The largest
+open ones are Pensacola: Blend 21, Shades at the Loop 20, Casino Beach 11. The decision sheet is keyed on the
+**distributor's account number, never the name** — the venue-grading round
+trip's rule, and Stardust is exactly why.
+
+---
+
+**D128 — ALL THREE CONTRACTORS SHARE ONE PAY START DATE, AND IT IS THE PORTAL'S
+OWN HORIZON.**
+⚠️ raised 26 Aug 2026 — **unresolved, needs operator data (D60).**
+
+`contractor_pay` gives Phil, Nick and Eric an `effective_from` of **2025-06-01**
+— the same day for all three, and the same month the portal's activity history
+begins (`min(activity_date)` is 2025-06-06). Three identical dates landing on
+the data's own horizon is the signature of a **seeded default, not three hire
+dates**.
+
+The operator said in passing that **Eric came on in March 2026**. If so the
+portal carries **$6,300 of base pay Eric was never paid** — nine months at $700
+— out of the $10,500 recorded against him.
+
+**What it contaminates:** the $4,132.33/month figure on the new Contractor pay
+page, `v_contractor_month_cost` for fifteen months, and the **Cost to serve**
+allocation (D116) — which is the analysis that concluded 44 North's $1,450
+retainer does not cover its $1,510 of payroll. That conclusion is not safe until
+the dates are right.
+
+**Ask for each person's real start date before touching anything.** A pay period
+is add-only and effective-dated for a reason: editing one in place silently
+restates every month before it.

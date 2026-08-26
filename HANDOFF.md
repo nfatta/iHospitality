@@ -125,6 +125,38 @@ closes on tap, link and Escape.
   stylesheet is **render-blocking from a third-party origin** — self-hosting
   `woff2` + `@font-face` in `css/site.css` removes it with no build step.
 
+### 26 Aug — the 44 North reorder question (D126–D128), NOTHING WRITTEN
+
+**Read D126 before quoting any 44 North margin.** The operator asked whether to
+move 44 North closer to the Wodka model. Three findings, none of them written to
+the database:
+
+1. **44 North's margin is overstated RIGHT NOW, not in future.** ⚠️ operator:
+   *"we have started paying on reorders for 44 North… when we brought Eric on…
+   he came on in March."* The portal holds **one** `recurring case` row in the
+   brand's entire history. Corrected, 44 North goes from 47% to **~27–34%**
+   since March, and from 4th-best activity margin to **6th**. It looked best
+   because its largest cost is not in the system.
+2. **Do not copy the Wodka model flat** — a flat 10% would charge $25.20 to
+   place a case that pays $25.00, recreating Wodka's initial-case loss at
+   44 North. Keep the placement fee and add ~10% on reorders.
+3. **All three contractors share one pay start date — 2025-06-01, the portal's
+   own horizon** (D128). If Eric really started March 2026 that is **$6,300 of
+   base pay he was never paid**, and it contaminates the Cost to serve
+   allocation. **Ask for the three real start dates.**
+
+**The depletion matching is half done and the sheet is with the operator**:
+`Ihospitality/44North_depletion_rulings_2026-08-26.csv`, keyed on the
+distributor's account number. **194 of ~223 cases are accounted for**; 120 rows
+carry cases and are undecided, 167 are zeroes. Six rulings are recorded in D127
+— including that the sheet lists **anyone who ordered in 2 years**, which means
+**152 of our 44 North venues have not bought in two years** (a D117 grading
+input, not a billing one).
+
+**Nine ruled-ours accounts are not venues yet** and must be created before their
+cases can be loaded. **Stardust Lounge is the portal's "Aku Aku"** — rename or
+alias it or the match breaks again every month.
+
 ### Still to build on the admin side (core came first, by the operator's call)
 
 **Rate card page.** `rate_card` has no view and no brand name column — needs a
