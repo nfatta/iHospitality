@@ -71,6 +71,8 @@ const NAV = [
 const ADMIN_NAV = [
   ['brands.html', 'Brands'],
   ['business.html', 'Business'],
+  ['rate-card.html', 'Rate card'],
+  ['pay.html', 'Contractor pay'],
 ];
 
 /** The one place the admin/brand distinction is decided in the client.

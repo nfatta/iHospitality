@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Contractor pay | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">Internal</span>
+        <h1>Contractor pay</h1>
+        <p class="portal-sub" id="count"></p>
+      </div>
+    </div>
+
+    <div id="stats"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Base pay, per person</h2>
+        <span class="hint">Read-only — edits happen in the staff admin</span>
+      </div>
+      <div id="people"></div>
+      <div id="flags"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Base pay by month</h2>
+        <span class="hint">A company cost, never charged to a brand</span>
+      </div>
+      <div id="months"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>The other half — pay earned on the work itself</h2>
+        <span class="hint">From the rate card, per activity</span>
+      </div>
+      <div id="piece"></div>
+    </div>
+
+    <p class="caveat" id="foot"></p>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, isStaff,
+             fmtDate, fmtMonth, fmtNum, money, sortableTable } from './portal.js';
+
+    // How many times a year each cadence pays. EXACT for semimonthly and
+    // monthly; an AVERAGE for weekly and biweekly, which land an extra time in
+    // some months — see the caveat rendered at the foot of the page.
+    const PER_YEAR = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12 };
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('pay.html', auth.profile);
+      const el = document.getElementById('people');
+
+      if (!isStaff(auth.profile)) {
+        render(el, { empty: {
+          title: 'Staff only',
+          body: 'This page shows what people are paid and is not part of your portal.' } });
+      } else {
+
+      /* The most sensitive pair of tables in the database. Both are staff-only
+         in Postgres — `contractors` and `contractor_pay` are revoked from anon
+         and authenticated and gated behind is_staff(), so this page cannot leak
+         to a brand login even if every line below were wrong. Confirmed by
+         impersonation: a brand user reads 0 rows from both. */
+      const [people, pay, monthly, piece] = await Promise.all([
+        db.from('contractors').select('id, name, is_active, note').order('name'),
+        db.from('contractor_pay').select(
+          'contractor_id, base_pay, pay_frequency, effective_from, effective_to, note'),
+        db.from('v_contractor_month_cost').select('contractor, month, monthly_equivalent'),
+        db.from('v_activity_money').select('cost, month'),
+      ]);
+
+      const bad = people.error || pay.error || monthly.error || piece.error;
+      if (bad) {
+        render(el, { error: bad });
+      } else {
+        /* A person can have several pay periods; a rise is a NEW ROW with the
+           old one end-dated, because editing in place would silently restate
+           every month before it. The CURRENT one is the open-ended row, or the
+           latest if all are closed. */
+        const byPerson = {};
+        for (const p of pay.data || []) (byPerson[p.contractor_id] ||= []).push(p);
+        for (const k in byPerson) {
+          byPerson[k].sort((a, b) => String(b.effective_from).localeCompare(String(a.effective_from)));
+        }
+
+        const rows = (people.data || []).map(c => {
+          const periods = byPerson[c.id] || [];
+          const current = periods.find(p => !p.effective_to) || periods[0] || null;
+          const base = current ? Number(current.base_pay) : null;
+          const freq = current ? current.pay_frequency : null;
+          return {
+            name: c.name,
+            active: c.is_active,
+            note: c.note,
+            base, freq,
+            periods: periods.length,
+            from: current ? current.effective_from : null,
+            to: current ? current.effective_to : null,
+            monthly: base != null && freq ? base * PER_YEAR[freq] / 12 : null,
+            annual: base != null && freq ? base * PER_YEAR[freq] : null,
+            approx: freq === 'weekly' || freq === 'biweekly',
+          };
+        });
+
+        const live = rows.filter(r => r.active && r.monthly != null);
+        const perMonth = live.reduce((t, r) => t + r.monthly, 0);
+        const pieceTotal = (piece.data || []).reduce((t, r) => t + Number(r.cost || 0), 0);
+
+        document.getElementById('count').textContent =
+          `${fmtNum(rows.filter(r => r.active).length)} active` +
+          (rows.length > live.length ? ` · ${fmtNum(rows.length - live.length)} without a current rate` : '');
+
+        const stats = document.getElementById('stats');
+        stats.className = 'stat-grid';
+        stats.innerHTML = `
+          <div class="stat-card">
+            <span class="num">${money(perMonth)}</span>
+            <span class="lbl">Base pay a month</span>
+            <span class="meta">${fmtNum(live.length)} people, annualised</span>
+          </div>
+          <div class="stat-card">
+            <span class="num">${money(perMonth * 12)}</span>
+            <span class="lbl">Base pay a year</span>
+            <span class="meta">the exact figure — see the note below</span>
+          </div>
+          <div class="stat-card">
+            <span class="num">${money(pieceTotal)}</span>
+            <span class="lbl">Pay earned on the work</span>
+            <span class="meta">per-activity, all time, from the rate card</span>
+          </div>
+          <div class="stat-card">
+            <span class="num">${money(perMonth * 12 + pieceTotal)}</span>
+            <span class="lbl">Both halves</span>
+            <span class="meta">a year of base plus all recorded piece work</span>
+          </div>`;
+
+        sortableTable(el, rows, [
+          { head: 'Contractor', always: true, cls: 'venue', sortValue: r => r.name,
+            get: r => esc(r.name) + (r.active ? '' : ' <span class="pill pill-lost">Retired</span>') },
+          { head: 'Base pay', cls: 'num', always: true, value: r => r.base, sortValue: r => r.base ?? -1,
+            get: r => r.base == null ? '<span class="pill pill-dormant">none on file</span>' : money(r.base) },
+          { head: 'Paid', get: r => esc(r.freq || ''), sortValue: r => r.freq || '' },
+          { head: 'A month', cls: 'num', value: r => r.monthly, sortValue: r => r.monthly ?? -1,
+            get: r => r.monthly == null ? '<span class="muted">—</span>'
+                    : money(r.monthly) + (r.approx ? ' <span class="muted">avg</span>' : '') },
+          { head: 'A year', cls: 'num', value: r => r.annual, sortValue: r => r.annual ?? -1,
+            get: r => r.annual == null ? '<span class="muted">—</span>' : money(r.annual) },
+          { head: 'Since', cls: 'nowrap', value: r => r.from, sortValue: r => r.from || '',
+            get: r => r.from ? esc(fmtDate(r.from)) : '<span class="muted">—</span>' },
+          { head: 'Until', cls: 'nowrap', value: r => r.to, sortValue: r => r.to || '',
+            get: r => r.to ? esc(fmtDate(r.to)) : '<span class="muted">current</span>' },
+          { head: 'Periods', cls: 'num', value: r => r.periods, sortValue: r => r.periods,
+            get: r => fmtNum(r.periods) },
+          { head: 'Note', get: r => esc(r.note || ''), sortValue: r => r.note || '' },
+        ], { sort: 'A month', dir: 'desc' });
+
+        // A person with no pay row is not free — they are unrecorded, and every
+        // company-wide cost figure is short by whatever they actually earn.
+        const missing = rows.filter(r => r.active && r.base == null);
+        document.getElementById('flags').innerHTML = missing.length
+          ? `<div class="note-flag warn"><b>No rate on file</b><span>${
+              esc(missing.map(m => m.name).join(', '))} ${missing.length === 1 ? 'has' : 'have'} no pay
+              period recorded. They are not free — every total on this page is short by whatever
+              they are actually paid.</span></div>`
+          : '';
+
+        // The monthly view comes from the database rather than the arithmetic
+        // above, so the two can disagree visibly if a period is mis-dated.
+        const byMonth = {};
+        for (const m of monthly.data || []) {
+          const g = byMonth[m.month] ||= { month: m.month, people: 0, total: 0 };
+          g.people += 1;
+          g.total += Number(m.monthly_equivalent || 0);
+        }
+        const months = Object.values(byMonth).sort((a, b) => b.month.localeCompare(a.month));
+        sortableTable(document.getElementById('months'), months, [
+          { head: 'Month', always: true, nowrap: true, get: r => esc(fmtMonth(r.month + '-01')),
+            sortValue: r => r.month },
+          { head: 'People', cls: 'num', always: true, get: r => fmtNum(r.people), sortValue: r => r.people },
+          { head: 'Base pay', cls: 'num', always: true, get: r => money(r.total), sortValue: r => r.total },
+        ], { sort: 'Month', dir: 'desc' });
+
+        // Piece work by month, so the two halves can be read side by side.
+        const pieceBy = {};
+        for (const r of piece.data || []) {
+          if (!r.month) continue;
+          pieceBy[r.month] = (pieceBy[r.month] || 0) + Number(r.cost || 0);
+        }
+        const pieceRows = Object.entries(pieceBy)
+          .map(([month, cost]) => ({ month, cost, base: byMonth[month]?.total ?? null }))
+          .sort((a, b) => b.month.localeCompare(a.month));
+        sortableTable(document.getElementById('piece'), pieceRows, [
+          { head: 'Month', always: true, nowrap: true, get: r => esc(fmtMonth(r.month + '-01')),
+            sortValue: r => r.month },
+          { head: 'Earned on activities', cls: 'num', always: true, get: r => money(r.cost),
+            sortValue: r => r.cost },
+          { head: 'Base pay', cls: 'num', value: r => r.base, sortValue: r => r.base ?? -1,
+            get: r => r.base == null ? '<span class="muted">—</span>' : money(r.base) },
+          { head: 'Total', cls: 'num', always: true, sortValue: r => r.cost + (r.base || 0),
+            get: r => money(r.cost + (r.base || 0)) },
+        ], { sort: 'Month', dir: 'desc' });
+
+        document.getElementById('foot').innerHTML =
+          '<strong>“A month” is an annualised spread, not a payday.</strong> It is the base times ' +
+          'the number of pay periods in a year, divided by twelve — <strong>exact</strong> for ' +
+          'semimonthly and monthly, an <strong>average</strong> for weekly and biweekly, which land ' +
+          'an extra time in some months. The annual figure is the exact one. To reconcile a single ' +
+          'month against a bank statement, use the real pay dates.<br><br>' +
+          '<strong>Base pay is a company cost and is never charged to a brand.</strong> It is a ' +
+          'property of the person, not of anyone’s work — one contractor can be on $350 a fortnight ' +
+          'and another on $500 for reasons that have nothing to do with which brand they served. ' +
+          'It is deliberately absent from every per-brand margin figure in this portal and in the ' +
+          'database; pushing it down would mean inventing an allocation nobody agreed to. The staff ' +
+          'admin has one, on its Analysis page, and it lives only on that page.<br><br>' +
+          '<strong>Pay has two halves.</strong> This base, and the per-activity rate from the rate ' +
+          'card. Both are real cost; only the second is caused by a particular brand.';
+      }
+      }
+    }
+  </script>
+</body>
+</html>
