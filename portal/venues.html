@@ -202,7 +202,17 @@
             const cls = d > 180 ? 'pill pill-lost' : d > 90 ? 'pill pill-dormant' : 'muted';
             return `<span class="${cls}">${fmtNum(d)}d</span>`;
           } },
-      ], { sort: 'Quiet', dir: 'desc' });
+      ], {
+        sort: 'Quiet', dir: 'desc',
+        // Keyed on venue_id, never the name. `v_venue_performance` is one row
+        // per BRAND per venue, so a staff user sees the same venue several
+        // times over -- every one of those rows carries the same venue_id and
+        // opens the same account. A name would have been ambiguous the moment
+        // a chain arrived.
+        onRowClick: (r) => {
+          location.href = `venue.html?id=${encodeURIComponent(r.venue_id)}`;
+        },
+      });
     }
   </script>
 </body>

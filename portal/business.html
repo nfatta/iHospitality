@@ -25,10 +25,8 @@
         <p class="portal-sub" id="count"></p>
       </div>
       <div class="filters">
-        <select id="f-scope">
-          <option value="active">Current brands</option>
-          <option value="all">All brands, including retired</option>
-        </select>
+        <select id="f-from" aria-label="From month"></select>
+        <select id="f-to" aria-label="To month"></select>
       </div>
     </div>
 
@@ -36,220 +34,259 @@
 
     <div class="panel">
       <div class="panel-head">
-        <h2>Charge, cost and margin by brand</h2>
+        <h2>Month by month</h2>
         <span class="hint" id="shown"></span>
       </div>
-      <div id="list"></div>
+      <div id="months"></div>
+      <p class="caveat" id="net-caveat"></p>
     </div>
 
     <div class="panel">
       <div class="panel-head">
         <h2>Not yet priced</h2>
-        <span class="hint">These count as nothing until a rate exists</span>
+        <span class="hint">no rate card line — these count as nothing</span>
       </div>
       <div id="gaps"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Priced at or below cost</h2>
+        <span class="hint">fully priced, arithmetic correct, earns nothing</span>
+      </div>
+      <div id="atcost"></div>
     </div>
   </main>
 
   <footer id="shell-footer"></footer>
 
   <script type="module">
-    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum,
-             sortableTable } from './portal.js';
+    /* ==========================================================
+       THE WHOLE BUSINESS, BY MONTH — AND THE THREE WAYS A PRICE GOES WRONG.
 
-    const money = (v) => '$' + Number(v || 0).toLocaleString(undefined,
-      { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+       WHY THIS PAGE STOPPED BEING A LIST OF BRANDS. Until 26 Aug 2026 it read
+       `v_brand_money` and showed charge, cost and margin per brand, all-time.
+       `brands.html` was built two days later on `v_brand_month_revenue` and
+       does that same job better -- it has the retainer in it and a month
+       window -- so the per-brand table here was a strictly worse copy of the
+       one next door. The operator asked what the two pages were FOR; this is
+       the answer. **Business is the business. Brands is per brand.**
+
+       WHICH MEANS THIS PAGE OWNS THE TWO FIGURES NOTHING ELSE SHOWS:
+       contractor BASE PAY and NET. Every margin anywhere else in this portal
+       is before base pay -- deliberately, because base pay is a company cost
+       and pushing it down onto brands is a page-level allocation that must not
+       become a view (D67/D116). `v_month_business` holds it one level up,
+       which is the level this page reads.
+
+       REVENUE, NOT CHARGE. `v_month_business` sums `v_brand_month_revenue`, so
+       the retainer is in it -- $81,550 of $119,513.93, about two thirds of what
+       iHospitality sells. Sourcing this page from `v_brand_money` understated
+       every month by that much and could flip the sign of net.
+       ========================================================== */
+    import { db, requireAuth, renderShell, render, esc, isStaff,
+             fmtNum, fmtMonth, money, monthRange, sortableTable } from './portal.js';
 
     const auth = await requireAuth();
     if (auth) {
       renderShell('business.html', auth.profile);
 
-      // Hiding the nav link is convenience; this is the actual gate. Even so it
-      // is not the last line of defence — the money columns come from
-      // rate_card, whose RLS policy is staff-only, so a brand user reaching
-      // this page would read nulls rather than anyone's rates.
-      if (auth.profile.role !== 'staff') {
-        render(document.getElementById('list'), { empty: {
+      // Hiding the nav link is convenience; this is the gate. And it is not the
+      // last line of defence either -- base pay comes from `contractor_pay`,
+      // whose RLS is staff-only, so a brand user reaching this page would read
+      // a net figure with no base pay in it rather than anyone's salary.
+      if (!isStaff(auth.profile)) {
+        render(document.getElementById('months'), { empty: {
           title: 'Staff only',
           body: 'This page shows internal figures and is not part of your portal.' } });
       } else {
-        const [brands, gaps, priced] = await Promise.all([
-          db.from('v_brand_money').select('*'),
-          // `unpriced`, NOT `charge is null`. Since D78 an itemised expense
-          // also has a null charge -- deliberately, because a reimbursement
-          // earns nothing -- so testing the charge would list the five expense
-          // rows here as missing rates. The view's own `unpriced` column
-          // already excludes them: a reimbursement has no rate BY DESIGN.
-          db.from('v_activity_money').select('brand_name, source_activity_type')
-            .eq('unpriced', true),
-          // THE THIRD WAY THE RATE CARD GOES WRONG, and the admin gained this
-          // on 23 Aug while this page did not (D90). `unpriced` means no rate
-          // at all and understates revenue; `uncosted` means charged with no
-          // pay rate and overstates margin. This is neither: the line is fully
-          // priced, the arithmetic is right, and the work earns nothing or
-          // loses money. It has no flag on the activity BECAUSE IT IS NOT A
-          // DATA FAULT — it is a price — so it has to be computed.
-          //
-          // Compared here rather than in the query because PostgREST cannot
-          // compare two columns to each other. Only five small columns are
-          // fetched, and only for rows that carry both rates.
+        const [business, money_, brands] = await Promise.all([
+          db.from('v_month_business').select('*'),
+          // Everything the two fault panels need, at row grain so both can be
+          // windowed by month. `month` is on the view already.
           db.from('v_activity_money')
-            .select('brand_name, source_activity_type, charge_rate, pay_rate, charge, cost')
-            .not('charge_rate', 'is', null).not('pay_rate', 'is', null),
+            .select('month, brand_name, source_activity_type, charge_rate, pay_rate, charge, cost, unpriced'),
+          db.from('brands').select('name, is_active'),
         ]);
-        if (brands.error) {
-          render(document.getElementById('list'), { error: brands.error });
+
+        if (business.error || money_.error) {
+          render(document.getElementById('months'), { error: business.error || money_.error });
         } else {
-          // A line charging nothing AND paying nothing is a no-op, not a
-          // leak — Dame Mas prices its placements at an explicit 0.00 / 0.00
-          // because the money is billed as commission elsewhere (D94), and
-          // counting those would bury the ones that really do lose money.
-          const atCost = (priced.data || []).filter(r =>
-            Number(r.charge_rate) <= Number(r.pay_rate)
-            && !(Number(r.charge_rate) === 0 && Number(r.pay_rate) === 0));
-          document.getElementById('f-scope')
-            .addEventListener('change', () => draw(brands.data, gaps.data, atCost));
-          draw(brands.data, gaps.data, atCost);
+          const rows = business.data || [];
+          const detail = money_.data || [];
+          const months = [...new Set(rows.map(r => r.month))].sort().reverse();
+
+          monthRange('f-from', 'f-to', months, (from, to) => {
+            draw(rows.filter(r => !from || (r.month >= from && r.month <= to)),
+                 detail.filter(r => !from || (r.month >= from && r.month <= to)),
+                 from, to);
+          });
         }
       }
     }
 
-    function draw(rows, gapRows, atCost) {
-      const scope = document.getElementById('f-scope').value;
-      // `brands.is_active` was set weeks of decisions ago and did nothing until
-      // now. This is the toggle that gives it a job.
-      const shown = scope === 'active' ? rows.filter(r => r.is_active) : rows;
-
-      // Scoped to the same brands the table is showing, so the cards and the
-      // rows can never describe different populations.
-      const names = new Set(shown.map(r => r.brand_name));
-      const loss = (atCost || []).filter(r => names.has(r.brand_name));
-      renderStats(shown, loss);
-      const lossByBrand = new Map();
-      for (const r of loss) {
-        lossByBrand.set(r.brand_name, (lossByBrand.get(r.brand_name) || 0)
-          + Number(r.charge || 0) - Number(r.cost || 0));
-      }
-      document.getElementById('count').textContent =
-        `${fmtNum(shown.length)} brand${shown.length === 1 ? '' : 's'}`;
-      document.getElementById('shown').textContent =
-        scope === 'active'
-          ? `${fmtNum(rows.length - shown.length)} retired brand(s) hidden`
-          : '';
-
-      sortableTable(document.getElementById('list'), shown, [
-        { head: 'Brand', always: true, cls: 'venue', value: r => r.brand_name,
-          get: r => esc(r.brand_name) +
-            (r.is_active ? '' : ' <span class="muted" style="font-size:0.72rem">retired</span>') },
-        { head: 'Activities', always: true, cls: 'num',
-          value: r => Number(r.activities), get: r => fmtNum(r.activities) },
-        { head: 'Unpriced', cls: 'num', value: r => Number(r.unpriced_activities),
-          // Amber when some of a brand's work has no rate, because every one of
-          // those makes the margin beside it an understatement.
-          get: r => Number(r.unpriced_activities)
-            ? `<span class="pill pill-dormant">${fmtNum(r.unpriced_activities)}</span>`
-            : '<span class="muted">—</span>' },
-        { head: 'Charged', always: true, cls: 'num', nowrap: true,
-          value: r => Number(r.charged), get: r => money(r.charged) },
-        { head: 'Contractor cost', cls: 'num', nowrap: true,
-          value: r => Number(r.contractor_cost), get: r => money(r.contractor_cost) },
-        { head: 'Margin', always: true, cls: 'num', nowrap: true,
-          value: r => Number(r.margin),
-          get: r => {
-            const m = Number(r.margin);
-            const cls = m < 0 ? 'pill pill-lost' : m === 0 ? 'muted' : '';
-            return `<span class="${cls}">${money(m)}</span>`;
-          } },
-        // Per brand, so the card above can be traced to a row. This is where
-        // Aspen Green's story is: a $75 margin on $2,535 charged looks like a
-        // thin month until you see that its cases are charged $5.00 and paid
-        // $5.00 (D90).
-        { head: 'At or below cost', cls: 'num', nowrap: true,
-          value: r => Number(lossByBrand.get(r.brand_name) || 0),
-          get: r => {
-            const m = lossByBrand.get(r.brand_name);
-            if (m === undefined) return '<span class="muted">—</span>';
-            return `<span class="${m < 0 ? 'pill pill-lost' : 'muted'}">${money(m)}</span>`;
-          } },
-        { head: 'Last activity', cls: 'num', nowrap: true,
-          sortValue: r => r.last_activity || '',
-          get: r => r.last_activity ? esc(fmtDate(r.last_activity)) : '<span class="muted">—</span>' },
-      ], { sort: 'Margin', dir: 'desc' });
-
-      renderGaps(shown, gapRows || []);
-    }
-
-    function renderStats(rows, atCost) {
-      const sum = (f) => rows.reduce((a, r) => a + Number(r[f] || 0), 0);
-      const charged = sum('charged'), cost = sum('contractor_cost');
-      const unpriced = sum('unpriced_activities'), acts = sum('activities');
-      // D78. Unpriced work UNDERSTATES the margin and somebody chases it.
-      // Charged work with no pay rate behind it OVERSTATES the margin, and
-      // until this card existed nothing anywhere said so -- cost simply read
-      // $0, which is indistinguishable from work done for free.
+    function draw(rows, detail, from, to) {
+      const sum = (f) => rows.reduce((t, r) => t + Number(r[f] || 0), 0);
+      const revenue = sum('revenue');
+      const retainer = sum('retainer');
+      const charge = sum('activity_charge');
+      const actCost = sum('activity_cost');
+      const basePay = sum('contractor_base_pay');
+      const net = sum('net');
       const uncosted = sum('uncosted_charge');
       const reimbursed = sum('reimbursements');
-      const lossRows = atCost || [];
-      const lossMargin = lossRows.reduce(
-        (a, r) => a + (Number(r.charge || 0) - Number(r.cost || 0)), 0);
 
-      const el = document.getElementById('stats');
-      el.className = 'stat-grid';
-      el.innerHTML = `
-        <div class="stat-card"><span class="num">${money(charged)}</span>
-          <span class="lbl">Charged</span></div>
-        <div class="stat-card"><span class="num">${money(cost)}</span>
-          <span class="lbl">Contractor cost</span></div>
-        <div class="stat-card"><span class="num">${money(charged - cost)}</span>
-          <span class="lbl">Margin</span>
-          <div class="meta">${charged ? ((charged - cost) / charged * 100).toFixed(1) : '0'}% of charged</div></div>
-        <div class="stat-card"><span class="num">${fmtNum(unpriced)}</span>
-          <span class="lbl">Unpriced activities</span>
-          <div class="meta">of ${fmtNum(acts)} — margin above is understated</div></div>
+      document.getElementById('count').textContent =
+        `${fmtNum(rows.length)} month${rows.length === 1 ? '' : 's'}`;
+      document.getElementById('shown').textContent =
+        from && to ? `${fmtMonth(from + '-01')} — ${fmtMonth(to + '-01')}` : '';
+
+      /* ---------- the four figures ---------- */
+      const stats = document.getElementById('stats');
+      stats.className = 'stat-grid';
+      stats.innerHTML = `
+        <div class="stat-card"><span class="num">${money(revenue)}</span>
+          <span class="lbl">Revenue</span>
+          <div class="meta">retainer ${money(retainer)} of it · activity ${money(charge)}</div></div>
+        <div class="stat-card"><span class="num">${money(actCost)}</span>
+          <span class="lbl">Activity cost</span>
+          <div class="meta">per-activity contractor pay</div></div>
+        <div class="stat-card"><span class="num">${money(basePay)}</span>
+          <span class="lbl">Contractor base pay</span>
+          <div class="meta">annualised spread — not a bank figure</div></div>
+        <div class="stat-card"><span class="num${net < 0 ? ' neg' : ''}">${money(net)}</span>
+          <span class="lbl">Net</span>
+          <div class="meta">revenue − activity cost − base pay</div></div>`
+        + (uncosted ? `
         <div class="stat-card"><span class="num">${money(uncosted)}</span>
           <span class="lbl">Charged, not costed</span>
-          <div class="meta">no pay rate behind it — margin above is
-            <strong>overstated</strong> by whatever it cost</div></div>`
-        + (lossRows.length ? `
-        <div class="stat-card"><span class="num ${lossMargin < 0 ? 'neg' : ''}">${money(lossMargin)}</span>
-          <span class="lbl">Priced at or below cost</span>
-          <div class="meta">${fmtNum(lossRows.length)} activities fully priced that
-            earn nothing — the rate, not the data</div></div>` : '')
+          <div class="meta">no pay rate behind it — net above is
+            <strong>overstated</strong> by whatever it cost</div></div>` : '')
         + (reimbursed ? `
         <div class="stat-card"><span class="num">${money(reimbursed)}</span>
           <span class="lbl">Reimbursements</span>
-          <div class="meta">passed through at cost — in neither charge nor margin</div></div>` : '');
+          <div class="meta">passed through at cost — in neither revenue nor net</div></div>` : '');
+
+      /* ---------- month by month ---------- */
+      sortableTable(document.getElementById('months'), rows, [
+        { head: 'Month', always: true, nowrap: true, cls: 'venue',
+          sortValue: r => r.month, get: r => esc(fmtMonth(r.month + '-01')) },
+        { head: 'Revenue', always: true, cls: 'num', nowrap: true,
+          value: r => Number(r.revenue), get: r => money(r.revenue) },
+        { head: 'Retainer', cls: 'num', nowrap: true,
+          value: r => Number(r.retainer), get: r => money(r.retainer) },
+        { head: 'Activity charge', cls: 'num', nowrap: true,
+          value: r => Number(r.activity_charge), get: r => money(r.activity_charge) },
+        { head: 'Activity cost', cls: 'num', nowrap: true,
+          value: r => Number(r.activity_cost), get: r => money(r.activity_cost) },
+        { head: 'Base pay', cls: 'num', nowrap: true,
+          value: r => Number(r.contractor_base_pay), get: r => money(r.contractor_base_pay) },
+        { head: 'Net', always: true, cls: 'num', nowrap: true,
+          value: r => Number(r.net),
+          get: r => {
+            const n = Number(r.net);
+            return `<span class="${n < 0 ? 'pill pill-lost' : ''}">${money(n)}</span>`;
+          } },
+      ], { sort: 'Month', dir: 'desc' });
+
+      // TWO THINGS THAT WOULD OTHERWISE READ AS BANK FIGURES.
+      document.getElementById('net-caveat').innerHTML =
+        `<strong>Base pay is an annualised spread</strong> — exact for the monthly and
+         semimonthly contractors, an average for weekly and biweekly, so a single
+         month is indicative rather than what left the account that month.
+         <strong>All three contractors currently share one pay start date of
+         1 Jun 2025</strong>, the portal's own activity horizon, which looks like a
+         seeded default rather than a fact; if any of them started later, the base
+         pay above is too high and net is too low (D128). Net also excludes every
+         cost that is not contractor pay.`;
+
+      drawGaps(detail);
+      drawAtCost(detail);
     }
 
-    function renderGaps(shownBrands, gapRows) {
-      const names = new Set(shownBrands.map(b => b.brand_name));
+    /* ---------- fault one: no rate at all ----------
+       `unpriced`, NOT `charge is null`. Since D78 an itemised expense also has
+       a null charge -- deliberately, because a reimbursement earns nothing --
+       so testing the charge would list expense rows here as missing rates. The
+       view's own flag already excludes them. This is the direction that
+       UNDERSTATES revenue, and somebody chases it. */
+    function drawGaps(detail) {
       const counts = new Map();
-      for (const r of gapRows) {
-        if (!names.has(r.brand_name)) continue;
+      for (const r of detail) {
+        if (!r.unpriced) continue;
         const key = `${r.brand_name}|${r.source_activity_type || '(archived, no type recorded)'}`;
         counts.set(key, (counts.get(key) || 0) + 1);
       }
-      const rows = [...counts.entries()]
-        .map(([k, n]) => {
-          const [brand, type] = k.split('|');
-          return { brand, type, n };
-        })
-        .sort((a, b) => b.n - a.n);
+      const rows = [...counts.entries()].map(([k, n]) => {
+        const [brand, type] = k.split('|');
+        return { brand, type, n };
+      });
 
       const el = document.getElementById('gaps');
       if (!rows.length) {
         return render(el, { empty: {
           title: 'Everything is priced',
-          body: 'Every activity for these brands resolves to a rate.' } });
+          body: 'Every activity in these months resolves to a rate.' } });
       }
       sortableTable(el, rows, [
-        { head: 'Brand', always: true, cls: 'venue', value: r => r.brand,
-          get: r => esc(r.brand) },
-        { head: 'What HubSpot wrote', always: true, value: r => r.type,
-          get: r => esc(r.type) },
-        { head: 'Activities', always: true, cls: 'num', value: r => r.n,
-          get: r => fmtNum(r.n) },
+        { head: 'Brand', always: true, cls: 'venue', value: r => r.brand, get: r => esc(r.brand) },
+        { head: 'What HubSpot wrote', always: true, value: r => r.type, get: r => esc(r.type) },
+        { head: 'Activities', always: true, cls: 'num', value: r => r.n, get: r => fmtNum(r.n) },
       ], { sort: 'Activities', dir: 'desc' });
+    }
+
+    /* ---------- fault three: priced, and it loses money ----------
+       Neither `unpriced` nor `uncosted`. The line is fully priced, the
+       arithmetic is right, and the work earns nothing or costs more than it
+       brings in. IT HAS NO FLAG ON THE ACTIVITY BECAUSE IT IS NOT A DATA FAULT
+       -- it is a price, and pricing is the operator's call (D60). So it has to
+       be computed, and it is computed here rather than in the query because
+       PostgREST cannot compare two columns to each other.
+
+       A line charging nothing AND paying nothing is a no-op, not a leak: Dame
+       Mas prices its placements at an explicit 0.00 / 0.00 because the money is
+       billed as commission elsewhere (D94), and counting those would bury the
+       ones that really do lose money. */
+    function drawAtCost(detail) {
+      const loss = detail.filter(r =>
+        r.charge_rate !== null && r.pay_rate !== null
+        && Number(r.charge_rate) <= Number(r.pay_rate)
+        && !(Number(r.charge_rate) === 0 && Number(r.pay_rate) === 0));
+
+      const agg = new Map();
+      for (const r of loss) {
+        const key = `${r.brand_name}|${r.source_activity_type || '(none)'}`;
+        const a = agg.get(key) || { brand: r.brand_name,
+                                    type: r.source_activity_type || '(none)',
+                                    n: 0, margin: 0 };
+        a.n += 1;
+        a.margin += Number(r.charge || 0) - Number(r.cost || 0);
+        agg.set(key, a);
+      }
+      const rows = [...agg.values()];
+
+      const el = document.getElementById('atcost');
+      if (!rows.length) {
+        return render(el, { empty: {
+          title: 'Nothing priced at or below cost',
+          body: 'Every priced line in these months charges more than it pays.' } });
+      }
+      const total = rows.reduce((t, r) => t + r.margin, 0);
+      const count = rows.reduce((t, r) => t + r.n, 0);
+
+      sortableTable(el, rows, [
+        { head: 'Brand', always: true, cls: 'venue', value: r => r.brand, get: r => esc(r.brand) },
+        { head: 'Work', always: true, value: r => r.type, get: r => esc(r.type) },
+        { head: 'Activities', always: true, cls: 'num', value: r => r.n, get: r => fmtNum(r.n) },
+        { head: 'Margin', always: true, cls: 'num', nowrap: true, value: r => r.margin,
+          get: r => `<span class="${r.margin < 0 ? 'pill pill-lost' : 'muted'}">${money(r.margin)}</span>` },
+      ], { sort: 'Margin', dir: 'asc' });
+
+      el.insertAdjacentHTML('beforeend', `<p class="caveat">
+        ${fmtNum(count)} activities, ${money(total)}. <strong>Not a data fault.</strong>
+        Some of this is deliberate — mileage and the fresh-market incentive are
+        100% pass-throughs and their $0.00 margin is the correct answer, not a
+        missing rate. The rest is a priced decision only you can change.</p>`);
     }
   </script>
 </body>

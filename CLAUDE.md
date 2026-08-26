@@ -111,6 +111,22 @@ reproduces it; keep it that way.
   carries it precisely "so the margin figure can be read with the size of its own
   blind spot next to it". The cost is unknown, not zero. And the two flags lean
   opposite ways: **`unpriced` UNDERSTATES revenue, `uncosted` OVERSTATES margin.**
+- **`business.html` IS THE COMPANY; `brands.html` IS PER BRAND** (D130). They
+  overlapped badly until 26 Aug 2026 — Business read `v_brand_money` all-time
+  while Brands read `v_brand_month_revenue` over a month range, so Business was
+  a strictly worse copy of the table next door. Business now reads
+  `v_month_business` and owns the two figures nothing else shows: **contractor
+  base pay and NET**. Every other margin in the portal is before base pay, on
+  purpose (D67/D116) — reading it one level up in `v_month_business` is what
+  shows the number without allocating it to brands. Label base pay as an
+  ANNUALISED SPREAD or it reads as a bank figure.
+- **A VENUE PAGE LINKS BY `venue_id`, NEVER BY `venue_name`** (D129).
+  `v_brand_activity_log` carries `venue_id` for exactly this. A name match works
+  today (340 venues, 340 distinct names) and blends two premises into one
+  history the moment a chain arrives, with every figure wrong and nothing on
+  screen to say so. A venue is SHARED — Levee Liquors holds 8 brands — so the
+  query carries no brand filter and RLS scopes it; verify by impersonation, not
+  by logging in (D125).
 - **Anything saying "revenue" reads `v_brand_month_revenue` or `v_month_business`,
   NEVER `v_brand_money`.** The latter is activity charge only, and the retainer is
   about two-thirds of what iHospitality sells ($110,850 of $167,580) — sourcing
@@ -500,7 +516,7 @@ reproduces it; keep it that way.
 
 | Path | What |
 |---|---|
-| `portal/` | The nine portal pages, `portal.css`, `portal.js`. Servable files only. |
+| `portal/` | The twelve portal pages, `portal.css`, `portal.js`. Servable files only. |
 | `portal/brands.html`, `brand.html`, `activity-detail.html` | The admin surface (D120). Staff-labelled "Admin"; RLS does the gating. |
 | `css/site.css` | Shared tokens, nav, buttons, section base, footer, mobile nav. |
 | `PORTAL_PLAN.md` | Architecture doc — phases, locked decisions. |

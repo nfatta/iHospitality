@@ -5502,6 +5502,26 @@ years.** That is a **grading input** (D117), not a billing one.
 **The rulings, each of which the matcher could not have inferred:**
 
 1. **Maggie McFly's is NOT ours** — two locations, 12 cases, excluded.
+   ⚠️ **CORRECTED later the same day, 26 Aug: "not our account" does NOT make
+   the one billed case sale fake.** The ruling above STANDS for the depletion
+   sheet — both accounts (700439549, 662 SE Becker Rd, Port St Lucie; and
+   700349851, 6000 Glades Rd, Boca Raton) stay out of the reorder pool, all 12
+   cases. But an earlier reading of it produced a data correction — *"Maggie
+   McFly PSL, 18 Mar 2026 — reclassify to an account visit"* — and **that
+   correction is WITHDRAWN and must not be applied.** Operator: *"That case
+   sale we billed shouldn't have happened, but the brand was ok with it
+   because we did open a relationship there."* The row is a real depletion, it
+   was really billed at $50.00, and it stays a **Case Sale** — it is already
+   counted correctly as one of the eight billed cases sitting legitimately
+   outside the sheet. **The two facts are not in tension: the premises is not
+   an account we service for REORDER purposes, and the single placement we
+   made there is real.** Nothing was ever written to the database from either
+   reading, so there is nothing to undo — only a correction not to make.
+   `NOT_OURS = {"maggiemcflys"}` in `match_depletion.py` and
+   `build_ruling_sheet.py` is therefore correct and stays. Note it is keyed on
+   the normalised NAME, which collides both premises into one key — harmless
+   while both are excluded, and the reason to re-key it on the account number
+   if either is ever ruled back in.
 2. **STARDUST LOUNGE is the portal's "Aku Aku"** — one premises, two names, at
    431 E Central Blvd. The DB has no Stardust and the sheet has no Aku Aku.
    Same shape as the Mullets ruling. **Rename or alias it or this recurs
@@ -5562,3 +5582,109 @@ the dates are right.
 **Ask for each person's real start date before touching anything.** A pay period
 is add-only and effective-dated for a reason: editing one in place silently
 restates every month before it.
+
+---
+
+**D129 — THE VENUE PAGE IS KEYED ON `venue_id`, AND `v_brand_activity_log`
+GAINED THE COLUMN TO MAKE THAT POSSIBLE.**
+26 Aug 2026. Operator: *"if I click on a venue it pulls up the venue page with
+all the activities and then I can click on the individual activities."*
+
+`venues.html` had never been clickable and there was no venue page at all. There
+is now: **`portal/venue.html`**, opened from a venues row and opening an
+activity in turn, so the chain is venues → venue → activity.
+
+**THE LINK IS AN ID, AND THAT WAS A DELIBERATE COST.** `v_brand_activity_log`
+carried `venue_name` and no `venue_id`, so the page could have been built with
+no schema change by matching on the name. It would have worked on the day it was
+written — 340 venues, 340 distinct names, zero collisions — and it is the wrong
+foundation. **The Venues admin exists BECAUSE one premises turns up under two
+names**; a chain is the same fault reversed, two premises under one name. A name
+match would then blend two accounts into one history with every figure on the
+page wrong and nothing on screen to say so. Operator, asked which way to go:
+*"I am not really looking for the easiest… I want reliability."*
+
+So the view gained `a.venue_id`, **appended at the tail** — `create or replace
+view` can only ADD columns at the end, and inserting one mid-list fails with
+'cannot change name of view column'. The column is nullable on purpose: 97
+activities have no venue and are absent from every venue page by definition.
+
+**A SHARED VENUE IS THE WHOLE RISK, AND POSTGRES CARRIES IT.** A venue is not
+one brand's — Levee Liquors holds **8 brands across 31 activities** — so a page
+that filtered in the browser would be a disclosure. The query carries no brand
+filter (the house rule) and RLS scopes it. Verified by impersonation rather than
+by logging in (D125), which is also the only way to check both sides at once:
+
+| viewer | activities at Levee | brands |
+|---|---|---|
+| service_role | 31 | 8 |
+| Phil (staff) | 31 | 8 |
+| Blue Run | **2** | Blue Run only |
+| Wodka | **1** | Wodka only |
+
+`is_superuser=off` asserted and the impersonated counts asserted to DIFFER from
+the baseline, or the probe could not fail (D114). Confirmed in a browser as well
+— as a brand the page drops the Brand column, drops every money column, and
+shows no other brand's status. **Opening another brand's venue gives "Nothing to
+show for this venue", and does NOT distinguish "not on file" from "not yours":**
+telling those apart would leak the existence of other brands' accounts.
+
+Internal notes cannot reach the page: it reads `v_brand_activity_log`, whose
+whole point is that `activities.notes` is not in it. And `venue.html` went into
+`login.html`'s ALLOWED list, or it would have been silently redirected to the
+dashboard after a successful sign-in (D124).
+
+---
+
+**D130 — BUSINESS IS THE BUSINESS; BRANDS IS PER BRAND. THE BUSINESS PAGE NOW
+OWNS BASE PAY AND NET, WHICH NOTHING ELSE IN THE PORTAL HAS EVER SHOWN.**
+26 Aug 2026, after the operator asked a question nobody had answered: *"What is
+the difference between the business tab and the brands tab? Like purpose wise.
+It is a genuine question."*
+
+**The honest answer was that there mostly wasn't one.** `business.html` was
+built 23 Aug on `v_brand_money` — all-time, activity charge only, no retainer.
+`brands.html` was built 25 Aug on `v_brand_month_revenue`, which has the
+retainer in it and a month window, and does the same job better. The per-brand
+money table on Business was a strictly worse copy of the table next door:
+$37,963.93 charged against $119,513.93 of revenue, because **the retainer is
+$81,550, about two thirds of what iHospitality sells** — exactly the understatement
+the standing rule against `v_brand_money` warns about.
+
+So the page changed job rather than gaining a date filter. It now reads
+**`v_month_business`** over a From/To range and shows **revenue, activity cost,
+contractor base pay and NET** — and base pay and net had never appeared anywhere
+in this portal. Every other margin figure in the app is *before* base pay, on
+purpose, because base pay is a company cost and pushing it down onto brands is a
+page-level allocation that must not become a view (D67/D116). `v_month_business`
+holds it one level up, which is the level this page reads. **That is what keeps
+D116 intact while still showing the number.** The duplicate per-brand table is
+gone; the two pricing-fault panels stay and are now windowed by month.
+
+**TWO FIGURES ON IT WOULD READ AS BANK FIGURES AND ARE NOT, SO THE PAGE SAYS SO.**
+Base pay is `sum(monthly_equivalent)` — an **annualised spread**, exact for the
+monthly and semimonthly contractors and an average for weekly and biweekly. And
+all three contractors still share one pay start date of 2025-06-01 (D128), so if
+any of them started later the base pay is too high and net too low. Both caveats
+are printed under the table rather than left in a comment, because the numbers
+they qualify are on the screen.
+
+---
+
+**D131 — THE MONTH PICKERS RUN OLDEST-FIRST, AND REORDERING THEM MUST NOT MOVE
+THE DEFAULT.**
+26 Aug 2026, operator request: oldest at the top, newest at the bottom.
+
+`monthRange()` in `portal.js` is the single definition behind every From/To pair
+in the portal, so the change is one line there and reaches `brand.html`,
+`brands.html` and the rebuilt `business.html` at once.
+
+**The reversal happens at RENDER time, on a copy.** The caller hands `months`
+newest-first and it is the same array the function indexes to pick defaults, so
+reversing it in place would have moved the opening range as a side effect. It
+does not: `[...months].reverse()` builds the options, while `from.value` and
+`to.value` still index the original descending array. **A `<select>` takes its
+value BY VALUE, not by position**, so reordering the options moves nothing —
+every page still opens on the last twelve months. Confirmed in a browser on all
+three pages: options run June 2025 → August 2026, selection stays September 2025
+→ August 2026.

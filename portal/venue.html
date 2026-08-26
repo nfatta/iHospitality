@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Venue | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <p class="crumb" id="crumb"></p>
+        <span class="portal-eyebrow">Account</span>
+        <h1 id="title">Venue</h1>
+        <p class="portal-sub" id="sub"></p>
+      </div>
+    </div>
+
+    <div id="body"></div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    /* ==========================================================
+       ONE VENUE, AND EVERYTHING THAT HAPPENED THERE.
+
+       KEYED ON `venue_id`, NEVER ON THE NAME. `v_brand_activity_log` gained
+       `venue_id` for this page. Matching on `venue_name` would have worked on
+       the day it was written -- 340 venues, 340 distinct names -- and it is the
+       wrong foundation: the Venues admin exists BECAUSE one place turns up
+       under two names, and a chain is the reverse, two places under one name.
+       A name match would then blend two premises into one history with every
+       figure wrong and nothing on screen to say so. An id cannot do that.
+
+       WHAT A BRAND SEES HERE IS THEIR OWN BRAND ONLY, AND POSTGRES DECIDES IT.
+       A venue is shared -- Levee Liquors carries eight brands across 31
+       activities -- so this page would be a disclosure if the filtering lived
+       in the browser. It does not: the query below carries NO brand filter on
+       purpose (the house rule), and RLS on `v_brand_activity_log` scopes it.
+       Verified by impersonation in Postgres rather than by logging in (D125):
+       at Levee Liquors, service_role and staff see 31 activities across 8
+       brands, Blue Run sees 2 and Wodka sees 1, each seeing only their own.
+
+       INTERNAL NOTES CANNOT REACH THIS PAGE. It reads `v_brand_activity_log`,
+       whose whole point is that `activities.notes` is not in it. `summary` is
+       `coalesce(brand_visible_summary, title)` -- what a client may read.
+       ========================================================== */
+    import { db, requireAuth, renderShell, render, esc, isStaff, param,
+             fmtDate, fmtNum, money, table, sortableTable, MARKET_LABEL } from './portal.js';
+
+    const STATUS_ORDER = ['reordering', 'placed', 'pitched', 'prospect', 'dormant', 'lost'];
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('venues.html', auth.profile);
+
+      const staff = isStaff(auth.profile);
+      const id = param('id');
+      const el = document.getElementById('body');
+      document.getElementById('crumb').innerHTML = '<a href="venues.html">&larr; All venues</a>';
+
+      if (!id) {
+        render(el, { empty: { title: 'No venue chosen',
+                              body: 'Open one from the Venues list.' } });
+      } else {
+        const [perf, log] = await Promise.all([
+          db.from('v_venue_performance').select('*').eq('venue_id', id),
+          // No brand filter, deliberately. RLS applies the restriction in
+          // Postgres; adding `.eq('brand_id', …)` here would imply the security
+          // lives in the browser, and it does not.
+          db.from('v_brand_activity_log').select('*').eq('venue_id', id)
+            .order('activity_date', { ascending: false }),
+        ]);
+
+        if (perf.error || log.error) {
+          render(el, { error: perf.error || log.error });
+        } else if (!(perf.data || []).length && !(log.data || []).length) {
+          // Covers both "no such venue" and "a real venue you have no rows at".
+          // They are indistinguishable from the browser BY DESIGN -- RLS
+          // returns an empty set either way, and telling them apart would leak
+          // the existence of other brands' accounts.
+          render(el, { empty: {
+            title: 'Nothing to show for this venue',
+            body: 'Either it is not on file, or none of your activity happened here.' } });
+        } else {
+          await paint(perf.data || [], log.data || [], staff, el);
+        }
+      }
+    }
+
+    async function paint(perf, log, staff, el) {
+      const name = perf[0]?.venue_name || log[0]?.venue_name || 'Venue';
+      const city = perf[0]?.city || log[0]?.city || '';
+      document.title = `${name} | iHospitality Brand Portal`;
+      document.getElementById('title').textContent = name;
+      document.getElementById('sub').textContent =
+        [city, log.length ? `${fmtNum(log.length)} activit${log.length === 1 ? 'y' : 'ies'}` : null]
+          .filter(Boolean).join(' · ');
+
+      /* ---------- money, staff only ----------
+         Read from `v_activity_money`, never recomputed from `rate_card` (D90):
+         a charge and a pay for the same work need not sit on the same row, so
+         anything reasoning about price from the rate card is a second pricing
+         implementation. Fetched separately because the brand-facing log has no
+         money in it at all -- which is the reason a brand user cannot see this
+         section even if they reach the page. */
+      let byId = new Map();
+      if (staff && log.length) {
+        const { data } = await db.from('v_activity_money')
+          .select('activity_id, charge, cost, unpriced, uncosted, reimbursement, charge_pct, amount')
+          .in('activity_id', log.map(r => r.id));
+        for (const m of data || []) byId.set(m.activity_id, m);
+      }
+      const sum = (pick) => log.reduce((t, r) => t + Number(pick(byId.get(r.id) || {}) || 0), 0);
+      const charged = sum(m => m.charge);
+      const cost = sum(m => m.cost);
+      const uncosted = log.reduce((t, r) => {
+        const m = byId.get(r.id) || {};
+        return t + (m.uncosted ? Number(m.charge || 0) : 0);
+      }, 0);
+
+      /* ---------- header facts ---------- */
+      const multiBrand = new Set(log.map(r => r.brand_name)).size > 1;
+      const lastVisit = log.length ? log[0].activity_date : null;
+      const firstSeen = log.length ? log[log.length - 1].activity_date : null;
+      // Quiet days come from the view, which computes them in Postgres against
+      // current_date. Recomputing here from the log would drift by a timezone.
+      const quiet = perf.reduce((best, r) =>
+        r.days_since === null ? best
+          : (best === null ? Number(r.days_since) : Math.min(best, Number(r.days_since))), null);
+      const units = perf.reduce((t, r) => t + Number(r.units_moved || 0), 0);
+
+      const fact = (k, v) => `<div class="fact"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`;
+      const dash = '<span class="muted">—</span>';
+
+      let facts =
+        fact('City', city ? esc(city) : dash) +
+        (perf[0]?.market ? fact('Market', esc(MARKET_LABEL[perf[0].market] || perf[0].market)) : '') +
+        fact('Activities', fmtNum(log.length)) +
+        fact('First seen', firstSeen ? esc(fmtDate(firstSeen)) : dash) +
+        fact('Last visit', lastVisit ? esc(fmtDate(lastVisit)) : dash) +
+        fact('Quiet', quiet === null ? dash : `${fmtNum(quiet)} days`) +
+        (units ? fact('Units moved', fmtNum(units)) : '');
+
+      if (staff) {
+        facts +=
+          fact('Charged', money(charged)) +
+          fact('Contractor cost', money(cost)) +
+          // BESIDE the margin, never subtracted from it. `uncosted` is charge
+          // with no pay rate behind it, so the cost is UNKNOWN, not zero.
+          fact('Margin', `${money(charged - cost)}${uncosted
+            ? `<br><span class="muted" style="font-size:0.72rem">overstated — ${money(uncosted)} uncosted</span>`
+            : ''}`);
+      }
+
+      let html = `<div class="detail-grid">${facts}</div>`;
+
+      /* ---------- status, per brand ----------
+         Shown as a table only when there is more than one brand at this venue,
+         which for a brand user is never -- they see one row, and it is theirs.
+         The single-brand case gets a pill in the facts grid instead. */
+      if (perf.length > 1) {
+        html += `<div class="panel"><div class="panel-head"><h2>Account status</h2>
+          <span class="hint">one per brand at this venue</span></div>
+          ${table([...perf].sort((a, b) =>
+              STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status)), [
+            { head: 'Brand', always: true, cls: 'venue', get: r => esc(r.brand_name) },
+            { head: 'Status', always: true,
+              get: r => `<span class="pill pill-${esc(r.status)}">${esc(r.status)}</span>` },
+            { head: 'Activities', always: true, cls: 'num', get: r => fmtNum(r.activities) },
+            { head: 'Sales', cls: 'num', value: r => Number(r.initial_sales),
+              get: r => Number(r.initial_sales) ? fmtNum(r.initial_sales) : dash },
+            { head: 'Reorders', cls: 'num', value: r => Number(r.reorders),
+              get: r => Number(r.reorders) ? `<strong>${fmtNum(r.reorders)}</strong>` : dash },
+            { head: 'Units', cls: 'num', value: r => Number(r.units_moved),
+              get: r => Number(r.units_moved) ? fmtNum(r.units_moved) : dash },
+            { head: 'Last touched', cls: 'num', nowrap: true,
+              value: r => r.last_touched || '',
+              get: r => r.last_touched ? esc(fmtDate(r.last_touched)) : dash },
+          ])}</div>`;
+      } else if (perf.length === 1) {
+        html = `<div class="detail-grid">${facts}${
+          fact('Status', `<span class="pill pill-${esc(perf[0].status)}">${esc(perf[0].status)}</span>`)
+        }</div>`;
+      }
+
+      html += `<div class="panel"><div class="panel-head"><h2>Every activity here</h2>
+        <span class="hint">Click a row to open it</span></div><div id="log"></div></div>`;
+
+      // The caveat is on the page rather than in a comment because the number
+      // it explains is on the page: `dormant` is 180 days quiet, DERIVED at
+      // read time and never stored, so an account comes back to life on its
+      // next visit without anyone touching it (D86).
+      html += `<p class="caveat">Status is stored when work is logged; <strong>dormant</strong>
+        is worked out at the moment you look — 180 days without activity — so a
+        visit brings an account back on its own.${staff
+          ? ' Charge and cost come from the rate card via <code>v_activity_money</code>. Margin here excludes the retainer and base pay.'
+          : ''}</p>`;
+
+      el.innerHTML = html;
+
+      if (!log.length) {
+        return render(document.getElementById('log'), { empty: {
+          title: 'No activity yet',
+          body: 'This account is on file but nothing has been logged here.' } });
+      }
+
+      const cols = [
+        { head: 'Date', always: true, nowrap: true,
+          sortValue: r => r.activity_date || '',
+          get: r => esc(fmtDate(r.activity_date)) },
+        ...(multiBrand ? [{ head: 'Brand', value: r => r.brand_name,
+          get: r => esc(r.brand_name) }] : []),
+        { head: 'Type', always: true, value: r => r.activity_type,
+          get: r => esc(r.activity_type) },
+        { head: 'What happened', always: true, value: r => r.summary,
+          get: r => r.summary ? esc(r.summary) : dash },
+        { head: 'Qty', cls: 'num', value: r => Number(r.quantity),
+          get: r => Number(r.quantity) ? fmtNum(r.quantity) : dash },
+        { head: 'Photos', cls: 'num', value: r => Number(r.photo_count),
+          get: r => Number(r.photo_count) ? fmtNum(r.photo_count) : dash },
+      ];
+
+      if (staff) {
+        cols.push(
+          { head: 'Charged', cls: 'num', nowrap: true,
+            value: r => Number(byId.get(r.id)?.charge || 0),
+            get: r => {
+              const m = byId.get(r.id);
+              if (!m) return dash;
+              // D98's fourth failure mode: a percentage row prices off `amount`,
+              // so a NULL amount charges $0.00 while displaying its rate. It is
+              // not `unpriced` and nothing else flags it, so it is called out
+              // on the row rather than left to read as a real zero.
+              if (m.charge_pct !== null && m.charge_pct !== undefined
+                  && (m.amount === null || m.amount === undefined)) {
+                return `<span class="pill pill-lost">no amount</span>`;
+              }
+              return m.unpriced ? '<span class="pill pill-dormant">unpriced</span>' : money(m.charge);
+            } },
+          { head: 'Cost', cls: 'num', nowrap: true,
+            value: r => Number(byId.get(r.id)?.cost || 0),
+            get: r => {
+              const m = byId.get(r.id);
+              if (!m) return dash;
+              return m.uncosted ? '<span class="pill pill-dormant">uncosted</span>' : money(m.cost);
+            } },
+        );
+      }
+
+      sortableTable(document.getElementById('log'), log, cols, {
+        sort: 'Date', dir: 'desc',
+        onRowClick: (r) => {
+          location.href = `activity-detail.html?id=${encodeURIComponent(r.id)}`;
+        },
+      });
+    }
+  </script>
+</body>
+</html>

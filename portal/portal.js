@@ -228,7 +228,15 @@ export function monthRange(fromId, toId, months, onChange) {
     onChange(null, null);
     return;
   }
-  const options = months.map(m =>
+  // OLDEST AT THE TOP, NEWEST AT THE BOTTOM. Asked for on 26 Aug 2026. The
+  // caller hands `months` newest-first (it is the same array the page uses to
+  // pick defaults), so the reversal happens HERE, on a copy, at render time.
+  //
+  // The two `.value` assignments below still index the ORIGINAL descending
+  // array, and that is what keeps the opening range unchanged: a <select>'s
+  // value is set by value, not by position, so reordering the options moves
+  // nothing. From still opens on the 12th-newest month and To on the newest.
+  const options = [...months].reverse().map(m =>
     `<option value="${esc(m)}">${esc(fmtMonth(m + '-01'))}</option>`).join('');
   from.innerHTML = options;
   to.innerHTML = options;
