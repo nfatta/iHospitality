@@ -4,7 +4,71 @@
    footer and mobile nav. Nothing here redefines a brand colour.
    ============================================================ */
 
-.portal-main { padding: calc(76px + 3.5rem) 6% 5rem; min-height: 70vh; }
+/* ---------- the left rail ----------
+   The portal navigates from a sidebar, not the public site's top bar: the admin
+   nav is eight items and a horizontal bar stops working around six.
+
+   EVERY CLASS BELOW IS PORTAL-ONLY. `css/site.css` still owns `nav`,
+   `.nav-links`, `.hamburger` and `.mobile-nav` for index.html and gallery.html,
+   and none of it is touched here. renderShell() sets `.portal-sidebar` on the
+   <nav> element itself, which outranks site.css's bare `nav` selector. */
+
+:root { --rail: 232px; }
+
+.portal-sidebar {
+  position: fixed; top: 0; left: 0; z-index: 150;
+  width: var(--rail); height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--black-rich);
+  border-right: 1px solid var(--divider-dark);
+  border-bottom: none;                    /* site.css's `nav` sets one */
+  padding: 1.75rem 0 1.25rem;
+  transition: transform 0.25s ease;
+}
+
+.side-logo { display:flex; align-items:center; gap:0.7rem; text-decoration:none; padding:0 1.4rem 1.75rem; }
+.side-logo img { height:34px; width:34px; border-radius:50%; object-fit:cover; }
+.side-logo-text { font-family:'Cormorant Garamond',serif; font-size:1.3rem; font-weight:600; color:var(--white); letter-spacing:0.5px; }
+.side-logo-text span { color:var(--gold); }
+
+.side-scroll { flex:1; overflow-y:auto; padding-bottom:1rem; }
+.side-group-label {
+  font-size:0.62rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+  color:rgba(232,224,213,0.28); padding:1.1rem 1.4rem 0.5rem;
+}
+.side-group-label:first-child { padding-top:0; }
+.side-links { list-style:none; }
+.side-links a {
+  display:block; padding:0.62rem 1.4rem; text-decoration:none;
+  color:rgba(232,224,213,0.62); font-size:0.82rem; font-weight:500; letter-spacing:0.6px;
+  border-left:2px solid transparent; transition:color 0.2s, background 0.2s, border-color 0.2s;
+}
+.side-links a:hover { color:var(--white); background:rgba(255,255,255,0.03); }
+.side-links a.current { color:var(--gold); border-left-color:var(--gold); background:var(--gold-dim); }
+
+.side-foot { padding:1.1rem 1.4rem 0; border-top:1px solid var(--divider-dark); display:flex; flex-direction:column; align-items:flex-start; gap:0.35rem; }
+.side-who { font-size:0.68rem; color:var(--gold); letter-spacing:1.5px; text-transform:uppercase; font-weight:600; }
+.side-name { font-size:0.75rem; color:rgba(232,224,213,0.4); }
+.side-foot .link-btn { margin-top:0.4rem; }
+
+/* The mobile top bar. Hidden on desktop, where the rail is always out. */
+.portal-topbar {
+  display: none;
+  position: fixed; top:0; left:0; right:0; z-index:120; height:60px;
+  align-items: center; gap:0.9rem; padding:0 5%;
+  background: rgba(10,10,10,0.95); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--divider-dark);
+}
+.top-logo { display:flex; align-items:center; gap:0.6rem; text-decoration:none; }
+.top-logo img { height:30px; width:30px; border-radius:50%; object-fit:cover; }
+.side-toggle { display:flex; flex-direction:column; gap:5px; cursor:pointer; background:none; border:none; padding:6px 2px; }
+.side-toggle span { display:block; width:22px; height:1.5px; background:var(--white); }
+
+.portal-scrim { display:none; position:fixed; inset:0; z-index:140; background:rgba(8,8,8,0.6); }
+.portal-scrim.open { display:block; }
+
+.portal-main { margin-left: var(--rail); padding: 3.5rem 4% 5rem; min-height: 70vh; }
+.portal-footer { margin-left: var(--rail); }
 
 /* Page header */
 .portal-head { display:flex; align-items:flex-end; justify-content:space-between; gap:2rem; flex-wrap:wrap; margin-bottom:3rem; }
@@ -115,9 +179,17 @@
 @media (max-width:1100px) {
   .stat-grid { grid-template-columns:repeat(2,1fr); }
   .photo-grid { grid-template-columns:repeat(3,1fr); }
+
+  /* The rail becomes a drawer: same element, same links, slid off to the left
+     until the top bar's button pulls it out. */
+  .portal-sidebar { width:264px; transform:translateX(-100%); box-shadow:0 0 40px rgba(0,0,0,0.5); }
+  .portal-sidebar.open { transform:translateX(0); }
+  .portal-topbar { display:flex; }
+  .portal-main { margin-left:0; padding-top:calc(60px + 2.5rem); }
+  .portal-footer { margin-left:0; }
 }
 @media (max-width:768px) {
-  .portal-main { padding:calc(76px + 2rem) 5% 3rem; }
+  .portal-main { padding:calc(60px + 2rem) 5% 3rem; }
   .stat-grid { grid-template-columns:1fr; }
   .photo-grid { grid-template-columns:repeat(2,1fr); gap:0.75rem; }
   .lightbox-prev { left:0.5rem; width:42px; height:42px; font-size:1.4rem; }
@@ -177,3 +249,56 @@
   opacity: 0.75;
 }
 .filter-note a:hover { opacity: 1; }
+
+/* ---------- per-photo caption ----------
+   The description used to live on the group heading only, so a tile said
+   nothing about itself. It is `v_brand_photos.summary` — NOT `photos.caption`,
+   which is deliberately left NULL because filling it from the HubSpot note body
+   would publish internal writing (D17/D24). */
+
+.photo-item .cap {
+  position:absolute; left:0; right:0; bottom:0; padding:1.75rem 0.7rem 0.55rem;
+  background:linear-gradient(to top, rgba(8,8,8,0.92), rgba(8,8,8,0));
+  font-size:0.68rem; line-height:1.35; color:rgba(232,224,213,0.9);
+  opacity:0; transition:opacity 0.25s; pointer-events:none;
+}
+.photo-item .cap b { display:block; color:var(--gold); font-weight:600; font-size:0.64rem; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:0.15rem; }
+.photo-item:hover .cap, .photo-item:focus-within .cap { opacity:1; }
+/* Touch has no hover, so the caption would never appear. Show it always. */
+@media (hover: none) { .photo-item .cap { opacity:1; } }
+
+.lightbox-cap a { color:var(--gold); text-decoration:none; border-bottom:1px solid var(--gold-border); }
+.lightbox-cap a:hover { border-bottom-color:var(--gold); }
+
+/* ---------- a "show more" foot under a bounded list ---------- */
+.more-wrap { text-align:center; padding:1rem 0 0; }
+.btn-more {
+  background:none; border:1px solid var(--gold-border); color:var(--gold);
+  padding:0.7rem 2rem; border-radius:2px; cursor:pointer;
+  font-family:'Inter',sans-serif; font-size:0.72rem; font-weight:700;
+  letter-spacing:1.5px; text-transform:uppercase; transition:background 0.2s,color 0.2s;
+}
+.btn-more:hover:not(:disabled) { background:var(--gold); color:var(--black); }
+.btn-more:disabled { opacity:0.45; cursor:default; }
+.more-count { display:block; font-size:0.72rem; color:rgba(232,224,213,0.3); margin-top:0.75rem; }
+
+/* ---------- detail page ---------- */
+.detail-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:1px; background:var(--divider-dark); border:1px solid var(--divider-dark); border-radius:2px; overflow:hidden; }
+.detail-grid .fact { background:var(--black-rich); padding:1.15rem 1.35rem; }
+.detail-grid .fact .k { display:block; font-size:0.62rem; letter-spacing:1.5px; text-transform:uppercase; color:rgba(232,224,213,0.35); margin-bottom:0.4rem; }
+.detail-grid .fact .v { font-size:1rem; color:var(--white); font-weight:500; overflow-wrap:anywhere; }
+
+.summary-box { padding:1.4rem 1.5rem; font-size:0.95rem; line-height:1.75; color:rgba(232,224,213,0.8); }
+
+/* A flag from v_activity_money, said in words. The three lie in different
+   directions and the direction is the useful part (D78/D90). */
+.note-flag { display:flex; gap:0.85rem; padding:1rem 1.35rem; border-bottom:1px solid var(--divider-dark); font-size:0.85rem; line-height:1.6; color:rgba(232,224,213,0.7); }
+.note-flag:last-child { border-bottom:none; }
+.note-flag b { color:var(--gold); font-weight:600; white-space:nowrap; }
+.note-flag.warn b { color:#C98A5A; }
+
+.crumb { font-size:0.78rem; color:rgba(232,224,213,0.4); margin-bottom:0.9rem; }
+.crumb a { color:var(--gold); text-decoration:none; }
+.crumb a:hover { text-decoration:underline; }
+
+.caveat { font-size:0.78rem; color:rgba(232,224,213,0.35); line-height:1.65; margin-top:0.9rem; }

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Activity | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <p class="crumb" id="crumb"></p>
+        <span class="portal-eyebrow" id="eyebrow">Activity</span>
+        <h1 id="title">Activity</h1>
+        <p class="portal-sub" id="sub"></p>
+      </div>
+    </div>
+
+    <div id="body"></div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <div class="lightbox" id="lightbox">
+    <button class="lightbox-close" id="lb-close" aria-label="Close">&times;</button>
+    <button class="lightbox-prev" id="lb-prev" aria-label="Previous">&#8249;</button>
+    <button class="lightbox-next" id="lb-next" aria-label="Next">&#8250;</button>
+    <div class="lightbox-content">
+      <img id="lb-img" alt="">
+      <p class="lightbox-cap" id="lb-cap"></p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, isStaff, param,
+             fmtDate, fmtNum, money, MARKET_LABEL } from './portal.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      // Staff arrive from a brand; a brand user arrives from their own log.
+      renderShell(isStaff(auth.profile) ? 'brands.html' : 'activity.html', auth.profile);
+
+      const id = param('id');
+      const el = document.getElementById('body');
+
+      if (!id) {
+        render(el, { empty: { title: 'No activity chosen', body: 'Open one from an activity list.' } });
+      } else {
+
+      /* ---------- lightbox ----------
+         Wired before the fetch so nothing can reach `shots` in its temporal
+         dead zone once photos start arriving. */
+      const lb = document.getElementById('lightbox');
+      let shots = [];
+      let index = 0;
+      function open(i) { index = i; paint(); lb.classList.add('open'); document.body.style.overflow = 'hidden'; }
+      function close() { lb.classList.remove('open'); document.body.style.overflow = ''; }
+      function step(d) { if (shots.length) { index = (index + d + shots.length) % shots.length; paint(); } }
+      function paint() {
+        const s = shots[index];
+        if (!s) return;
+        document.getElementById('lb-img').src = s.url;
+        document.getElementById('lb-cap').textContent = s.cap;
+      }
+      document.getElementById('lb-close').onclick = close;
+      document.getElementById('lb-prev').onclick = () => step(-1);
+      document.getElementById('lb-next').onclick = () => step(1);
+      lb.addEventListener('click', e => { if (e.target === lb) close(); });
+      document.addEventListener('keydown', e => {
+        if (!lb.classList.contains('open')) return;
+        if (e.key === 'Escape') close();
+        if (e.key === 'ArrowLeft') step(-1);
+        if (e.key === 'ArrowRight') step(1);
+      });
+
+      /* Three reads on the same id.
+         v_activity_money is staff-gated by RLS at the rate_card level, so a
+         brand user gets their own row back with the money columns NULL. That is
+         the design, not a failure — the page simply does not draw the money
+         panel when there is no money in it.
+         `notes` is nowhere here on purpose: it is internal and candid, and no
+         brand-facing view selects it. */
+      const [act, mon, pics] = await Promise.all([
+        db.from('v_brand_activity_log').select('*').eq('id', id).maybeSingle(),
+        db.from('v_activity_money').select('*').eq('activity_id', id).maybeSingle(),
+        db.from('v_brand_photos').select('*').eq('activity_id', id),
+      ]);
+
+      if (act.error) {
+        render(el, { error: act.error });
+      } else if (!act.data) {
+        // Either the id is wrong or RLS says this row does not exist for you.
+        // Both answers look the same from here, and should.
+        render(el, { empty: {
+          title: 'Not found',
+          body: 'That activity is not on file, or is not part of your portal.' } });
+      } else {
+        const a = act.data;
+        const m = mon.data || {};
+        const staff = isStaff(auth.profile);
+
+        document.title = `${a.activity_type || 'Activity'} — ${a.venue_name || a.brand_name} | iHospitality`;
+        document.getElementById('eyebrow').textContent = a.brand_name || 'Activity';
+        document.getElementById('title').textContent = a.venue_name || a.activity_type || 'Activity';
+        document.getElementById('sub').textContent =
+          [fmtDate(a.activity_date), a.activity_type].filter(Boolean).join(' · ');
+
+        // Staff came through the brand page; send them back to it.
+        document.getElementById('crumb').innerHTML = staff
+          ? `<a href="brands.html">Brands</a> &rsaquo; <a href="brand.html?slug=${encodeURIComponent(slugify(a.brand_name))}">${esc(a.brand_name)}</a>`
+          : `<a href="activity.html">&larr; All activity</a>`;
+
+        const fact = (k, v) => v === null || v === undefined || v === ''
+          ? '' : `<div class="fact"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`;
+
+        const facts = [
+          fact('Date', esc(fmtDate(a.activity_date))),
+          fact('Brand', esc(a.brand_name)),
+          fact('Account', esc(a.venue_name || '')),
+          fact('City', esc(a.city || '')),
+          fact('Market', esc(MARKET_LABEL[a.market] || a.market || '')),
+          fact('Activity type', esc(a.activity_type || '')),
+          fact('Quantity', a.quantity ? fmtNum(a.quantity) : ''),
+          fact('Value', a.amount ? money(a.amount) : ''),
+          fact('Points of distribution', a.pods ? fmtNum(a.pods) : ''),
+        ].join('');
+
+        // Money is a staff panel by construction — for a brand login every one
+        // of these columns comes back NULL, and an empty panel says nothing.
+        const hasMoney = m.charge != null || m.cost != null || m.unpriced;
+        const moneyPanel = !hasMoney ? '' : `
+          <div class="panel">
+            <div class="panel-head"><h2>What it billed</h2><span class="hint">Internal</span></div>
+            <div class="detail-grid">
+              ${fact('Charge rate', m.charge_rate != null ? money(m.charge_rate)
+                    : (m.charge_pct != null ? (Number(m.charge_pct) * 100).toFixed(2) + '%' : ''))}
+              ${fact('Pay rate', m.pay_rate != null ? money(m.pay_rate)
+                    : (m.pay_pct != null ? (Number(m.pay_pct) * 100).toFixed(2) + '%' : ''))}
+              ${fact('Charged', m.charge != null ? money(m.charge) : '')}
+              ${fact('Contractor cost', m.cost != null ? money(m.cost) : '')}
+              ${fact('Margin', m.charge != null && m.cost != null
+                    ? `<span class="${Number(m.charge) - Number(m.cost) < 0 ? 'neg' : ''}">${money(Number(m.charge) - Number(m.cost))}</span>` : '')}
+              ${fact('Priced on', m.source_activity_type ? esc(m.source_activity_type) : '')}
+            </div>
+            ${flags(m)}
+          </div>`;
+
+        const summary = a.summary
+          ? `<div class="panel">
+               <div class="panel-head"><h2>What happened</h2></div>
+               <div class="summary-box">${esc(a.summary)}</div>
+             </div>` : '';
+
+        el.innerHTML = `
+          <div class="detail-grid" style="margin-bottom:2.5rem">${facts}</div>
+          ${summary}
+          ${moneyPanel}
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Photos</h2>
+              <span class="hint" id="pic-count"></span>
+            </div>
+            <div id="pics" style="padding:1.5rem"></div>
+          </div>`;
+
+        drawPhotos(pics.data || [], pics.error, a);
+      }
+
+      /* ---------- flags, said in words ----------
+         The three ways pricing goes wrong lie in DIFFERENT directions, and the
+         direction is the useful half. A page that just showed a badge would
+         leave the reader to remember which way each one bends. */
+      function flags(m) {
+        const out = [];
+        if (m.unpriced) out.push(['warn', 'Unpriced',
+          'No rate line matched this work at all, so it charged nothing. This UNDERSTATES revenue — the work happened and was not billed for here.']);
+        if (m.uncosted) out.push(['warn', 'Uncosted',
+          'It was charged but carries no pay rate, so it looks like it cost nothing to deliver. This OVERSTATES margin.']);
+        if (m.charge_rate != null && m.pay_rate != null
+            && Number(m.charge_rate) <= Number(m.pay_rate)
+            && !(Number(m.charge_rate) === 0 && Number(m.pay_rate) === 0)) {
+          out.push(['', 'At or below cost',
+            'Fully priced and the arithmetic is right — the charge is simply at or under what it pays. That is a priced decision, not a data fault. Mileage and the fresh market incentive are deliberate pass-throughs of exactly this shape.']);
+        }
+        if (m.is_expense) out.push(['', 'Reimbursement',
+          'An itemised expense. It is paid back in full and earns nothing, by construction — it sits beside revenue, never in it.']);
+        if (m.charge_pct != null && (m.amount == null || Number(m.amount) === 0)) {
+          out.push(['warn', 'No value recorded',
+            'This is priced as a percentage, so the money comes from the value of the goods — and no value is recorded, so it charges $0.00 while showing a rate. Take the figure from the depletion report or the invoice, never from a per-bottle average.']);
+        }
+        if (!out.length) return '';
+        return out.map(([cls, k, v]) =>
+          `<div class="note-flag ${cls}"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join('');
+      }
+
+      /* ---------- photos ----------
+         The bucket is private (public = false), so a storage path is not an
+         image — every one has to be signed. Batched into a single call. */
+      async function drawPhotos(rows, error, a) {
+        const box = document.getElementById('pics');
+        const count = document.getElementById('pic-count');
+        if (error) { render(box, { error }); return; }
+        if (!rows.length) {
+          count.textContent = 'none';
+          box.innerHTML = '<div class="state">No photos on this activity.</div>';
+          return;
+        }
+        const paths = [...new Set(rows.map(r => r.storage_path))];
+        const { data: signed, error: signError } = await db.storage
+          .from('activation-photos').createSignedUrls(paths, 3600);
+        if (signError) { render(box, { error: signError }); return; }
+
+        const url = {};
+        (signed || []).forEach(s => { if (!s.error) url[s.path] = s.signedUrl; });
+        const usable = rows.filter(r => url[r.storage_path]);
+        count.textContent = `${fmtNum(usable.length)} photo${usable.length === 1 ? '' : 's'}`;
+
+        shots = usable.map(r => ({
+          url: url[r.storage_path],
+          cap: [a.summary, a.venue_name, a.activity_type, fmtDate(a.activity_date)]
+                 .filter(Boolean).join(' · '),
+        }));
+
+        box.innerHTML = `<div class="photo-grid">${usable.map((r, i) =>
+          `<div class="photo-item" data-i="${i}" tabindex="0" role="button"
+                aria-label="Open photo ${i + 1}">
+             <img src="${esc(url[r.storage_path])}"
+                  alt="${esc(a.summary || a.venue_name || 'Activation photo')}" loading="lazy">
+           </div>`).join('')}</div>`;
+
+        box.querySelectorAll('.photo-item').forEach(node => {
+          const go = () => open(Number(node.dataset.i));
+          node.addEventListener('click', go);
+          node.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+          });
+        });
+      }
+
+      /* brands.slug is generated upstream and constrained to
+         ^[a-z0-9]+(-[a-z0-9]+)*$ — this reproduces it for the breadcrumb so the
+         page does not need a fourth query just to link back. */
+      function slugify(name) {
+        return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      }
+      }
+    }
+  </script>
+</body>
+</html>

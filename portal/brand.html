@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Brand | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <p class="crumb"><a href="brands.html">&larr; All brands</a></p>
+        <span class="portal-eyebrow">Internal</span>
+        <h1 id="title">Brand</h1>
+        <p class="portal-sub" id="count"></p>
+      </div>
+      <div class="filters">
+        <select id="f-from" aria-label="From month"></select>
+        <select id="f-to" aria-label="To month"></select>
+      </div>
+    </div>
+
+    <div id="stats"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>What was done</h2>
+        <span class="hint">By activity type, over the months chosen</span>
+      </div>
+      <div id="mix"></div>
+    </div>
+    <p class="caveat" id="mix-note"></p>
+
+    <div class="panel" style="margin-top:2.5rem">
+      <div class="panel-head">
+        <h2>Every activity</h2>
+        <span class="hint">Click a row for the detail and its photos</span>
+      </div>
+      <div id="log"></div>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, isStaff, param,
+             fmtDate, fmtNum, money, monthRange, sortableTable, MARKET_LABEL } from './portal.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('brands.html', auth.profile);   // a detail page lights its parent
+
+      const slug = param('slug');
+      const mixEl = document.getElementById('mix');
+      const logEl = document.getElementById('log');
+
+      if (!isStaff(auth.profile)) {
+        render(logEl, { empty: {
+          title: 'Staff only',
+          body: 'This page shows one brand in full and is not part of your portal.' } });
+      } else if (!slug) {
+        // Reachable by hand, and by the login round trip if the query string is
+        // ever dropped. Say what is missing rather than rendering an empty page.
+        render(logEl, { empty: {
+          title: 'No brand chosen',
+          body: 'Open a brand from the Brands page.' } });
+      } else {
+
+      const { data: brand, error: brandError } = await db
+        .from('brands').select('id, name, slug, is_active').eq('slug', slug).maybeSingle();
+
+      if (brandError || !brand) {
+        render(logEl, brandError ? { error: brandError } : { empty: {
+          title: 'No such brand',
+          body: 'That link points at a brand that is not on file.' } });
+      } else {
+        document.title = `${brand.name} | iHospitality Brand Portal`;
+        document.getElementById('title').textContent = brand.name;
+
+        /* Three reads, keyed three different ways — the money views join on the
+           brand NAME (invoice_recap and friends are keyed on text), while the
+           activity log carries brand_id. Not tidy, but it is what the views do. */
+        const [revenue, log, money_] = await Promise.all([
+          db.from('v_brand_month_revenue').select('*').eq('brand_name', brand.name),
+          db.from('v_brand_activity_log').select('*').eq('brand_id', brand.id),
+          db.from('v_activity_money').select(
+            'activity_id, charge, cost, unpriced, uncosted, is_expense, reimbursement')
+            .eq('brand_name', brand.name),
+        ]);
+
+        const bad = revenue.error || log.error || money_.error;
+        if (bad) {
+          render(logEl, { error: bad });
+        } else {
+          const byActivity = new Map((money_.data || []).map(m => [m.activity_id, m]));
+          const logRows = (log.data || []).map(r => ({ ...r, m: byActivity.get(r.id) || {} }));
+
+          // Months come from both sources: a month can carry a retainer with no
+          // activity in it, and that month is still part of the brand.
+          const months = [...new Set([
+            ...(revenue.data || []).map(r => r.month),
+            ...logRows.map(r => String(r.activity_date).slice(0, 7)),
+          ])].sort().reverse();
+
+          monthRange('f-from', 'f-to', months, (from, to) => {
+            const rev = (revenue.data || []).filter(r => !from || (r.month >= from && r.month <= to));
+            const acts = logRows.filter(r => {
+              const m = String(r.activity_date).slice(0, 7);
+              return !from || (m >= from && m <= to);
+            });
+            drawStats(rev, acts);
+            drawMix(acts);
+            drawLog(acts);
+          });
+
+          function drawStats(rev, acts) {
+            const t = rev.reduce((a, r) => ({
+              revenue: a.revenue + Number(r.revenue || 0),
+              retainer: a.retainer + Number(r.retainer || 0),
+              charge: a.charge + Number(r.activity_charge || 0),
+              cost: a.cost + Number(r.contractor_cost || 0),
+              margin: a.margin + Number(r.margin || 0),
+              uncosted: a.uncosted + Number(r.uncosted_charge || 0),
+              unpriced: a.unpriced + Number(r.unpriced_activities || 0),
+            }), { revenue: 0, retainer: 0, charge: 0, cost: 0, margin: 0, uncosted: 0, unpriced: 0 });
+
+            const venues = new Set(acts.map(r => r.venue_name).filter(Boolean)).size;
+            document.getElementById('count').textContent =
+              `${fmtNum(acts.length)} activit${acts.length === 1 ? 'y' : 'ies'} · ` +
+              `${fmtNum(venues)} account${venues === 1 ? '' : 's'} touched`;
+
+            const stats = document.getElementById('stats');
+            stats.className = 'stat-grid';
+            stats.innerHTML = `
+              <div class="stat-card">
+                <span class="num">${money(t.revenue)}</span>
+                <span class="lbl">Revenue</span>
+                <span class="meta">retainer ${money(t.retainer)} of it</span>
+              </div>
+              <div class="stat-card">
+                <span class="num">${money(t.charge)}</span>
+                <span class="lbl">Activity charge</span>
+                <span class="meta">the work, not the retainer</span>
+              </div>
+              <div class="stat-card">
+                <span class="num">${money(t.cost)}</span>
+                <span class="lbl">Contractor cost</span>
+                <span class="meta">per-activity pay only</span>
+              </div>
+              <div class="stat-card">
+                <span class="num${t.margin < 0 ? ' neg' : ''}">${money(t.margin)}</span>
+                <span class="lbl">Margin</span>
+                <span class="meta">before base pay</span>
+              </div>
+              ${t.uncosted ? `
+              <div class="stat-card">
+                <span class="num">${money(t.uncosted)}</span>
+                <span class="lbl">Charged, not costed</span>
+                <span class="meta">margin above is overstated by up to this</span>
+              </div>` : ''}
+              ${t.unpriced ? `
+              <div class="stat-card">
+                <span class="num">${fmtNum(t.unpriced)}</span>
+                <span class="lbl">Unpriced activities</span>
+                <span class="meta">no rate line — revenue understated</span>
+              </div>` : ''}`;
+          }
+
+          /* The activity-type breakdown is computed here rather than read from
+             v_activity_mix, which is otherwise exactly this shape — the view has
+             no month column, so it can only ever answer for all time, and the
+             whole point of this page is the period picker. */
+          function drawMix(acts) {
+            const by = {};
+            for (const r of acts) {
+              const key = r.activity_type || '(unclassified)';
+              const g = by[key] ||= { type: key, n: 0, venues: new Set(), units: 0, charge: 0, cost: 0, unpriced: 0 };
+              g.n += 1;
+              if (r.venue_name) g.venues.add(r.venue_name);
+              g.units += Number(r.quantity || 0);
+              g.charge += Number(r.m.charge || 0);
+              g.cost += Number(r.m.cost || 0);
+              if (r.m.unpriced) g.unpriced += 1;
+            }
+            const rows = Object.values(by).map(g => ({ ...g, venues: g.venues.size, margin: g.charge - g.cost }));
+            if (!rows.length) {
+              render(mixEl, { empty: { title: 'Nothing in these months', body: 'Widen the range above.' } });
+              return;
+            }
+            sortableTable(mixEl, rows, [
+              { head: 'Activity type', always: true, cls: 'venue', get: r => esc(r.type), sortValue: r => r.type },
+              { head: 'Activities', cls: 'num', always: true, get: r => fmtNum(r.n), sortValue: r => r.n },
+              { head: 'Accounts', cls: 'num', get: r => fmtNum(r.venues), value: r => r.venues, sortValue: r => r.venues },
+              { head: 'Units', cls: 'num', get: r => fmtNum(r.units), value: r => r.units, sortValue: r => r.units },
+              { head: 'Charge', cls: 'num', get: r => money(r.charge), value: r => r.charge, sortValue: r => r.charge },
+              { head: 'Cost', cls: 'num', get: r => money(r.cost), value: r => r.cost, sortValue: r => r.cost },
+              { head: 'Margin', cls: 'num', value: r => r.margin, sortValue: r => r.margin,
+                get: r => `<span class="${r.margin < 0 ? 'neg' : ''}">${money(r.margin)}</span>` },
+              { head: 'Unpriced', cls: 'num', value: r => r.unpriced, sortValue: r => r.unpriced,
+                get: r => r.unpriced ? `<span class="pill pill-dormant">${fmtNum(r.unpriced)}</span>` : '<span class="muted">—</span>' },
+            ], { sort: 'Activities', dir: 'desc' });
+          }
+
+          function drawLog(acts) {
+            if (!acts.length) {
+              render(logEl, { empty: { title: 'Nothing in these months', body: 'Widen the range above.' } });
+              return;
+            }
+            sortableTable(logEl, acts, [
+              { head: 'Date', always: true, nowrap: true, get: r => fmtDate(r.activity_date), sortValue: r => r.activity_date },
+              { head: 'Account', always: true, cls: 'venue', get: r => esc(r.venue_name || '—'), sortValue: r => r.venue_name || '' },
+              { head: 'City', get: r => esc(r.city || ''), sortValue: r => r.city || '' },
+              { head: 'Market', get: r => esc(MARKET_LABEL[r.market] || r.market || ''), sortValue: r => r.market || '' },
+              { head: 'Activity', always: true, get: r => esc(r.activity_type || ''), sortValue: r => r.activity_type || '' },
+              { head: 'Qty', cls: 'num', get: r => fmtNum(r.quantity), value: r => Number(r.quantity), sortValue: r => Number(r.quantity || 0) },
+              { head: 'Value', cls: 'num', value: r => Number(r.amount), sortValue: r => Number(r.amount || 0),
+                get: r => r.amount ? money(r.amount) : '<span class="muted">—</span>' },
+              { head: 'Charge', cls: 'num', value: r => Number(r.m.charge), sortValue: r => Number(r.m.charge || 0),
+                get: r => r.m.unpriced ? '<span class="pill pill-dormant">Unpriced</span>'
+                        : (r.m.charge != null ? money(r.m.charge) : '<span class="muted">—</span>') },
+              { head: 'What happened', get: r => esc(r.summary || ''), sortValue: r => r.summary || '' },
+              { head: 'Photos', cls: 'num', value: r => Number(r.photo_count), sortValue: r => Number(r.photo_count || 0),
+                get: r => Number(r.photo_count) ? fmtNum(r.photo_count) : '<span class="muted">—</span>' },
+            ], {
+              sort: 'Date', dir: 'desc',
+              onRowClick: (r) => { location.href = `activity-detail.html?id=${encodeURIComponent(r.id)}`; },
+            });
+          }
+
+          document.getElementById('mix-note').innerHTML =
+            'Activity types are deliberately coarser than the rate card. Three source ' +
+            'strings priced at $150, $0 and $100 all read as one <em>tasting event</em> here — ' +
+            'analysis groups by type, billing joins on the raw source string. ' +
+            'Open a row below to see the rate that was actually applied.';
+        }
+      }
+      }
+    }
+  </script>
+</body>
+</html>

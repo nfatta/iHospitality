@@ -149,7 +149,12 @@
         { head: 'What happened', value: r => r.summary, get: r => esc(r.summary || '') },
         { head: 'Photos', cls: 'num', value: r => Number(r.photo_count),
           get: r => fmtNum(r.photo_count) },
-      ], { sort: 'Date', dir: 'desc' });
+      ], {
+        sort: 'Date', dir: 'desc',
+        // A row opens the activity in full, with its photos. This is the only
+        // route to that page for a brand user — staff reach it through a brand.
+        onRowClick: (r) => { location.href = `activity-detail.html?id=${encodeURIComponent(r.id)}`; },
+      });
     }
   </script>
 </body>
