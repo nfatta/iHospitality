@@ -13,3 +13,27 @@
 #
 # portal/ now contains only what the browser is meant to fetch: the five pages,
 # portal.css and portal.js.
+
+# ---------------------------------------------------------------------------
+# INTERNAL DOCUMENTS ARE NOT PUBLIC. Added 26 Aug 2026, after DECISIONS.md was
+# found returning 200 on the deploy preview — 305 KB of contractor pay, brand
+# margins and invoice figures, on a public URL with no login. Production was
+# spared only because those files were not on `main` yet; merging the PR would
+# have published every one of them.
+#
+# THE FILES MOVED INTO `docs/` RATHER THAN BEING BLOCKED WHERE THEY LAY, and
+# that is the whole point. Netlify's `*` is a TRAILING splat, not a filename
+# glob — the note at the top of this file records that `/portal/*.sql` does not
+# match and would have served the schema while looking blocked (D12). A
+# directory prefix is the one shape the splat really does cover.
+#
+# The `!` is required. Netlify serves a matching static file IN PREFERENCE to a
+# redirect unless the rule is forced, so `404` without the bang would have left
+# every one of these files readable while this block sat here looking like it
+# had closed them.
+/docs/*      /404.html   404!
+
+# CLAUDE.md cannot move: Claude Code reads it from the project root. It carries
+# the same commercial detail as the rest, so it is blocked by exact path — which
+# works, unlike a filename glob, because it is a literal path and not a pattern.
+/CLAUDE.md   /404.html   404!

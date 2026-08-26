@@ -1,9 +1,17 @@
 # CLAUDE.md — standing instructions
 
-Read these before doing anything: **`HANDOFF.md` (start here — where we
-stopped and the next prompt)**, `PROGRESS.md` (where the build is),
-`DECISIONS.md` (judgment calls already made and why), `PORTAL_PLAN.md` (the WHAT
-— its locked decisions are final). `BUILD-PLAYBOOK.md` is the HOW.
+Read these before doing anything: **`docs/HANDOFF.md` (start here — where we
+stopped and the next prompt)**, `docs/PROGRESS.md` (where the build is),
+`docs/DECISIONS.md` (judgment calls already made and why), `docs/PORTAL_PLAN.md`
+(the WHAT — its locked decisions are final). `docs/BUILD-PLAYBOOK.md` is the HOW.
+
+**THEY LIVE IN `docs/` BECAUSE THE REPO ROOT IS THE PUBLISH DIRECTORY.** On
+26 Aug 2026 `DECISIONS.md` was found returning 200 on the deploy preview — 305 KB
+of contractor pay, brand margins and invoice figures, public, with no login.
+`_redirects` now force-404s `/docs/*`, which works because Netlify's `*` is a
+TRAILING splat and a directory prefix is the one shape it really covers (D12).
+Do not move them back to the root, and if you add another internal document,
+put it in `docs/`.
 
 ## Two repos, and why
 
@@ -434,7 +442,7 @@ reproduces it; keep it that way.
   invisible. Its commission ties EXACTLY in both checked months, so this and a
   "Smoke Tops" line are the whole of its difference.
 - **The portal does not yet model the retainer**, which is most of what every
-  brand pays, so no revenue or margin figure here is complete. See `HANDOFF.md`.
+  brand pays, so no revenue or margin figure here is complete. See `docs/HANDOFF.md`.
 - **The invoice PDFs are the billing source, and `parse_invoices.py` reads
   them** (D93). They carry the line detail the QuickBooks API blanks (D70),
   including the month's GROSS stated on the commission line. **Every invoice
@@ -529,8 +537,9 @@ reproduces it; keep it that way.
 | `portal/` | The twelve portal pages, `portal.css`, `portal.js`. Servable files only. |
 | `portal/brands.html`, `brand.html`, `activity-detail.html` | The admin surface (D120). Staff-labelled "Admin"; RLS does the gating. |
 | `css/site.css` | Shared tokens, nav, buttons, section base, footer, mobile nav. |
-| `PORTAL_PLAN.md` | Architecture doc — phases, locked decisions. |
-| `HANDOFF.md` | Where the last session stopped, and the next prompt. |
+| `docs/` | The internal documents. **Force-404'd by `_redirects` — not public.** |
+| `docs/PORTAL_PLAN.md` | Architecture doc — phases, locked decisions. |
+| `docs/HANDOFF.md` | Where the last session stopped, and the next prompt. |
 | `../../Hubspot/portal_seed/admin/` | The staff admin (Streamlit). Analysis, review, cleanup. |
 | `../../Hubspot/portal_seed/promote.py` | Promote / reject / suppress a staged deal. One definition, two callers. |
 | `../../Hubspot/portal_seed/` | Python tooling + `db/schema.sql`. Separate repo. |

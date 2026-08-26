@@ -5755,3 +5755,47 @@ another widget in it can never change (D92). Live widgets in a fragment.
 **The status trigger still only ever ADVANCES (D86)**, so a backdated depletion
 moves a venue to `placed`/`reordering` without regard to chronology. The page
 says so after saving rather than letting it be discovered.
+
+---
+
+**D133 — THE INTERNAL DOCUMENTS WERE PUBLIC ON THE DEPLOY PREVIEW. THEY LIVE IN
+`docs/` NOW, FORCE-404'd.**
+⚠️ found and fixed 26 Aug 2026.
+
+`https://deploy-preview-1--cool-dusk-e84d8f.netlify.app/DECISIONS.md` returned
+**200**. So did `CLAUDE.md`, `HANDOFF.md`, `PROGRESS.md`, `PORTAL_PLAN.md`,
+`BUILD-PLAYBOOK.md`, `GALLERY_PLAN.md` and `WORK_LOG_2026-07-27.md` —
+**305 KB of DECISIONS.md alone**, 290 of its lines mentioning contractor pay,
+margins or invoices. Every brand's rates, the base pay figures, the invoice
+reconciliation, revenue. No login in front of any of it.
+
+**THIS IS D12's RULE, AND D12 ONLY EVER COVERED HALF OF IT.** The repo root IS
+the Netlify publish directory, so every committed file is served; D12 worked
+that out for `*.sql` and concluded the schema must live in the other repo. The
+markdown was never considered, because it is *documentation* and documentation
+does not feel like a servable asset. It is one.
+
+**PRODUCTION WAS SPARED BY AN ACCIDENT OF BRANCHING, NOT BY ANY CONTROL.**
+`ihospitality.vip` returned 404 for all of them only because they sat on
+`portal-v1` and had never reached `main`. **Merging PR #1 would have published
+every one of them.**
+
+**The fix is a directory, not a pattern, and the distinction is D12's own.**
+Netlify's `*` is a TRAILING splat, not a filename glob — which is exactly why
+`/portal/*.sql` does not match and would have served the schema while looking
+blocked. `/docs/*` is a directory prefix, the one shape the splat really does
+cover. So the documents moved into `docs/` rather than being blocked where they
+lay.
+
+**The `!` is not decoration.** Netlify serves a matching static file IN
+PREFERENCE to a redirect unless the rule is forced, so `404` without the bang
+would have left every file readable while the rule sat in `_redirects` looking
+like it had closed them — the same class of fault as the rule it replaces.
+
+`CLAUDE.md` cannot move: Claude Code reads it from the project root. It carries
+the same commercial detail, so it is force-404'd by exact path. An exact literal
+path works where a pattern does not.
+
+**Verify by fetching, never by reading the rule.** That is the whole lesson of
+D12 and of this entry: both times the rule looked right and the file was served
+anyway.
