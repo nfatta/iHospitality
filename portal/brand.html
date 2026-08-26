@@ -93,7 +93,9 @@
            activity log carries brand_id. Not tidy, but it is what the views do. */
         const [revenue, log, money_] = await Promise.all([
           db.from('v_brand_month_revenue').select('*').eq('brand_name', brand.name),
-          db.from('v_brand_activity_log').select('*').eq('brand_id', brand.id),
+          db.from('v_brand_activity_log').select('*').eq('brand_id', brand.id)
+            // See the note in activity.html. Hidden from the LIST only.
+            .neq('activity_type_code', 'monthly_commission'),
           db.from('v_activity_money').select(
             'activity_id, charge, cost, unpriced, uncosted, is_expense, reimbursement')
             .eq('brand_name', brand.name),
@@ -224,8 +226,6 @@
               { head: 'Market', get: r => esc(MARKET_LABEL[r.market] || r.market || ''), sortValue: r => r.market || '' },
               { head: 'Activity', always: true, get: r => esc(r.activity_type || ''), sortValue: r => r.activity_type || '' },
               { head: 'Qty', cls: 'num', get: r => fmtNum(r.quantity), value: r => Number(r.quantity), sortValue: r => Number(r.quantity || 0) },
-              { head: 'Value', cls: 'num', value: r => Number(r.amount), sortValue: r => Number(r.amount || 0),
-                get: r => r.amount ? money(r.amount) : '<span class="muted">—</span>' },
               { head: 'Charge', cls: 'num', value: r => Number(r.m.charge), sortValue: r => Number(r.m.charge || 0),
                 get: r => r.m.unpriced ? '<span class="pill pill-dormant">Unpriced</span>'
                         : (r.m.charge != null ? money(r.m.charge) : '<span class="muted">—</span>') },

@@ -66,7 +66,9 @@
       // per month. That is the fix for August appearing four times.
       const [months, log, venues] = await Promise.all([
         db.from('v_monthly_summary').select('*').order('month', { ascending: false }),
-        db.from('v_brand_activity_log').select('*').limit(10),
+        db.from('v_brand_activity_log').select('*')
+          // See the note in activity.html. Filtered BEFORE the limit.
+          .neq('activity_type_code', 'monthly_commission').limit(10),
         db.from('v_brand_venue_counts').select('venue_id'),
       ]);
 

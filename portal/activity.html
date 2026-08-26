@@ -59,7 +59,27 @@
       const wanted = new URLSearchParams(location.search).get('month');
       const month = /^\d{4}-\d{2}$/.test(wanted || '') ? wanted : null;
 
-      const { data, error } = await db.from('v_brand_activity_log').select('*');
+      // MONTH-LEVEL COMMISSION ROLL-UPS ARE NOT LISTED. Operator's call,
+      // 26 Aug 2026: they are a billing total, not something that happened.
+      //
+      // Dame Mas was billed Jul 2025 - Mar 2026 off the distributor's whole
+      // monthly depletion report, and no per-venue breakdown exists for those
+      // months (D93). So one row carries the month's money and the individual
+      // sales are priced at an explicit 0.00 to stop the same money being
+      // counted twice. In the log that reads as though a case sale earned
+      // nothing, which is the opposite of true: $33,072.75 of gross sits behind
+      // 84 logged bottles, so the roll-up covers roughly twice the product the
+      // log knows about.
+      //
+      // FILTERED IN POSTGRES, NOT AFTER THE FETCH. The dashboard takes
+      // `.limit(10)`, so dropping rows client-side would quietly return fewer
+      // than ten -- the same fault D122 describes for the gallery.
+      //
+      // THE MONEY IS UNAFFECTED. Revenue and margin come from v_activity_money
+      // and v_brand_month_revenue, which still include it. This hides an entry
+      // from a list; it does not remove a charge.
+      const { data, error } = await db.from('v_brand_activity_log')
+        .select('*').neq('activity_type_code', 'monthly_commission');
       if (error) {
         render(document.getElementById('log'), { error });
       } else if (!data.length) {
@@ -141,11 +161,6 @@
         // because staff see all brands at once and would get it permanently.
         // The data stays in `activities.pods` and in the aggregate views; it
         // wants a Dame Mas-shaped home, not a general one.
-        { head: 'Value', cls: 'num', nowrap: true, value: r => Number(r.amount),
-          get: r => Number(r.amount)
-            ? '$' + Number(r.amount).toLocaleString(undefined,
-                { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-            : '<span class="muted">—</span>' },
         { head: 'What happened', value: r => r.summary, get: r => esc(r.summary || '') },
         { head: 'Photos', cls: 'num', value: r => Number(r.photo_count),
           get: r => fmtNum(r.photo_count) },

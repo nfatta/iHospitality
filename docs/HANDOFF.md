@@ -1302,3 +1302,86 @@ on the Cost to serve tab without comment.
   comments, not assertions.
 - The first real sync will likely re-promote the backfilled rows as state
   `auto`. Expected and harmless — none are hand-edited.
+
+---
+
+## ⚠️ OPEN, 26 Aug 2026 — DAME MAS'S NINE COMMISSION MONTHS
+
+**Parked deliberately, not forgotten.** The operator asked for it to be hidden
+for now and picked up next session: *"Hide it for now. We will come back to
+that. Put it in the notes for our next session."*
+
+### What is actually wrong
+
+Nothing double-counts — that was checked and it is clean. The two pricing models
+are **mutually exclusive by month**:
+
+| | sale rows | what they charge | commission row |
+|---|---|---|---|
+| Jul 2025 – Mar 2026 | 58 | **$0.00** | $3,307.28 across 9 rows |
+| Apr 2026 → | 25 | **carries its own 10%** | none |
+
+From April 2026 the model is exactly what the operator described: *"We do get
+paid on case sales and bottle sales, just a percentage not a fixed price."*
+$16,577.30 of gross over 100 bottles — **$165.77 a bottle**, which sits properly
+between the $123.00 Reposado and the $210.75 Extra Añejo — charged at exactly
+10.0%.
+
+**The nine older months are a DATA GAP, not a pricing decision.** No per-venue
+depletion exists for them, so the invoice was billed off the distributor's whole
+monthly report and the portal books one row per month (D93). The individual
+sales are zeroed so the same money is not counted twice.
+
+### The number that settles what can and cannot be done
+
+| Jul 2025 – Mar 2026 | |
+|---|---|
+| gross the commission was billed on | **$33,072.75** |
+| bottles logged in the portal | **84** |
+| implied price per logged bottle | $393.72 — **not a price anyone has ever charged** |
+| 84 bottles even at the DEAREST SKU | $17,703 = **at most 54% of the gross** |
+
+**So the commission row is not a duplicate of those 84 sales — it covers roughly
+twice as much product.** Most of the difference is reorders that reached venues
+through the distributor's rep with no visit and nothing to log, which is D118's
+structure exactly.
+
+**DO NOT SPREAD THE COMMISSION ACROSS THE LOGGED SALES.** It would invent a
+per-bottle price *and* a per-venue attribution, pinning reorders at unvisited
+venues onto the handful that happened to be visited. D101 already bans inferring
+a unit price from a blended average, and the arithmetic above is why.
+
+### The real fix, for next session
+
+**Get Dame Mas's per-venue depletion reports for Jul 2025 – Mar 2026 from the
+distributor.** Loading them removes the problem on its own: D93's guard skips
+any month that already carries percentage-priced rows, so the commission row
+stops and every bottle sale picks up its own 10% — the model the operator
+expects. Nothing in the code needs changing for that to happen.
+
+### What was done in the meantime
+
+**The commission rows are hidden from the activity LISTS only** —
+`activity.html`, `brand.html` and `index.html` filter
+`activity_type_code = 'monthly_commission'` **in Postgres, before any limit**
+(client-side filtering would have broken the dashboard's `.limit(10)`, the same
+fault D122 describes for the gallery).
+
+**THE MONEY IS UNTOUCHED and this must stay true.** Dame Mas over the portal's
+default window still reads revenue **$14,036.78**, retainer $9,000.00, activity
+charge **$5,036.78** — of which **$2,576.63 is the hidden rows**. Revenue and
+margin come from `v_activity_money` and `v_brand_month_revenue`, which do not
+filter. If a future change makes those figures move, the filter has leaked out
+of the list and into the money.
+
+**Also removed: the "Value" column** on `activity.html` and `brand.html`. It
+read `activities.amount` — the gross the PRODUCT sold for — under a header that
+said "Value", and was blank on **1,166 of 1,238 rows (94%)** because only
+percentage-priced work has an amount at all. Operator: *"I don't like what it
+adds. I think instead if we saw how much we charged or how much we made that
+would be more useful, but we will make that decision another day."*
+**That decision is also open.** Note that a brand login reads **NULL** for
+charge and cost — `rate_card` is staff-only and `v_activity_money` is
+`security_invoker` — so showing a brand what it was charged is a schema and
+disclosure decision, not a column change. `brand.html` is staff-only and already
+shows Charge.
