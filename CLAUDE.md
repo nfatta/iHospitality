@@ -170,6 +170,16 @@ reproduces it; keep it that way.
   aliases and invoice figures live in tables the admin edits at runtime. A rule
   compiled into a script is a rule the operator cannot reach. `load_rate_card.py`
   is retired and its write path deleted — do not revive it.
+- **AN ACTIVITY CAN NOW BE ADDED IN THE ADMIN WITH NO HUBSPOT DEAL** (D132) —
+  "Add a missing activity" on Review and edit. For work that was never a deal: a
+  distributor-driven reorder nobody visited for (D118), or a line found on an
+  invoice afterwards. The row has **no `hubspot_deal_id`**, so the sync can
+  neither revert nor duplicate it (D84). It picks `source_activity_type` from
+  strings the rate card already knows (D74), refuses to create venues (D81),
+  refuses an exact duplicate because the quantity is the multiplier (D65), and
+  **prices the row by inserting it and rolling back** (D91) so charge, cost and
+  margin are on screen before saving. `activities_date_not_future` is a CHECK
+  constraint — an activity cannot be dated ahead of today.
 - **HubSpot lands in staging; a person promotes it** (D64) — **for DEALS only.**
   `apply()` upserts `brands` and `venues` DIRECTLY, before the staging zone is
   reached (D83). Do not assume the staging zone covers anything but deals.

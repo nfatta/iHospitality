@@ -5688,3 +5688,70 @@ value BY VALUE, not by position**, so reordering the options moves nothing —
 every page still opens on the last twelve months. Confirmed in a browser on all
 three pages: options run June 2025 → August 2026, selection stays September 2025
 → August 2026.
+
+---
+
+**D132 — AN ACTIVITY CAN BE ADDED IN THE ADMIN, WITHOUT A HUBSPOT DEAL. IT IS
+THE FIRST ROW-CREATING WRITE PATH AND IT IS DELIBERATE.**
+26 Aug 2026. Operator: *"I would rather not go through HubSpot. Let's make that
+I can add it in the review and edit tab."*
+
+Until now every activity reached the portal through HubSpot — it lands in
+staging and a person promotes it (D64). That is still right for work a
+contractor logged. **It is wrong for work nobody logged**, which is a real and
+growing category: a reorder that came through the distributor's rep with no
+visit (D118), or a line found on an invoice months later (D108). Making the
+operator invent a HubSpot deal to record something that was never a deal is a
+worse lie than recording it here.
+
+**A ROW ADDED HERE HAS NO `hubspot_deal_id`, AND THAT IS THE POINT.** The sync
+joins on the deal id, so it can neither revert this row nor duplicate it — the
+row exists in the portal only. That is D84 exactly: the portal is the source of
+record and HubSpot is an input. `hand_edited_by` is stamped so provenance is
+readable.
+
+**WHAT IT REFUSES TO DO.** It does not create venues — `_resolve_venue` refuses
+to guess for good reasons (D81) and the Venues page is where a venue is made; a
+row can be saved with no venue, but says out loud that money on a venue-less row
+is D111's signature. And it does not let the operator type a
+`source_activity_type` freehand: that raw string is what pricing keys on (D74),
+so the picker offers only strings the rate card already knows, each labelled
+with what it charges, and marked when the price comes from the shared
+`(all brands)` line rather than a brand line — which is a fact to check, not a
+fault (D119). The vocabulary is queried, never hardcoded (D60).
+
+**IT PRICES THE ROW BEFORE SAVING, BY INSERTING IT AND ROLLING BACK.** Same
+method the Rate card uses to price an edit (D91): apply it, ask
+`v_activity_money`, roll back. Never by recomputing pricing in Python, because a
+charge and a pay for one job need not sit on the same `rate_card` row and any
+second implementation drifts (D90). So the operator sees charge, cost, margin
+and the resolved type before committing — and a `recurring case` for 44 North
+shows its $0.00 charge against $5.00 of pay on screen, which is D118's
+structural gap made visible at the moment of entry.
+
+**AN EXACT DUPLICATE IS REFUSED, AND THAT IS DOMAIN-CORRECT, NOT DEFENSIVE.**
+Since D65 the quantity is the multiplier, so two identical case sales at one
+venue on one day are ONE row with quantity 2. The check also closes the replay
+hole: a Streamlit rerun can repeat a button press, and for an INSERT a repeated
+press is a duplicate row rather than a misdirected write (D103).
+
+**TWO BUGS THE BROWSER FOUND, BOTH OF WHICH LOOKED FINE IN THE CODE.**
+
+1. **`activities_date_not_future` is a CHECK constraint**, and the date defaulted
+   to the last day of the selected month. For the month you are IN that is a
+   future date — August 31 against a real date of August 26 — so the insert was
+   refused with a raw constraint error. The default is capped at today and the
+   picker's `max_value` is today.
+2. **THE DATE DID NOT FOLLOW THE MONTH PICKER.** A Streamlit widget keyed on a
+   constant keeps the value it already holds, so selecting June left the date
+   sitting in August and the row would have filed itself into the wrong month
+   **silently**. The key now interpolates the month, so it is a different widget
+   per month and the default re-derives. Same reasoning as D103: the key carries
+   what it refers to.
+
+Not an `st.form`: a form does not rerun until submit, so `disabled=` against
+another widget in it can never change (D92). Live widgets in a fragment.
+
+**The status trigger still only ever ADVANCES (D86)**, so a backdated depletion
+moves a venue to `placed`/`reordering` without regard to chronology. The page
+says so after saving rather than letting it be discovered.
