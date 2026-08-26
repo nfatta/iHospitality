@@ -72,6 +72,49 @@ reproduces it; keep it that way.
 - **Shared CSS is in `css/site.css`.** Page-specific CSS stays inline *after*
   the link so pages can override (gallery.html relies on this). Change brand
   colours in `:root` in that file only.
+- **`css/site.css` IS SHARED WITH THE PUBLIC SITE — PORTAL CHROME NEVER GOES IN
+  IT** (D121). It owns `nav`, `.nav-logo`, `.nav-links`, `.hamburger` and
+  `.mobile-nav`, and `index.html` and `gallery.html` use every one. The portal
+  navigates from a **left rail** whose class names (`.portal-sidebar`,
+  `.side-links`, `.portal-topbar`, `.portal-scrim`) all live in `portal.css`;
+  `renderShell()` sets `.portal-sidebar` on the `<nav>` element itself, which
+  outranks site.css's bare `nav`. A sidebar written in the shared file would
+  redesign the marketing site as a side effect.
+- **EVERY PORTAL PAGE MUST BE IN `login.html`'s `ALLOWED` LIST** (D124). A page
+  left out is not blocked — it is **silently redirected to the dashboard** after
+  a successful sign-in, with no error. `business.html` behaved that way from the
+  day it was written until 25 Aug 2026 and nobody noticed, because the nav link
+  works once you are already inside. `requireAuth()` now carries the query
+  string through, and the allowlist matches only the filename half so
+  `?slug=`/`?id=` survive a login.
+- **A NEW `profiles.role` VALUE FAILS SILENTLY, WITH EMPTY RESULT SETS** (D120).
+  `is_staff()` tests the literal string `'staff'` and `profile_role_enum` has
+  exactly two values, so an unrecognised role returns **false** and every
+  staff-gated table returns zero rows with no error, on a page that renders
+  perfectly. The admin portal is therefore the `staff` role with "Admin" as a UI
+  label — no schema change. A real `contractor` role IS an enum change plus ~15
+  policies, done deliberately. The failure direction is the useful part: an
+  unknown role sees less, never more.
+- **THE GALLERY IS BOUNDED, AND PHOTOS ARE THE ONLY TABLE HERE THAT GROWS
+  WITHOUT LIMIT** (D122). Postgres orders and slices (`.order(...).range(...)`),
+  the filters are applied **server-side** — filtering a page after it arrives
+  shows 60 rows drawn from the wrong set — and the dropdowns are built from
+  three small tables (`v_brand_monthly_summary`, `brands`, `v_activity_mix`),
+  never from the photo rows, because reading every photo to populate a control
+  is the thing being avoided. The page order must be TOTAL
+  (`activity_date, activity_id, id`) or a page boundary repeats or drops a row.
+- **A PHOTO'S DESCRIPTION IS `summary`, NEVER `caption`** (D122). `photos.caption`
+  is deliberately left NULL — filling it from the HubSpot note body would publish
+  internal writing (D17/D24). `v_brand_photos.summary` is already
+  `coalesce(brand_visible_summary, title)`.
+- **SHOW `uncosted_charge` BESIDE MARGIN, NEVER SUBTRACTED FROM IT.** The view
+  carries it precisely "so the margin figure can be read with the size of its own
+  blind spot next to it". The cost is unknown, not zero. And the two flags lean
+  opposite ways: **`unpriced` UNDERSTATES revenue, `uncosted` OVERSTATES margin.**
+- **Anything saying "revenue" reads `v_brand_month_revenue` or `v_month_business`,
+  NEVER `v_brand_money`.** The latter is activity charge only, and the retainer is
+  about two-thirds of what iHospitality sells ($110,850 of $167,580) — sourcing
+  revenue from it understates every brand by that much and can flip margin's sign.
 - **The account status is two layers, and mixing them up is the live trap.**
   STORED, by the trigger: non-depletion work makes a venue `pitched`, a
   depletion makes it `placed`, a **reorder** makes it `reordering` — one fact
@@ -248,10 +291,21 @@ reproduces it; keep it that way.
   card's four money fields — unusable from the day they were written, on a page
   that rendered perfectly. Drop the form and use live widgets in a fragment.
   `test_admin_sql.py` checks for it now.
+- **VERIFY RLS BY IMPERSONATION IN POSTGRES, NOT BY LOGGING IN** (D125). Never
+  create a login to test with. `auth.uid()` reads `request.jwt.claims->>'sub'`,
+  so `set local role authenticated` plus `set_config('request.jwt.claims', …,
+  true)` inside a rolled-back transaction reproduces exactly what a browser
+  session gets — and probes every staff table at once, which clicking cannot.
+  **The control is the critical half**: assert `is_superuser = off` AND assert
+  the impersonated counts DIFFER from the service_role baseline, or the check
+  cannot fail and proves nothing (D114). It covers isolation completely and
+  rendering not at all.
 - **Open every admin page — AND EVERY TAB — in a browser before calling a
-  session done** (D79, D89). And where a page takes input, TYPE IN IT (D92) —
-  opening a page is not using it. It is the highest-yield check in this project and
-  nothing else covers it. Tabs matter because `st.stop()` halts the WHOLE
+  session done** (D79, D89). **This covers the brand portal's pages too.** And
+  where a page takes input, TYPE IN IT (D92) — opening a page is not using it.
+  It is the highest-yield check in this project and nothing else covers it.
+  SQL can prove the numbers and prove the isolation; only a browser proves the
+  page renders. Tabs matter because `st.stop()` halts the WHOLE
   script run, not the block it sits in: one inside a tab killed "Edit a venue"
   from the day it was written, with a clean console and a page that looked
   perfect. Never `st.stop()` after `st.tabs()` — use `else:`.
@@ -446,7 +500,8 @@ reproduces it; keep it that way.
 
 | Path | What |
 |---|---|
-| `portal/` | The five portal pages, `portal.css`, `portal.js`. Servable files only. |
+| `portal/` | The nine portal pages, `portal.css`, `portal.js`. Servable files only. |
+| `portal/brands.html`, `brand.html`, `activity-detail.html` | The admin surface (D120). Staff-labelled "Admin"; RLS does the gating. |
 | `css/site.css` | Shared tokens, nav, buttons, section base, footer, mobile nav. |
 | `PORTAL_PLAN.md` | Architecture doc — phases, locked decisions. |
 | `HANDOFF.md` | Where the last session stopped, and the next prompt. |

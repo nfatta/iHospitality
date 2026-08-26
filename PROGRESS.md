@@ -1427,6 +1427,144 @@ were never written down and they gate D117 and D118 both. No venue is graded, no
 route exists, `venues.market` is still NULL for 186 of 187 44 North venues, and
 invoice 3178 ($720 of barrels, no work month) is still unplaced.
 
+
+## Session of 25 Aug 2026 — the admin portal, core pass (D120–D125)
+
+**A build session, not a reconciliation one. Nothing in the database changed,
+no invoice work was done, and open items 1–7 are untouched.** The operator asked
+for the web portal's admin side — his login and Phil's — and asked to start
+there before the contractor role.
+
+**Everything is UNCOMMITTED and the rendering is UNVERIFIED.** The operator was
+running remotely from a phone and could not open a browser; he asked to hold
+until he is back at the machine. See HANDOFF.
+
+### What was built
+
+Five servable files changed, three created. **No schema change, no new role, no
+Python change, no build step.**
+
+| File | Change |
+|---|---|
+| `portal/portal.js` | Sidebar `renderShell()`; `isStaff()`, `money()`, `param()`, `monthRange()`; `requireAuth()` now preserves the query string |
+| `portal/portal.css` | `.portal-sidebar` + drawer breakpoints, per-photo captions, detail-page fact grid, flag callouts, "show more" |
+| `portal/brands.html` | **NEW** — every brand over a month range, click through |
+| `portal/brand.html` | **NEW** — one brand: stat cards, activity-type breakdown, full activity log |
+| `portal/activity-detail.html` | **NEW** — one activity, its pricing, its photos, its flags in words |
+| `portal/photos.html` | Bounded paging, grouping toggle, per-tile captions, lightbox links to the activity |
+| `portal/login.html` | Allowlist fixed and extended (D124) |
+| `portal/activity.html` | Rows open the detail page |
+| `css/site.css` | **Untouched** — shared with the public site (D121) |
+
+### The four decisions that shaped it
+
+**No new role (D120).** `is_staff()` tests the literal string `'staff'` and the
+enum has two values. An `'admin'` value would return **zero rows with no error**
+from every staff table — a page that renders perfectly and shows nothing. Both
+admin logins stay `staff`; "Admin" is a label. Salaries are one tier for both,
+operator-ruled: *"Phil is also the owner of the company so he is already well
+aware."*
+
+**A left rail, portal-only (D121).** Six nav items today, eight once the rate
+card and salaries land. `css/site.css` owns the top nav AND the public site uses
+it, so the rail is new class names in `portal.css` and the marketing site does
+not move.
+
+**The gallery is bounded (D122).** Operator: *"photos will increase as time goes
+on."* Postgres orders and slices, filters are applied server-side, and the
+dropdowns are built from three small tables rather than from the photo list.
+
+**Analytics stay live (D123).** No push pipeline — everything asked for is
+already a view. Cost to serve can be computed in the browser rather than
+promoted into one, which keeps D116's page-only rule; deferred, with the
+drift risk stated.
+
+### Two live bugs found in existing code
+
+**`business.html` had NEVER been in `login.html`'s allowlist** (D124). A staff
+member deep-linking to it while logged out signed in fine and landed on the
+dashboard — silently, since the day the page was written. Every new page is now
+listed, and so is that one.
+
+**`requireAuth()` dropped the query string**, so `brand.html?slug=44-north` came
+back as a bare `brand.html`. Fixed; the allowlist now matches only the filename
+half, and the hostile cases were re-checked.
+
+### Verified — all without a login
+
+**RLS by impersonation in Postgres, rolled back (D125).** Better than clicking,
+because it probes every staff table at once:
+
+| probe | service_role | test-bluerun | test-wodka | phil |
+|---|---|---|---|---|
+| activities | 1236 | 119 | 205 | 1236 |
+| brands | 12 | 1 | 1 | 12 |
+| photos | 412 | 46 | 45 | 412 |
+| priced money rows | 1185 | **0** | **0** | 1185 |
+| rate_card / contractor_pay / venue_grading / invoice_recap / brand_retainer | 253 / 3 / 339 / 56 / 13 | **0** | **0** | full |
+
+`is_superuser=off` asserted, and impersonated counts asserted to DIFFER from the
+baseline — otherwise the check could not fail (D114).
+
+**Numbers tie to the admin to the cent.** 44 North, 2025-09..2026-08: activity
+charge **$9,197.10**, contractor cost **$4,992.10**, 330 activities, uncosted
+**$315.00**, revenue **$26,597.10**, margin **$21,605.00** — all matching the
+SQL the Analysis page runs. All **14 activity types** agree on count, accounts,
+units, charge and cost.
+
+**Also:** every column the new pages select exists (8 relations, 53 columns);
+the breadcrumb's `slugify()` reproduces all 12 real slugs; gallery paging walks
+412 photos over 7 pages with 0 duplicates and 0 dropped; all 9 page modules pass
+`node --check`; the public site still renders a 76px horizontal nav with 6 links
+and no portal class leaked into `site.css`; the mobile drawer opens, scrims,
+locks scroll and closes on tap/link/Escape.
+
+### NOT verified — and it is the check that finds things
+
+**Rendering.** Whether the pages paint correctly, whether tables land in the
+right cells, whether the stat cards read properly. D79 is explicit that opening
+the page is the highest-yield check in this project and that nothing else covers
+it. **Nobody has opened any of these five pages.**
+
+### A change made because a view's own comment demanded it
+
+`v_brand_month_revenue` carries `uncosted_charge` with a comment saying it exists
+"so the margin figure can be read with the size of its own blind spot next to
+it." Margin was being shown bare. Both new pages now show uncosted beside
+margin, with the directions named — **unpriced UNDERSTATES revenue, uncosted
+OVERSTATES margin** — and uncosted is shown beside margin rather than subtracted
+from it, because the cost is unknown, not zero.
+
+### Surfaced, not caused
+
+**46 activities carrying $9,882.28 have no venue**, and the new brand page shows
+them as "Account —". Mostly known and deliberate: Dame Mas's 9 rows at
+$3,307.28 are the month-level commission from D93, and about $3,030 is the
+synthetic `Invoice-derived` rows of open item 4. Not new damage; newly visible.
+
+| | Dame Mas | Blue Run | Heavens Door | Aspen Green | 44 North | Five Trail | Barmen | Wodka |
+|---|---|---|---|---|---|---|---|---|
+| rows | 9 | 13 | 5 | 3 | 7 | 5 | 2 | 2 |
+| charge | $3,307.28 | $2,240.00 | $1,245.00 | $1,095.00 | $1,010.00 | $800.00 | $145.00 | $40.00 |
+
+### Corrected premises
+
+**The "site is slow" report was from DYNADOT** (first noted as GoDaddy; the
+operator corrected it). Dynadot **is** the registrar, so it can probe the public
+site from outside — but it cannot have measured the portal, which is behind a
+login and `noindex`. So it was measured rather than dismissed: `index.html` is
+6 requests / 636 KB with 24 of 26 images lazy; `gallery.html` is 20 / 785 KB
+with 33 of 35 lazy. **The structure is sound.** Two real items, neither done:
+**`Hero.jpg` at 401 KB is the homepage LCP image** (with `market.jpeg` at 168 KB,
+they are 569 KB of 636 KB — WebP/AVIF would cut them 60–70%), and **the Google
+Fonts stylesheet is render-blocking from a third-party origin** (self-hosting
+`woff2` + `@font-face` removes it with no build step). See D123.
+
+**"Only clean data, not staged" was already true** — the whole `staging` schema
+is revoked from `anon` and `authenticated`, so no browser can reach it. The one
+exception is venue ATTRIBUTES, which `apply()` writes directly (D83) — which is
+why `Crown Lounge` still shows a venue name in its city column.
+
 ## Known data problems to resolve before seeding
 
 Found by profiling the six `hubspot-crm-exports-*.csv` files (315 rows):

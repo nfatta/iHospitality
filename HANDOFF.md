@@ -1,5 +1,233 @@
 # HANDOFF — start here
 
+Written at the close of **25 Aug 2026**.
+
+## ⚠️ FIRST: FIVE PAGES ARE BUILT, UNCOMMITTED, AND NOBODY HAS LOOKED AT THEM
+
+**25 Aug was a BUILD session, not a reconciliation one.** The admin side of the
+web portal exists. **Nothing in the database changed, no invoice work was done,
+and the reconciliation still stands at 64 of 83** — every item in the numbered
+list below is exactly where the 24 Aug session left it.
+
+**THE WORK IS UNCOMMITTED.** `git status` shows five modified and three new
+files in `portal/`. The branch is `portal-v1`, 54 commits ahead of
+`origin/portal-v1`, nothing behind.
+
+**THE RENDERING IS UNVERIFIED, AND THAT IS THE ONE THING LEFT.** The operator
+was running remotely from a phone and could not open a browser; he asked to hold
+until he is back at the machine. He also asked whether a test login could be
+created and deleted afterwards — it cannot, and it turned out not to be needed
+for anything except rendering (D125).
+
+**So the first job of the next session is not a decision, it is a look:**
+
+```bash
+cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Website/ihospitality-website_3_3_26/ihospitality"
+python -m http.server 8123        # then open /portal/login.html and SIGN IN
+```
+
+Open **`brands.html`**, **`brand.html`**, **`activity-detail.html`**,
+**`photos.html`** and **`activity.html`**, click a brand → a row → an activity →
+a photo → back to the activity, change the month range and watch the numbers
+move, and resize to a phone width to work the drawer. **D79 exists because this
+is the check that finds things** — it has caught a broken front page, three
+broken admin pages, a tab blank since the day it was written, and four money
+fields that could never be enabled.
+
+### What was built (D120–D125)
+
+| File | Change |
+|---|---|
+| `portal/portal.js` | Sidebar `renderShell()`; `isStaff()`, `money()`, `param()`, `monthRange()`; `requireAuth()` preserves the query string |
+| `portal/portal.css` | `.portal-sidebar` + drawer breakpoints, photo captions, detail fact grid, flag callouts |
+| `portal/brands.html` | **NEW** — every brand over a month range, click through |
+| `portal/brand.html` | **NEW** — one brand: stats, activity-type breakdown, full log |
+| `portal/activity-detail.html` | **NEW** — one activity, its pricing, its photos, its flags in words |
+| `portal/photos.html` | Bounded paging, grouping toggle, per-tile captions, lightbox → activity |
+| `portal/login.html` | Allowlist fixed and extended |
+| `portal/activity.html` | Rows open the detail page |
+| `css/site.css` | **Untouched** — shared with the public site |
+
+**No schema change. No new role. No Python change. No build step.**
+
+### Four things to know before touching any of it
+
+1. **THERE IS NO ADMIN ROLE, AND CREATING ONE WOULD FAIL SILENTLY** (D120).
+   `is_staff()` tests the literal string `'staff'`; `profile_role_enum` has two
+   values. A third would return **zero rows with no error** from every
+   staff-gated table, on a page that renders perfectly. Both admin logins stay
+   `staff`; "Admin" is a label. The contractor role is a real enum change plus
+   ~15 policies — its own session.
+2. **`css/site.css` IS SHARED WITH THE PUBLIC SITE** (D121). The rail is
+   portal-only class names in `portal.css`. Do not move portal chrome into the
+   shared file; it would redesign the marketing site.
+3. **EVERY NEW PORTAL PAGE GOES IN `login.html`'s `ALLOWED` LIST** (D124). A page
+   left out is not blocked — it is silently redirected to the dashboard after a
+   successful sign-in. `business.html` had never been in it, since the day it was
+   written.
+4. **THE GALLERY IS BOUNDED ON PURPOSE** (D122). Postgres orders and slices, the
+   filters are server-side, and the dropdowns come from three small tables. Do
+   not "simplify" it back to loading every photo — the operator asked for this
+   explicitly: *"photos will increase as time goes on so I don't want to do
+   something that could become load bearing."*
+
+### What IS verified, so it does not get re-done
+
+**Isolation, proved in Postgres by impersonation and rollback** (D125) — better
+than clicking, because it probes every staff table at once:
+
+| probe | service_role | test-bluerun | test-wodka | phil |
+|---|---|---|---|---|
+| activities | 1236 | 119 | 205 | 1236 |
+| brands | 12 | 1 | 1 | 12 |
+| photos | 412 | 46 | 45 | 412 |
+| priced money rows | 1185 | **0** | **0** | 1185 |
+| rate_card / contractor_pay / venue_grading / invoice_recap / brand_retainer | 253 / 3 / 339 / 56 / 13 | **0** | **0** | full |
+
+`is_superuser=off` asserted, and impersonated counts asserted to DIFFER from the
+baseline — otherwise the check could not fail (D114). **The brand-user break
+attempt in the plan is DONE and does not need repeating in a browser.**
+
+**The numbers tie to the Streamlit admin to the cent.** 44 North,
+2025-09..2026-08: activity charge **$9,197.10**, contractor cost **$4,992.10**,
+330 activities, uncosted **$315.00**, revenue **$26,597.10**, margin
+**$21,605.00**. All **14 activity types** agree on count, accounts, units,
+charge and cost.
+
+Also confirmed: every column the pages select exists (8 relations, 53 columns);
+`slugify()` reproduces all 12 real slugs; gallery paging walks 412 photos over 7
+pages with 0 duplicates and 0 dropped; all 9 page modules pass `node --check`;
+the public site still renders its 76px horizontal nav with 6 links and no portal
+class leaked into `site.css`; the mobile drawer opens, scrims, locks scroll and
+closes on tap, link and Escape.
+
+**Not verified: rendering. Only rendering.**
+
+### Decided this session, so it does not get relitigated
+
+- **Salaries: one tier, both admins see everything.** Operator: *"Phil is also
+  the owner of the company so he is already well aware."*
+- **Analytics stay LIVE — no push/snapshot pipeline** (D123). Everything asked
+  for is already a view. **Cost to serve can be computed in the BROWSER** rather
+  than promoted into a view, which keeps D116's page-only rule intact. Deferred,
+  and note the cost: a second implementation of the allocation that can drift
+  from the pandas one, and it must carry its four render-time caveats or the
+  grid silently flatters and penalises brands.
+- **"Only clean data, not staged" is already true** — the whole `staging` schema
+  is revoked from `anon` and `authenticated`. The one exception is venue
+  ATTRIBUTES, written directly by `apply()` (D83).
+- **The "site is slow" report was DYNADOT's, and it was measured, not dismissed**
+  (D123). It cannot have been about the portal — every portal page is behind a
+  login and `noindex`, so no external scanner reaches it. The PUBLIC site is
+  structurally fine (6 requests / 636 KB on `index.html`, 24 of 26 images lazy).
+  **Two real items, neither done and neither urgent:** `Hero.jpg` at 401 KB is
+  the homepage LCP image (WebP/AVIF cuts it 60–70%), and the Google Fonts
+  stylesheet is **render-blocking from a third-party origin** — self-hosting
+  `woff2` + `@font-face` in `css/site.css` removes it with no build step.
+
+### Still to build on the admin side (core came first, by the operator's call)
+
+**Rate card page.** `rate_card` has no view and no brand name column — needs a
+client-side join to `brands` or a new `v_rate_card`. It is a READ-ONLY page, so
+its job is to *explain* that editing a rate restates history (D91), not to cause
+it.
+
+**Salaries page.** `v_contractor_month_cost` is ready. Note `monthly_equivalent`
+is an **annualised spread** — exact for semimonthly and monthly, an average for
+weekly and biweekly. Label it, or it reads as a bank figure.
+
+**Analytics page**, per D123 above.
+
+**The contractor role**, which was the operator's third surface and has not been
+started. Enum change, `is_staff()`, ~15 policies. Read D120 first: the failure
+direction is helpful (an unknown role sees less), but a contractor must NOT be
+`staff` or they read every brand's rates and every colleague's pay.
+
+### One thing the new pages make visible
+
+**46 activities carrying $9,882.28 have no venue**, and `brand.html` shows them
+as "Account —". Mostly known and deliberate: Dame Mas's 9 rows at $3,307.28 are
+the month-level commission from D93, and about $3,030 is the synthetic
+`Invoice-derived` rows of open item 4. **Not new damage — newly visible.**
+
+---
+
+## THE NEXT PROMPT
+
+Paste this to pick up exactly where we stopped:
+
+> Read `CLAUDE.md`, `HANDOFF.md`, and **D120–D125 plus D119 and D108–D115** in
+> `DECISIONS.md`.
+>
+> **There are two separate tracks and they do not touch each other. Ask which
+> one I want before starting.**
+>
+> **TRACK A — finish the admin portal.** Five pages are built and UNCOMMITTED,
+> and nobody has opened them in a browser. Start the static server, sign in, and
+> open `brands.html`, `brand.html`, `activity-detail.html`, `photos.html` and
+> `activity.html`; click brand → row → activity → photo → back; change the month
+> range; resize to a phone and work the drawer. Fix what it finds, then commit.
+> **Isolation and the arithmetic are already proved (D125) — do not redo them.**
+> Then the rate card page, the salaries page, the analytics page, and after
+> those the contractor role. Before writing any of it: there is **no admin
+> role** and creating one fails silently (D120); `css/site.css` is shared with
+> the public site (D121); every new page goes in `login.html`'s `ALLOWED` list
+> (D124); the gallery is bounded on purpose (D122).
+>
+> **TRACK B — finish the reconciliation, unchanged from 24 Aug.** It stands at
+> **64 of 83** and the Coors pool ties 9 of 9. Eight rows are genuinely open and
+> eleven must not move. **Start with HEAVEN'S DOOR** — the biggest open gap, the
+> best understood, and the brand with **$16,361.08 outstanding across five
+> unpaid invoices**. Its commission ties EXACTLY in both checked months (280 and
+> 965), so the whole difference is that it bills **ACCOUNT VISITS at $20** inside
+> the consulting block, where every other brand's invoice reads "no charge" and
+> the rate card prices `account visit` at **$0.00 for all eight brands** — plus a
+> "Smoke Tops" line. Confirm on the other three invoices before changing a rate,
+> because editing a rate **restates history** (D91).
+>
+> **Whichever track, five things outrank convenience:**
+> 1. **Never run `parse_invoices.py --brand "<x>" --apply` for a per-unit
+>    brand** — the guard only recognises percentage-priced months and will
+>    duplicate the whole brand (D108). Use `load_pool_recap.py` or write
+>    `invoice_recap` directly.
+> 2. **`quantity = 0` is how a row says "this happened and was not billed"**
+>    (D119). Reach for it before considering a deletion. **Never delete real
+>    work to make a month tie.**
+> 3. **Four things on an invoice are not work** and each faked a gap: the
+>    early-payment discount, a card/ACH fee, a balance carried forward, and a
+>    goods invoice (no commission, no retainer, and **sales tax**). An ACTIVITY
+>    DATE equal to the issue date says nothing about when the work happened.
+> 4. **Do not touch Wodka's $25 `1st case sale` pay.** It is correct; the old
+>    item A was withdrawn and would have cost $915.
+> 5. **The 63 synthetic `Invoice-derived` rows are not all wrong** (D108). The
+>    test is whether the work already exists elsewhere in the portal, and 44
+>    North's June 2025 ties at exactly 0.00 while holding $660 of them.
+>
+> **Still unanswered and worth asking early: what did Phil actually agree to?**
+> The conversation happened and he agreed with the operator's position, but the
+> specifics were never written down — and they are the missing input for
+> **D117** (venue grading and the routed week) and **D118** (the 44 North fee
+> model). Both are designed and neither is agreed. Do not hand anyone a grading
+> sheet before reading D117, and when you do, send the **128 venues that have
+> ever sold**, not all 260.
+>
+> Standing rules: the billing is the truth (D56), no hardcoded business data
+> (D60), the brand portal stays read-only by construction (D61), base pay is
+> never allocated to a brand in a view (D67), a reimbursement never earns (D78),
+> and reclassifying must not move money unless moving it is the point
+> (D93/D112).
+>
+> Before calling a session done: **open every page AND every tab in a browser,
+> and type into anything that takes input** (D79/D89/D92). SQL can prove the
+> numbers and prove the isolation; only a browser proves the page renders.
+
+---
+
+## The reconciliation state, unchanged from 24 Aug
+
+Everything from here down is the 24 Aug handoff and **none of it was advanced on
+25 Aug.**
+
 Written at the close of **24 Aug 2026**, after a THIRD session that day.
 
 **THE THIRD SESSION CLOSED THE COORS POOL — 9 of 9 months tie — AND TOOK THE
@@ -259,7 +487,14 @@ honest word for Dame Mas is **break-even**, never "loses money".
 
 ---
 
-## THE NEXT PROMPT
+---
+
+## THE 24 AUG PROMPT — superseded by the one at the top
+
+**Kept for its METHOD**, which is still the current one for Track B: QuickBooks
+totals → PDF parse → operator workbook → only then write `invoice_recap` → then
+diff the portal's activity against the workbook, venue by venue. Ignore its
+"start here" framing; the top of this file supersedes it.
 
 Paste this to pick up exactly where we stopped:
 

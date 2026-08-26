@@ -5174,3 +5174,260 @@ to correct (D60).
 This inverts the lesson D94 taught: **a brand falling through to the shared pay
 line is a fact to check, not a fault to fix.** Sometimes the shared line is
 simply right, and only the operator knows which.
+
+---
+
+**D120 — THE ADMIN PORTAL IS THE `staff` ROLE RELABELLED. THERE IS NO NEW ROLE,
+AND ADDING ONE WOULD HAVE FAILED SILENTLY.**
+✅ built 25 Aug 2026
+
+The operator asked for an admin surface on the website for himself and Phil —
+all brands, all analytics, the rate card, salaries — *"not to be confused with
+the admin panel on the back end."* The instinct was that this needed a new role.
+It did not, and reaching for one would have been the expensive mistake.
+
+`is_staff()` (`schema.sql:929`) is:
+
+```sql
+select coalesce((select role = 'staff' from profiles
+                 where user_id = auth.uid() and is_active), false)
+```
+
+**It tests one literal string, and `profile_role_enum` has exactly two values.**
+That function appears in roughly fifteen RLS policies. A third value —
+`'admin'` — would make `is_staff()` return **false**, and every staff-gated
+table would return **zero rows with no error at all**. Not a permission message,
+not an exception: an empty result set, on a page that renders perfectly. That is
+the same shape of failure as D89's blank tab and D92's permanently-disabled
+fields, and it would have been blamed on the queries.
+
+**So both admin logins stay `role = 'staff'` and the word "Admin" is a UI
+label.** `isStaff()` in `portal.js` tests the same string, and the comment there
+says why the two spellings must stay married.
+
+**This is deferred, not dodged.** A real `contractor` role is still coming and
+it IS an enum change plus every one of those policies, deliberately, one at a
+time. The useful property is the failure direction: `is_staff()` returns false
+for any value it does not recognise, so a new role sees **less** by default,
+never more.
+
+**Salaries: one tier, both admins, operator-ruled.** The question was put
+because Phil is on the contractor list at $619/week and the fee conversation is
+still pending. Operator: *"Phil is also the owner of the company so he is
+already well aware."* No second gate, no owner tier.
+
+---
+
+**D121 — THE PORTAL NAVIGATES FROM A LEFT RAIL, AND `css/site.css` MUST NOT
+MOVE.**
+✅ built 25 Aug 2026
+
+The nav went from four items to six and is heading for eight once the rate card
+and salaries land. A horizontal bar stops working around six — `site.css`
+already gives up at 1024px and swaps to a hamburger.
+
+**The trap is that the portal and the PUBLIC SITE share one stylesheet.**
+`css/site.css` owns `nav`, `.nav-logo`, `.nav-links`, `.hamburger` and
+`.mobile-nav`, and `index.html` and `gallery.html` use every one of them. A
+sidebar written there would have redesigned the marketing site as a side effect.
+
+So the rail is **portal-only**: new class names (`.portal-sidebar`,
+`.side-links`, `.portal-topbar`, `.portal-scrim`) defined in `portal.css`, and
+`renderShell()` sets `.portal-sidebar` on the `<nav>` element itself, which
+outranks `site.css`'s bare `nav` selector. **`css/site.css` was not touched.**
+Verified afterwards: both public pages still render a 76px horizontal bar with
+six links and no sideways scroll, and no portal class name appears in
+`site.css`.
+
+Below 1100px the same element becomes a drawer — off-canvas, a slim top bar to
+open it, a scrim, body scroll locked, closing on scrim tap, on a nav link, and
+on Escape.
+
+**One measurement trap worth recording, because it cost twenty minutes.** A CSS
+*transition* does not advance in a browser pane that is not compositing frames,
+and `getComputedStyle` returns the frozen start value — so the drawer read as
+permanently shut while working correctly. **Set `transition: none` before
+asserting on a transform in a headless or hidden pane**, or the test lies.
+
+---
+
+**D122 — THE GALLERY IS BOUNDED. PHOTOS ARE THE ONLY TABLE HERE THAT GROWS
+WITHOUT LIMIT.**
+✅ built 25 Aug 2026
+
+Operator: *"Photos will increase as time goes on so I don't want to do something
+that could become load bearing in the long run."* Correct, and it changed the
+design.
+
+Brands, venues, activity types and rate lines are effectively fixed. **Photos are
+not** — every activation adds more, for ever. At 412 today the old page could
+load everything; that is exactly the reasoning that ages badly, and the old page
+already showed the strain by defaulting to the newest month only, to avoid
+signing 400 URLs at once.
+
+The gallery now:
+
+- **asks Postgres to order and slice** — `.order(activity_date desc,
+  activity_id desc, id desc).range(from, from + 59)`. The order must be TOTAL or
+  a page boundary can repeat or drop a row; verified 0 duplicate keys across all
+  412, and a simulated seven-page walk returned 412 distinct rows.
+- **applies the filters IN POSTGRES**, not after the page arrives. Filtering a
+  page client-side would silently show 60 rows drawn from the wrong set.
+- **builds the dropdowns from three SMALL tables** — months from
+  `v_brand_monthly_summary` where `photo_count > 0`, brands from `brands`, types
+  from `v_activity_mix`. Building them from the photo rows would mean reading
+  every photo to populate a control, which is the whole thing being avoided.
+- **signs only what has arrived**, cached, so changing a filter never re-signs.
+
+Grouping (month / brand / activity, default month) applies to what is LOADED.
+That is deliberate: a grouping that reached across the whole table would undo
+all of the above.
+
+**The description on a photo is `summary`, never `caption`.** `photos.caption`
+is NULL by design and must stay so — filling it from the HubSpot note body would
+publish internal writing (D17/D24). `v_brand_photos.summary` is already
+`coalesce(brand_visible_summary, title)`.
+
+---
+
+**D123 — THE ANALYTICS STAY LIVE. THERE IS NO SNAPSHOT PIPELINE, AND THE
+ALLOCATION STAYS OUT OF THE DATABASE.**
+✅ ruled 25 Aug 2026
+
+The operator's opening preference was to do deep analysis in Streamlit and
+**push** chosen tables to the website — *"anything I deem necessary I can then
+push to the admin portal on the website so Phil can see for himself"* — while
+adding *"I would rather it be live if possible."*
+
+**It can all be live, so nothing is pushed.** Everything asked for is already a
+view. The one exception was Cost to serve (D116), which is a pandas allocation
+living in the Streamlit page and in no view — and CLAUDE.md forbids promoting it
+into one, because D67's fear was other views inheriting base pay silently.
+
+That rule protects the *database*, not the *page*. The allocation can be
+computed **in the browser** from `v_contractor_month_cost`,
+`v_brand_month_revenue` and an activities-by-owning-contractor read — page-only,
+exactly as D116 requires, with no view involved. **Deferred rather than built**,
+and with its cost stated: that would be a SECOND implementation of the
+allocation which can drift from the pandas one, and it must carry its four
+render-time caveats (unallocated payroll, retainer below payroll, unattributed
+activities, and the "where this is weak" note) or the grid silently flatters
+some brands and penalises others.
+
+**Two premises were corrected on the way.**
+
+**The "site is slow" report came from DYNADOT, and it is worth taking half
+seriously.** (First recorded here as GoDaddy; the operator corrected it —
+*"it wasn't godaddy it was Dynadot."*) Dynadot **is** in the stack, as registrar
+only, so it cannot see the hosting path and can only probe the public site from
+outside like any other visitor. Two things follow, and they point opposite ways:
+
+- **It cannot have measured the portal.** Every portal page is behind a Supabase
+  login and marked `noindex, nofollow`. No external scanner reaches it. So the
+  report says nothing about anything built in this session.
+- **It could legitimately have measured the PUBLIC site**, and that is a real
+  external probe. So it was measured rather than dismissed:
+
+| | requests | total | images | DOM ready |
+|---|---|---|---|---|
+| `index.html` | 6 | 636 KB | 3 loaded, **24 of 26 lazy** | 120 ms |
+| `gallery.html` | 20 | 785 KB | 15 loaded, **33 of 35 lazy** | 15 ms |
+
+**The structure is sound** — lazy loading throughout, few requests, small HTML
+and CSS, and `preconnect` already on both font hosts. The timings are localhost
+and mean nothing about the real world. **Two things are genuinely worth fixing,
+and both are what an external scanner flags:**
+
+1. **`Hero.jpg` is 401 KB and is the homepage's largest-contentful-paint
+   image**; `market.jpeg` adds another 168 KB eagerly. Those two are **569 KB of
+   the homepage's 636 KB**. WebP or AVIF would cut them roughly 60–70 percent.
+2. **The Google Fonts stylesheet is RENDER-BLOCKING from a third-party origin**
+   (`renderBlockingStatus: "blocking"`). Preconnect softens the handshake but
+   the blocking request remains. Self-hosting the two families — `woff2` files
+   plus `@font-face` in `css/site.css` — removes it entirely and needs no build
+   step, so it does not touch the locked no-npm decision.
+
+Neither is urgent and neither was done this session. **Designing the gallery for
+load is still right for D122's reason** — unbounded growth — not for this one.
+
+**"Only clean data, not staged" was already true, and is stronger than
+assumed.** The operator asked that the portal show only promoted data. The entire
+`staging` schema is revoked from `anon` AND `authenticated`
+(`schema.sql:2493-2495`), so no browser can reach it at all, and
+`sync_hubspot.py` writes only to `staging.hubspot_deals`. Nothing to build.
+**The one exception is venue ATTRIBUTES** — `apply()` upserts `brands` and
+`venues` directly, before the staging zone (D83), which is why `Crown Lounge`
+still carries a venue name in its city column.
+
+---
+
+**D124 — A PORTAL PAGE MISSING FROM `login.html`'s ALLOWLIST IS SILENTLY
+REDIRECTED, NOT BLOCKED — AND `business.html` HAD NEVER BEEN IN IT.**
+✅ found and fixed 25 Aug 2026
+
+`login.html` keeps an allowlist so a crafted `?next=` cannot bounce someone off
+site. Anything not on the list falls through to `index.html`. The list read:
+
+```js
+const ALLOWED = ['index.html', 'activity.html', 'venues.html', 'photos.html'];
+```
+
+**`business.html` was never added.** So a staff member who followed a link to it
+while logged out signed in successfully and landed on the dashboard, with no
+error and no explanation — since the day that page was written. Nobody noticed
+because the nav link works once you are already in.
+
+**Every new portal page must be added to that list.** All four new ones are, and
+so is `business.html`.
+
+`requireAuth()` also dropped the query string, so `brand.html?slug=44-north`
+came back as a bare `brand.html`. It now carries the search string through and
+`login.html` matches **only the filename half** against the allowlist. Confirmed
+that `//evil.com`, `https://evil.com`, `../../etc/passwd` and
+`index.html/../../out.html` all still fall through to the dashboard.
+
+---
+
+**D125 — RLS IS VERIFIED BY IMPERSONATION IN POSTGRES, AND THE TEST MUST BE ABLE
+TO FAIL.**
+✅ 25 Aug 2026
+
+The operator was away from the machine and asked whether a login could be created
+for testing and deleted afterwards. It cannot — accounts and passwords are not
+ours to create. **The better test needed no login at all.**
+
+RLS is enforced in Postgres, and `auth.uid()` reads
+`request.jwt.claims->>'sub'`. So each account can be impersonated inside a
+transaction that is rolled back:
+
+```sql
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"<user_id>"}', true);
+-- probe every table, then rollback
+```
+
+**The result, and it is the isolation proof the plan asked for:**
+
+| probe | service_role | test-bluerun | test-wodka | phil (staff) |
+|---|---|---|---|---|
+| activities | 1236 | 119 | 205 | 1236 |
+| brands | 12 | 1 | 1 | 12 |
+| photos | 412 | 46 | 45 | 412 |
+| **priced money rows** | 1185 | **0** | **0** | 1185 |
+| rate_card | 253 | **0** | **0** | 253 |
+| contractor_pay | 3 | **0** | **0** | 3 |
+| venue_grading | 339 | **0** | **0** | 339 |
+| invoice_recap | 56 | **0** | **0** | 56 |
+| brand_retainer | 13 | **0** | **0** | 13 |
+
+A brand login gets its own rows with the money columns NULL — which is the
+`security_invoker` design working — and cannot read one row of any staff table.
+
+**THE CRITICAL PART IS THE CONTROL.** If the connecting role bypassed RLS, every
+column of that table would equal the baseline and the check would pass while
+proving nothing — D114's lesson, that a check whose two sides share a source
+cannot fail. So the script asserts `is_superuser = off` and asserts that the
+impersonated counts DIFFER from the baseline. Both hold.
+
+**What this does NOT cover is rendering**, and no amount of SQL will. D79
+stands: a person still has to open every page.
