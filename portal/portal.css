@@ -17,13 +17,26 @@
 
 .portal-sidebar {
   position: fixed; top: 0; left: 0; z-index: 150;
-  width: var(--rail); height: 100vh;
+  width: var(--rail);
   display: flex; flex-direction: column;
   background: var(--black-rich);
   border-right: 1px solid var(--divider-dark);
   border-bottom: none;                    /* site.css's `nav` sets one */
   padding: 1.75rem 0 1.25rem;
   transition: transform 0.25s ease;
+
+  /* ⚠️ 100dvh, NOT 100vh. On a phone `vh` is the LARGE viewport -- the height
+     the page would have if the browser's address bar were hidden -- so with
+     the bar showing, the bottom of this rail sits below the fold. Sign out and
+     Install app were unreachable: the operator had to scroll the page until
+     the toolbar retracted before he could see them (reported 27 Aug 2026).
+     `dvh` tracks the visible area as that bar comes and goes. The `vh` line
+     stays first as the fallback for anything that does not know `dvh`. */
+  height: 100vh;
+  height: 100dvh;
+
+  /* And the last line must clear the iPhone's home indicator. */
+  padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
 }
 
 .side-logo { display:flex; align-items:center; gap:0.7rem; text-decoration:none; padding:0 1.4rem 1.75rem; }
@@ -31,7 +44,15 @@
 .side-logo-text { font-family:'Cormorant Garamond',serif; font-size:1.3rem; font-weight:600; color:var(--white); letter-spacing:0.5px; }
 .side-logo-text span { color:var(--gold); }
 
-.side-scroll { flex:1; overflow-y:auto; padding-bottom:1rem; }
+/* `min-height:0` is doing real work: a flex item defaults to min-height:auto,
+   which refuses to shrink below its content -- so the links pushed .side-foot
+   off the bottom instead of scrolling, whatever height the rail had.
+   `overscroll-behavior` stops a flick at the end of the list scrolling the
+   page behind the drawer, which on a phone reads as the menu jumping. */
+.side-scroll {
+  flex:1; min-height:0; overflow-y:auto; padding-bottom:1rem;
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+}
 .side-group-label {
   font-size:0.62rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
   color:rgba(232,224,213,0.28); padding:1.1rem 1.4rem 0.5rem;
@@ -46,7 +67,9 @@
 .side-links a:hover { color:var(--white); background:rgba(255,255,255,0.03); }
 .side-links a.current { color:var(--gold); border-left-color:var(--gold); background:var(--gold-dim); }
 
-.side-foot { padding:1.1rem 1.4rem 0; border-top:1px solid var(--divider-dark); display:flex; flex-direction:column; align-items:flex-start; gap:0.35rem; }
+/* flex-shrink:0 -- the footer is the one part that must always be on screen,
+   because it holds Sign out. The list above it is what gives way. */
+.side-foot { flex-shrink:0; padding:1.1rem 1.4rem 0; border-top:1px solid var(--divider-dark); display:flex; flex-direction:column; align-items:flex-start; gap:0.35rem; }
 .side-who { font-size:0.68rem; color:var(--gold); letter-spacing:1.5px; text-transform:uppercase; font-weight:600; }
 .side-name { font-size:0.75rem; color:rgba(232,224,213,0.4); }
 .side-foot .link-btn { margin-top:0.4rem; }
@@ -131,7 +154,7 @@
 .err { border:1px solid rgba(184,112,112,0.4); background:rgba(184,112,112,0.08); color:#D89A9A; padding:1rem 1.25rem; border-radius:2px; font-size:0.85rem; margin-bottom:1.5rem; }
 
 /* Login */
-.login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:2rem; }
+.login-wrap { min-height:100vh; min-height:100dvh; display:flex; align-items:center; justify-content:center; padding:2rem; }
 .login-card { width:100%; max-width:400px; }
 .login-brand { text-align:center; margin-bottom:2.5rem; }
 .login-brand img { width:56px; height:56px; border-radius:50%; margin-bottom:1rem; }
