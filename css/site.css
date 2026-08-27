@@ -42,6 +42,24 @@ nav {
 .nav-links a.current { color:var(--gold); }
 .nav-cta { border:1px solid var(--gold-border) !important; color:var(--gold) !important; padding:0.5rem 1.4rem !important; border-radius:2px; transition:background 0.2s,color 0.2s !important; }
 .nav-cta:hover { background:var(--gold) !important; color:var(--black) !important; }
+
+/* Log in — the way a brand or a contractor reaches the portal.
+   DELIBERATELY QUIETER THAN .nav-cta. "Partner With Us" is what this site is
+   for and must stay the loudest thing in the bar; a second gold button beside
+   it would split the eye between winning a client and serving one. Muted until
+   hovered, with a hairline separating it from the CTA so it reads as a
+   different KIND of action rather than a lesser version of the same one. */
+.nav-login {
+  margin-left:0.4rem; padding-left:1.4rem;
+  border-left:1px solid rgba(232,224,213,0.18);
+  color:rgba(232,224,213,0.45) !important;
+}
+.nav-login:hover { color:var(--gold) !important; }
+
+/* On a phone the nav-links list is hidden entirely and the drawer takes over,
+   so the link has to be repeated there or it disappears below 900px -- which
+   is where a contractor standing in a bar will be looking for it. */
+.mobile-login { color:var(--gold) !important; }
 .hamburger { display:none; flex-direction:column; gap:5px; cursor:pointer; background:none; border:none; padding:4px; }
 .hamburger span { display:block; width:22px; height:1.5px; background:var(--white); }
 
