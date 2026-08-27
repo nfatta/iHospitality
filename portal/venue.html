@@ -80,7 +80,8 @@
         render(el, { empty: { title: 'No venue chosen',
                               body: 'Open one from the Venues list.' } });
       } else {
-        const [perf, log, grading, names, internal, earned] = await Promise.all([
+        const [perf, log, grading, names, internal, earned,
+               people, venueNotes, profile] = await Promise.all([
           db.from('v_venue_performance').select('*').eq('venue_id', id),
           // No brand filter, deliberately. RLS applies the restriction in
           // Postgres; adding `.eq('brand_id', …)` here would imply the security
@@ -117,6 +118,22 @@
           (staff || contractor)
             ? db.from('v_my_activity_pay').select('activity_id, earned')
             : Promise.resolve({ data: [] }),
+          // WHO TO ASK FOR, and what HubSpot knows about the place (D152).
+          // INTERNAL ONLY -- named people, job titles, our own commentary. The
+          // tables are is_internal(), so a brand reaching this page gets empty
+          // arrays from Postgres whatever these lines ask for; the role check
+          // here only saves three round trips.
+          (staff || contractor)
+            ? db.from('v_venue_contact').select('*').eq('venue_id', id)
+            : Promise.resolve({ data: [] }),
+          (staff || contractor)
+            ? db.from('venue_note').select('body, noted_at').eq('venue_id', id)
+                .order('noted_at', { ascending: false, nullsFirst: false })
+            : Promise.resolve({ data: [] }),
+          (staff || contractor)
+            ? db.from('venue_profile').select('description, state')
+                .eq('venue_id', id).maybeSingle()
+            : Promise.resolve({ data: null }),
         ]);
 
         if (perf.error || log.error) {
@@ -145,6 +162,9 @@
             ownerName: (names?.data || []).find(n => n.id === owner)?.name ?? null,
             internal: new Map((internal?.data || []).map(r => [r.activity_id, r])),
             earned: new Map((earned?.data || []).map(r => [r.activity_id, r.earned])),
+            people: people?.data || [],
+            venueNotes: venueNotes?.data || [],
+            profile: profile?.data || null,
           });
         }
       }
@@ -152,7 +172,8 @@
 
     async function paint(perf, log, staff, el, ctx = {}) {
       const { contractor = false, mine = false, grade = null, ownerName = null,
-              internal = new Map(), earned = new Map() } = ctx;
+              internal = new Map(), earned = new Map(),
+              people = [], venueNotes = [], profile = null } = ctx;
       const name = perf[0]?.venue_name || log[0]?.venue_name || 'Venue';
       const city = perf[0]?.city || log[0]?.city || '';
       document.title = `${name} | iHospitality Brand Portal`;
@@ -219,6 +240,35 @@
           fact('Grade', grade ? `<span class="pill">${esc(grade)}</span>`
                               : '<span class="muted">not graded</span>') +
           fact('Owned by', ownerName ? esc(ownerName) : '<span class="muted">nobody yet</span>');
+
+        /* ---------- who to ask for (D152) ----------
+           The single most useful thing to have walking in, and the honest
+           limits are on the card rather than in a comment: a name and a job
+           title exist for 88% of venues, a way to reach them for under 10%.
+
+           NEVER GROUPED OR DEDUPLICATED BY NAME. Two people called Dan are two
+           rows with two HubSpot ids, and there are four of them across four
+           venues -- collapsing on the label would merge different people. Each
+           contact is rendered from its own row. */
+        if (people.length) {
+          facts += fact('Ask for', people.map(p => {
+            const role = p.job_title ? `<span class="muted"> · ${esc(p.job_title)}</span>` : '';
+            // A number or an address is rare enough to be worth showing when it
+            // is there. `reachable_remotely` is false on most rows by design.
+            const reach = [p.phone, p.mobile_phone, p.email].filter(Boolean)[0];
+            const how = reach ? `<br><span class="muted" style="font-size:0.72rem">${esc(reach)}</span>` : '';
+            const label = p.contact_name ? esc(p.contact_name)
+                                          : '<span class="muted">no name recorded</span>';
+            return `${label}${role}${how}`;
+          }).join('<br>'));
+        }
+
+        if (profile?.description) {
+          facts += fact('The place', `<span style="font-size:0.78rem;line-height:1.5">${esc(profile.description)}</span>`);
+        }
+        if (profile?.state && !city) {
+          facts += fact('State', esc(profile.state));
+        }
       }
 
       // Keyed on OWNERSHIP, not on the role -- an admin who works accounts owns
@@ -268,6 +318,24 @@
         html = `<div class="detail-grid">${facts}${
           fact('Status', `<span class="pill pill-${esc(perf[0].status)}">${esc(perf[0].status)}</span>`)
         }</div>`;
+      }
+
+      /* ---------- notes from HubSpot (D152) ----------
+         Above the activity list because they are context for the visit rather
+         than a record of one. INTERNAL: our own commentary about named people
+         at a named premises, so it renders only for staff and contractors --
+         and `venue_note` is is_internal() underneath, which is the real lock.
+
+         Mostly one-liners (median 61 characters), and only about 5% carry the
+         "best time to reach them" the operator was after -- so they are shown
+         as a plain list rather than dressed up as something they are not. */
+      if ((staff || contractor) && venueNotes.length) {
+        html += `<div class="panel"><div class="panel-head">
+            <h2>Notes</h2><span class="hint">from HubSpot · internal</span></div>
+          <ul class="venue-notes">${venueNotes.map(n => `<li>
+            <span>${esc(n.body)}</span>${n.noted_at
+              ? `<span class="when">${esc(fmtDate(String(n.noted_at).slice(0, 10)))}</span>` : ''}
+          </li>`).join('')}</ul></div>`;
       }
 
       html += `<div class="panel"><div class="panel-head"><h2>Every activity here</h2>
