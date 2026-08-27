@@ -31,6 +31,7 @@ const VERSION = 'ih-portal-v1';
 const SHELL = [
   'index.html',
   'login.html',
+  'reset.html',
   'my-venues.html',
   'my-pay.html',
   'venues.html',

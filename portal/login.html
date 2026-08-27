@@ -37,6 +37,9 @@
           <input type="password" id="password" autocomplete="current-password" required>
         </div>
         <button type="submit" class="btn-full" id="submit">Sign In</button>
+        <p class="login-forgot">
+          <a href="#" id="forgot">Forgot your password?</a>
+        </p>
       </form>
 
       <p class="login-note">
@@ -80,6 +83,37 @@
     // Already signed in? Skip the form.
     const { data: { session } } = await db.auth.getSession();
     if (session) location.replace(next);
+
+    /* ---------- forgot password ----------
+       Sends a recovery link to the address in the Email field.
+
+       ⚠️ THE ANSWER IS THE SAME WHETHER OR NOT THE ACCOUNT EXISTS, on purpose.
+       Saying "no such account" turns this box into a way to test which client
+       email addresses are real -- the same reason the sign-in error above is
+       deliberately generic. Supabase does not distinguish either, and neither
+       does this.
+
+       `redirectTo` MUST be in Supabase's Redirect URLs allow-list, or the link
+       silently falls back to the Site URL and lands somewhere that cannot
+       handle it. Built from the current origin so the same page works on
+       localhost and on ihospitality.vip without a second build. */
+    document.getElementById('forgot').addEventListener('click', async (e) => {
+      e.preventDefault();
+      msg.innerHTML = '';
+      const email = document.getElementById('email').value.trim();
+      if (!email) {
+        msg.innerHTML = '<div class="err">Type your email address above first, then click again.</div>';
+        document.getElementById('email').focus();
+        return;
+      }
+
+      const redirectTo = new URL('reset.html', location.href).href;
+      await db.auth.resetPasswordForEmail(email, { redirectTo });
+
+      msg.innerHTML = `<div class="ok">If <strong>${esc(email)}</strong> has an
+        account, a reset link is on its way. It is single-use and expires, so
+        open it soon — and check the spam folder.</div>`;
+    });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();

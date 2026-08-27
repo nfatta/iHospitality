@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Set a new password | iHospitality Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        <img src="../images/ih_logo.png" alt="iHospitality" width="444" height="394">
+        <div class="t">i<span>Hospitality</span></div>
+        <p>Set a new password</p>
+      </div>
+
+      <form class="login-form" id="form" hidden>
+        <div id="msg"></div>
+        <div class="fld">
+          <label for="password">New password</label>
+          <input type="password" id="password" autocomplete="new-password" required minlength="12">
+        </div>
+        <div class="fld">
+          <label for="confirm">Again</label>
+          <input type="password" id="confirm" autocomplete="new-password" required minlength="12">
+        </div>
+        <button type="submit" class="btn-full" id="submit">Set password</button>
+      </form>
+
+      <div id="state"></div>
+
+      <p class="login-note" id="note">
+        At least 12 characters. Nobody at iHospitality sees what you choose.
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    /* ==========================================================
+       THE ONE PORTAL PAGE THAT MUST NOT CALL requireAuth().
+
+       It is reached from a recovery link WITHOUT a normal session. Supabase
+       puts the recovery token in the URL, supabase-js exchanges it for a
+       short-lived session, and `updateUser` works inside that. Calling
+       requireAuth() here would bounce the person straight back to the login
+       page they cannot get past -- which is the whole reason they are here.
+
+       It is therefore also NOT in login.html's ALLOWED list (D124), and that
+       is correct: ALLOWED is the set of places a SUCCESSFUL sign-in may land,
+       and this is not one of them. Adding it there is the obvious instinct and
+       the wrong one.
+
+       ⚠️ THIS DOES NOT WEAKEN D61. Password changes go through GoTrue
+       (/auth/v1/...), not PostgREST. They touch only the caller's own auth
+       record and add no write grant on any table in `public`. The portal is
+       still read-only by construction for every piece of business data.
+       ========================================================== */
+    import { db } from './portal.js';
+
+    const form = document.getElementById('form');
+    const submit = document.getElementById('submit');
+    const msg = document.getElementById('msg');
+    const state = document.getElementById('state');
+    const note = document.getElementById('note');
+
+    const say = (cls, html) => { state.innerHTML = `<div class="${cls}">${html}</div>`; };
+
+    // supabase-js consumes the token from the URL on load (detectSessionInUrl),
+    // which is asynchronous -- so a bare getSession() on the first tick can
+    // legitimately come back empty on a link that is perfectly good. Waiting
+    // for the PASSWORD_RECOVERY event and ALSO polling getSession covers both
+    // the fresh-link case and a reload where the session already exists.
+    let ready = false;
+
+    function open() {
+      if (ready) return;
+      ready = true;
+      form.hidden = false;
+      state.innerHTML = '';
+    }
+
+    db.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') open();
+    });
+
+    const { data: { session } } = await db.auth.getSession();
+    if (session) open();
+
+    /* SUPABASE SENDS THIS LINK IN TWO DIFFERENT SHAPES, AND WHICH ONE ARRIVES
+       DEPENDS ON THE EMAIL TEMPLATE, NOT ON ANYTHING HERE.
+
+         {{ .ConfirmationURL }}  — the default. Bounces through /auth/v1/verify
+                                   and lands with tokens in the URL HASH, which
+                                   supabase-js consumes on its own above.
+         {{ .TokenHash }}        — lands with ?token_hash=…&type=recovery and
+                                   the app must exchange it ITSELF.
+
+       Handling only the first is the trap: it works until somebody edits the
+       email template in the dashboard, and then the reset page says "this link
+       has expired" for a link that is perfectly good. Both are cheap, so both
+       are here. */
+    const qs = new URLSearchParams(location.search);
+    const tokenHash = qs.get('token_hash');
+    if (!ready && tokenHash) {
+      const { error } = await db.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: qs.get('type') || 'recovery',
+      });
+      if (!error) open();
+    }
+
+    // Nothing arrived. Distinguish the two real causes, because the fix is
+    // different: an expired link needs a new one, and no link at all means
+    // they navigated here directly.
+    setTimeout(async () => {
+      if (ready) return;
+      // token_hash counts too. Without it, a link whose token had expired fell
+      // through to "this page is only reachable from a reset link" -- which
+      // tells the person they did something wrong when they did not, and does
+      // not tell them the one thing that helps: ask for another.
+      const q = new URLSearchParams(location.search);
+      const hasToken = location.hash.includes('access_token')
+        || location.hash.includes('error')
+        || q.has('code') || q.has('token_hash');
+      note.hidden = true;
+      if (hasToken) {
+        say('err', 'That reset link has expired or has already been used. '
+          + 'Reset links are single-use and time-limited. '
+          + '<a href="login.html" style="color:var(--gold)">Ask for a new one</a>.');
+      } else {
+        say('err', 'This page is only reachable from a password reset link. '
+          + '<a href="login.html" style="color:var(--gold)">Go to sign in</a>.');
+      }
+    }, 2500);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.innerHTML = '';
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm').value;
+
+      if (password !== confirm) {
+        msg.innerHTML = '<div class="err">Those two do not match.</div>';
+        return;
+      }
+      if (password.length < 12) {
+        msg.innerHTML = '<div class="err">Use at least 12 characters.</div>';
+        return;
+      }
+
+      submit.disabled = true;
+      submit.textContent = 'Saving…';
+
+      const { error } = await db.auth.updateUser({ password });
+
+      if (error) {
+        msg.innerHTML = `<div class="err">${
+          // Supabase's own message is the useful one here -- it names a
+          // too-short or previously-used password, which a generic sentence
+          // would hide and the person would retry blindly.
+          (error.message || 'That did not work. Ask for a new link.')
+            .replace(/[<>&]/g, '')
+        }</div>`;
+        submit.disabled = false;
+        submit.textContent = 'Set password';
+        return;
+      }
+
+      form.hidden = true;
+      note.hidden = true;
+      say('ok', 'Password set. <a href="index.html" style="color:var(--gold)">Open the portal</a>.');
+    });
+  </script>
+</body>
+</html>
