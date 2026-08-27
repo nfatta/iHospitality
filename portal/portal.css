@@ -16,7 +16,7 @@
 :root { --rail: 232px; }
 
 .portal-sidebar {
-  position: fixed; left: 0; z-index: 150;
+  position: fixed; top: 0; left: 0; z-index: 150;
   width: var(--rail);
   display: flex; flex-direction: column;
   background: var(--black-rich);
@@ -25,31 +25,18 @@
   padding: 1.75rem 0 1.25rem;
   transition: transform 0.25s ease;
 
-  /* ⚠️ NO HEIGHT AT ALL -- top AND bottom, on a fixed element.
-     A fixed box pinned top:0 bottom:0 IS the viewport, whatever the browser's
-     address bar is doing. No viewport unit is involved, so there is nothing to
-     be wrong.
-
-     This was `height: 100vh` and Sign out and Install app were unreachable on a
-     phone: `vh` is the LARGE viewport -- the height the page would have if the
-     address bar were hidden -- so with the bar showing, the bottom of the rail
-     sat below the fold. Retracting the bar by scrolling was what brought it
-     back (operator, 27 Aug 2026).
-
-     `100dvh` was the second attempt and is the textbook answer, but it was
-     still cut off on a real Android phone. Rather than keep guessing at which
-     unit a given browser gets right, this asks for none of them. */
-  top: 0; bottom: 0;
+  /* ⚠️ 100dvh, NOT 100vh. On a phone `vh` is the LARGE viewport -- the height
+     the page would have if the browser's address bar were hidden -- so with
+     the bar showing, the bottom of this rail sits below the fold. Sign out and
+     Install app were unreachable: the operator had to scroll the page until
+     the toolbar retracted before he could see them (reported 27 Aug 2026).
+     `dvh` tracks the visible area as that bar comes and goes. The `vh` line
+     stays first as the fallback for anything that does not know `dvh`. */
+  height: 100vh;
+  height: 100dvh;
 
   /* And the last line must clear the iPhone's home indicator. */
   padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
-
-  /* THE LAST RESORT. The flex layout above already shrinks the link list so
-     the footer always fits, and top/bottom already makes the rail exactly the
-     viewport -- so this should never engage. It is here because the cost of
-     being wrong is that somebody cannot sign out, and the cost of the rule is
-     nothing at all. */
-  overflow-y: auto; overscroll-behavior: contain;
 }
 
 .side-logo { display:flex; align-items:center; gap:0.7rem; text-decoration:none; padding:0 1.4rem 1.75rem; }
