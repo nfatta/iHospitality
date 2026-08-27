@@ -403,3 +403,14 @@
   color: var(--muted, #8a8f98);
 }
 .side-install-help strong { color: var(--gold); font-weight: 600; }
+
+/* HubSpot notes on a venue (D152). Internal, and short -- a median of 61
+   characters -- so a list reads better than a table would. */
+.venue-notes { list-style:none; margin:0; padding:0; }
+.venue-notes li {
+  display:flex; justify-content:space-between; gap:1.5rem;
+  padding:0.7rem 0; border-bottom:1px solid var(--divider-dark);
+  font-size:0.84rem; line-height:1.5; color:rgba(232,224,213,0.78);
+}
+.venue-notes li:last-child { border-bottom:none; }
+.venue-notes .when { flex:0 0 auto; color:rgba(232,224,213,0.35); font-size:0.75rem; white-space:nowrap; }
