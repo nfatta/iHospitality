@@ -17,6 +17,11 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 export const db = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
+/* Exported so login.html can ask GoTrue which providers are ENABLED rather than
+   assuming. Both values already ship in this file by design -- see the header. */
+export const AUTH_BASE = `${SUPABASE_URL}/auth/v1`;
+export const AUTH_KEY = SUPABASE_PUBLISHABLE_KEY;
+
 /* ---------- installable on a phone (D137) ----------
    Registered from here so every page gets it without repeating the snippet.
 
