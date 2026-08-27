@@ -108,9 +108,18 @@
 
        WHAT STOPS A STRANGER. Not this page. Accounts are pre-created and
        signups are disabled at the project level, so a Google account nobody has
-       created is REFUSED by GoTrue -- it never becomes a row. `hd` below only
-       narrows Google's own account chooser to the workspace; it is a hint to
-       Google, not a control, and must never be relied on as one.
+       created is REFUSED by GoTrue -- it never becomes a row.
+
+       ⚠️ NO `hd` PARAMETER, AND THAT IS DELIBERATE. It was here, set to
+       ihospitality.vip, described in this comment as "a hint to Google, not a
+       control". That was true of its SECURITY value and quite wrong about its
+       BEHAVIOUR: it locked the account chooser to the workspace, so a brand on
+       Google Workspace could not sign in at all. Which defeats the point --
+       brands are most of who this button is for.
+
+       Domain is not this page's job. It never was. Pre-created accounts plus
+       disabled signups already decide who may in, and they do it for password
+       logins too.
 
        Signing in with Google attaches that identity to the EXISTING account
        with the same address, because Google's emails are verified. So the
@@ -136,7 +145,7 @@
         provider: 'google',
         options: {
           redirectTo: back.href,
-          queryParams: { hd: 'ihospitality.vip', prompt: 'select_account' },
+          queryParams: { prompt: 'select_account' },
         },
       });
       if (error) {
