@@ -6,6 +6,10 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Venue | iHospitality Brand Portal</title>
   <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -57,7 +61,7 @@
        whose whole point is that `activities.notes` is not in it. `summary` is
        `coalesce(brand_visible_summary, title)` -- what a client may read.
        ========================================================== */
-    import { db, requireAuth, renderShell, render, esc, isStaff, param,
+    import { db, requireAuth, renderShell, render, esc, isStaff, isContractor, param,
              fmtDate, fmtNum, money, table, sortableTable, MARKET_LABEL } from './portal.js';
 
     const STATUS_ORDER = ['reordering', 'placed', 'pitched', 'prospect', 'dormant', 'lost'];
@@ -67,6 +71,7 @@
       renderShell('venues.html', auth.profile);
 
       const staff = isStaff(auth.profile);
+      const contractor = isContractor(auth.profile);
       const id = param('id');
       const el = document.getElementById('body');
       document.getElementById('crumb').innerHTML = '<a href="venues.html">&larr; All venues</a>';
@@ -75,13 +80,43 @@
         render(el, { empty: { title: 'No venue chosen',
                               body: 'Open one from the Venues list.' } });
       } else {
-        const [perf, log] = await Promise.all([
+        const [perf, log, grading, names, internal, earned] = await Promise.all([
           db.from('v_venue_performance').select('*').eq('venue_id', id),
           // No brand filter, deliberately. RLS applies the restriction in
           // Postgres; adding `.eq('brand_id', …)` here would imply the security
           // lives in the browser, and it does not.
           db.from('v_brand_activity_log').select('*').eq('venue_id', id)
             .order('activity_date', { ascending: false }),
+          // Grade and owning rep. Staff-only until 27 Aug 2026; a contractor
+          // reads them now on ANY venue, because knowing who to call is the
+          // main reason to look up an account you do not own (D137).
+          //
+          // THE OWNER'S NAME IS NOT EMBEDDED HERE. `contractors` is still
+          // staff-only -- its `note` column is internal writing about a person
+          // (D88) -- so a PostgREST embed of `contractors(name)` came back null
+          // for a contractor and the page read "Owned by: nobody yet" on an
+          // account that plainly had an owner. That is worse than showing
+          // nothing: it states a falsehood about a colleague's book. The name
+          // comes from v_contractor_names below, which exists for exactly this.
+          (staff || contractor)
+            ? db.from('venue_grading').select('grade, owner_contractor_id')
+                .eq('venue_id', id).maybeSingle()
+            : Promise.resolve({ data: null }),
+          (staff || contractor)
+            ? db.from('v_contractor_names').select('id, name')
+            : Promise.resolve({ data: [] }),
+          // The internal view carries `notes` and WHO DID IT. It is a definer
+          // view because `activities.notes` cannot be column-granted to
+          // `authenticated` without handing it to every brand and undoing D134.
+          (staff || contractor)
+            ? db.from('v_internal_activity').select('activity_id, notes, contractor, contractor_id')
+                .eq('venue_id', id)
+            : Promise.resolve({ data: [] }),
+          // MY earnings here. Scoped in Postgres to work this caller actually
+          // did, so it is empty for anyone else no matter what the page asks.
+          (staff || contractor)
+            ? db.from('v_my_activity_pay').select('activity_id, earned')
+            : Promise.resolve({ data: [] }),
         ]);
 
         if (perf.error || log.error) {
@@ -95,12 +130,29 @@
             title: 'Nothing to show for this venue',
             body: 'Either it is not on file, or none of your activity happened here.' } });
         } else {
-          await paint(perf.data || [], log.data || [], staff, el);
+          // WHOSE ACCOUNT IS THIS. Ownership decides how much of the page
+          // renders: the accounts you own show the days and your money; every
+          // other account shows the history, the notes, the grade and the
+          // owner, and no figures.
+          // "Mine" is about the PERSON, not the role -- an admin who works
+          // accounts owns some of them, and should see them as theirs.
+          const owner = grading?.data?.owner_contractor_id ?? null;
+          const mine = owner !== null && auth.profile.contractor_id !== null
+                       && owner === auth.profile.contractor_id;
+          await paint(perf.data || [], log.data || [], staff, el, {
+            contractor, mine,
+            grade: grading?.data?.grade ?? null,
+            ownerName: (names?.data || []).find(n => n.id === owner)?.name ?? null,
+            internal: new Map((internal?.data || []).map(r => [r.activity_id, r])),
+            earned: new Map((earned?.data || []).map(r => [r.activity_id, r.earned])),
+          });
         }
       }
     }
 
-    async function paint(perf, log, staff, el) {
+    async function paint(perf, log, staff, el, ctx = {}) {
+      const { contractor = false, mine = false, grade = null, ownerName = null,
+              internal = new Map(), earned = new Map() } = ctx;
       const name = perf[0]?.venue_name || log[0]?.venue_name || 'Venue';
       const city = perf[0]?.city || log[0]?.city || '';
       document.title = `${name} | iHospitality Brand Portal`;
@@ -145,14 +197,36 @@
       const fact = (k, v) => `<div class="fact"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`;
       const dash = '<span class="muted">—</span>';
 
+      // THE QUIET COUNT IS WITHHELD ON AN ACCOUNT A CONTRACTOR DOES NOT OWN,
+      // and it is NOT concealed -- the dated activity list is right below, so
+      // anyone can subtract. What is removed is the page stating it, because
+      // "quiet 240 days" on a colleague's account is a judgement about that
+      // colleague and this page is for looking an account up (D137).
+      const showQuiet = staff || !contractor || mine;
+
       let facts =
         fact('City', city ? esc(city) : dash) +
         (perf[0]?.market ? fact('Market', esc(MARKET_LABEL[perf[0].market] || perf[0].market)) : '') +
         fact('Activities', fmtNum(log.length)) +
         fact('First seen', firstSeen ? esc(fmtDate(firstSeen)) : dash) +
         fact('Last visit', lastVisit ? esc(fmtDate(lastVisit)) : dash) +
-        fact('Quiet', quiet === null ? dash : `${fmtNum(quiet)} days`) +
-        (units ? fact('Units moved', fmtNum(units)) : '');
+        (showQuiet ? fact('Quiet', quiet === null ? dash : `${fmtNum(quiet)} days`) : '') +
+        ((showQuiet && units) ? fact('Units moved', fmtNum(units)) : '');
+
+      if (staff || contractor) {
+        // A BLANK GRADE MEANS NOT GRADED YET, NEVER A BAD GRADE (D88).
+        facts +=
+          fact('Grade', grade ? `<span class="pill">${esc(grade)}</span>`
+                              : '<span class="muted">not graded</span>') +
+          fact('Owned by', ownerName ? esc(ownerName) : '<span class="muted">nobody yet</span>');
+      }
+
+      // Keyed on OWNERSHIP, not on the role -- an admin who works accounts owns
+      // some of them and should see what they earned there, same as anyone.
+      if (mine) {
+        const mineHere = log.reduce((t, r) => t + Number(earned.get(r.id) || 0), 0);
+        facts += fact('You earned here', money(mineHere));
+      }
 
       if (staff) {
         facts +=
@@ -207,6 +281,10 @@
         is worked out at the moment you look — 180 days without activity — so a
         visit brings an account back on its own.${staff
           ? ' Charge and cost come from the rate card via <code>v_activity_money</code>. Margin here excludes the retainer and base pay.'
+          : ''}${contractor && !mine
+          ? ' This is not one of your accounts, so the figures are not shown here. Everything you have earned is on <a href="my-pay.html">My pay</a>.'
+          : ''}${mine
+          ? ' Earnings shown are for work recorded as <strong>yours</strong> — a job a colleague did at your account appears in the list with nothing against it.'
           : ''}</p>`;
 
       el.innerHTML = html;
@@ -232,6 +310,27 @@
         { head: 'Photos', cls: 'num', value: r => Number(r.photo_count),
           get: r => Number(r.photo_count) ? fmtNum(r.photo_count) : dash },
       ];
+
+      if (staff || contractor) {
+        // WHO DID IT, on every account. Blank means NOT RECORDED, never
+        // "nobody" (D135) -- 179 activities carry no HubSpot deal and so have
+        // nobody to attribute them to.
+        cols.push({ head: 'Who', value: r => internal.get(r.id)?.contractor,
+          get: r => {
+            const who = internal.get(r.id)?.contractor;
+            return who ? esc(who) : '<span class="muted">not recorded</span>';
+          } });
+        cols.push({ head: 'Internal note', value: r => internal.get(r.id)?.notes,
+          get: r => {
+            const n = internal.get(r.id)?.notes;
+            return n ? `<span class="muted">${esc(n)}</span>` : dash;
+          } });
+        if (mine) {
+          cols.push({ head: 'You earned', cls: 'num', nowrap: true,
+            value: r => Number(earned.get(r.id) || 0),
+            get: r => earned.has(r.id) ? money(earned.get(r.id)) : dash });
+        }
+      }
 
       if (staff) {
         cols.push(
@@ -262,7 +361,13 @@
 
       sortableTable(document.getElementById('log'), log, cols, {
         sort: 'Date', dir: 'desc',
-        onRowClick: (r) => {
+        // activity-detail.html is the admin surface and shows charge, cost and
+        // margin, so a contractor is redirected off it (see STAFF_ONLY_PAGES).
+        // Rather than send them to a page that bounces them back to the
+        // dashboard, the rows simply do not open. Everything a contractor needs
+        // about an activity -- the note, who did it, what it earned -- is
+        // already on the row.
+        onRowClick: (contractor && !staff) ? null : (r) => {
           location.href = `activity-detail.html?id=${encodeURIComponent(r.id)}`;
         },
       });

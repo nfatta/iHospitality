@@ -5923,3 +5923,237 @@ It keyed its impact query on `contractor_id` at first and failed —
 The page caught it and showed the operator "Refused, and nothing was changed",
 which is the behaviour to keep: a preview that cannot compute must refuse, not
 guess.
+
+---
+
+**D137 — THE CONTRACTOR ROLE. A FIELD REP READS EVERY VENUE AND EVERY ACTIVITY,
+AND NO MONEY BUT THEIR OWN.**
+✅ built 27 Aug 2026. D120's enum change, done deliberately.
+
+The operator's statement of purpose: *"a central location of information and use
+for the contractor"* — a place to see the work they have done, organised. **Three
+versions, and only V1 is built:** V1 is read-only (field reference, worklist, pay
+statement, with the Brand and Training tabs present and saying "Coming soon");
+V2 fills those two in; **V3 is logging, where the contractor enters their own
+work and HubSpot stops being the input** — the direction D84 already points, and
+the point at which D61 has to be reopened on purpose rather than by accident.
+
+`profile_role_enum` gains `contractor`. `is_internal()` = `is_staff() or
+is_contractor()` and it is **the line for data that is internal but not
+financial**: venues, activities, photos, notes, grades, who did what. It is NOT
+the line for money — `rate_card`, `contractor_pay`, `brand_retainer`,
+`brand_product`, `invoice_recap` and the billing tables stay `is_staff()`,
+because a contractor holding their own pay rate AND the charge for the same row
+holds iHospitality's margin on their own work.
+
+**`activities.notes` COULD NOT BE GRANTED, AND THAT IS WHY THERE ARE DEFINER
+VIEWS.** The grant on `activities` is a written-out column list precisely so a
+new column is not published (D134) — and it is granted to `authenticated`,
+which is brand users *and* contractors alike. Widening it would have handed
+`notes` straight back to every brand and undone D134 the day after it landed. So
+`v_internal_activity` is a **SECURITY DEFINER view** that selects `notes` and
+gates on `is_internal()` in its own WHERE clause. Same for `v_contractor_names`,
+because `contractors.note` is internal writing about a person (D88).
+
+⚠️ **WHICH MAKES THE `where` CLAUSE THE ENTIRE BOUNDARY.** There is no policy
+underneath a definer view. `db/test/11_contractor_test.sql` asserts a brand login
+reads **zero** rows from both, and that assertion was proved able to fail: with
+the gate removed it reports *"A BRAND LOGIN READ 4 ROW(S) OF v_internal_activity
+— internal notes are published"*.
+
+**THE PAY VIEWS NEEDED DEFINER *FUNCTIONS*, NOT DEFINER VIEWS, AND THE
+DIFFERENCE COST AN HOUR.** `v_my_pay` and `v_my_activity_pay` read
+`v_contractor_month_cost` and `v_activity_money`, both `security_invoker = true`
+— and `security_invoker` keys off `current_user`, which **a definer VIEW does
+not change**. The inner views therefore still ran as the contractor, RLS still
+hid `rate_card` and `contractor_pay`, and the result was an empty pay page and a
+table of NULL money. A SECURITY DEFINER **function** does change `current_user`.
+Written that way rather than by recomputing either figure: the monthly spread has
+one definition (D136) and pricing has one definition (D90).
+
+**A CONTRACTOR READING `v_activity_money` GETS THE ROWS AND NOT THE MONEY.** It
+does not return zero rows — the rate-card join simply yields NULL, exactly as it
+does for a brand login. So contractor pages must never read it: it renders a full
+activity list with every figure blank, which looks like broken data rather than a
+boundary. The test asserts the part that matters — that no charge and no cost
+escape through it.
+
+Verified on live by impersonation in a rolled-back transaction (D125), with the
+control (D114): contractor reads **0** from all five money tables against
+service_role baselines of 253 / 3 / 13 / 2 / 56, and reads all 1,238 activities,
+340 venues and 632 internal notes.
+
+
+---
+
+**D138 — TWO VENUE SURFACES, AND THE SPLIT IS THE DESIGN. WHAT IS WITHHELD FROM
+A COLLEAGUE'S ACCOUNT IS THE JUDGEMENT, NOT THE FACT.**
+✅ operator ruling, 27 Aug 2026.
+
+*"While contractors can see all the venues and click on them and see what
+activities, I don't want them to see the money, but also don't want them to see
+days since last touched. I would want all the venues a separate tab from their
+venues and in their venues they see all the information, days, money, activities
+everything."*
+
+**My accounts** (`my-venues.html`, and the dashboard worklist) — the venues they
+own: days since, volume, their own earnings, status, grade. **All accounts**
+(`venues.html`) — every account in the business, for walking into one you do not
+own: activities, who did them, notes, grade and owner, and **no money and no
+days-since**.
+
+⚠️ **THE QUIET COUNT IS NOT CONCEALED, AND THE CODE SAYS SO.** The dated activity
+list is on the venue page, so anyone can subtract. What is removed is the column,
+the dormant badge and the sort — because a page that ranks a colleague's accounts
+by how long they have been neglected is passing judgement on that colleague, and
+this page is for looking an account up. **Do not "fix the leak" by hiding the
+dates**: that would gut the one thing the tab is for, to conceal a number that
+was never concealed. A comment claiming otherwise would be false and would invite
+exactly that change.
+
+**Money on your own accounts means YOUR EARNINGS and VOLUME** — never the charge
+side, which with your own pay in hand *is* the margin. And the earnings are
+scoped through `activity_contractor`, so **a venue you own where a colleague
+worked lists the activity with nothing against it**. That is correct, and the
+page says so rather than hiding the row.
+
+**The inference leak is accepted for now**: a contractor who knows their own
+rates can price a colleague's visible activities. Operator — Phil owns the
+business and Nicholas does the books, so both already know every rate; Eric does
+not know what either of them is paid, and base pay stays private.
+
+
+---
+
+**D139 — WHO DID THE WORK CAME FROM THE HUBSPOT DEAL OWNER. IT WAS NEVER A
+GUESS, AND IT WAS SITTING THERE ALL ALONG.**
+✅ 27 Aug 2026. 1,057 rows written.
+
+`activity_contractor` was added on 26 Aug (D135) and deliberately left empty:
+1,236 rows could not be assigned by hand, and inferring from who owns the venue
+NOW would have attributed a colleague's work — and, once `v_my_activity_pay`
+existed, a colleague's MONEY — to the wrong person. That is D116's named weakness
+applied to somebody's pay record.
+
+**HubSpot already held the answer.** Operator: *"All the deals pulled from
+hubspot has a contractor name attached, let's use that to match it."* Checked
+live before writing anything: all **1,057** activities carrying a
+`hubspot_deal_id` resolve, **every one with an owner**, and the distribution is
+genuinely spread rather than sitting on whoever ran the imports — **Phil King
+773, Eric Anderson 145, Nick Fatta 80, Alan Merrick 59**.
+
+**ALAN MERRICK OWNS 59 DEALS AND WAS NOT IN `contractors`.** Created **INACTIVE**
+(operator ruling): his history attributes correctly, and he gets no login and no
+pay record. That is what `contractors.is_active` is for — the table keeps people
+rather than deleting them, because their work is part of what last year cost.
+
+**The 179 rows with no deal id stay blank.** Nothing to read an owner from, and
+BLANK MEANS NOT RECORDED, NEVER "NOBODY" (D135).
+
+**THE DRY RUN HAD TO BE A REAL PREVIEW, SO IT RUNS AND ROLLS BACK (D91).** The
+first version computed the preview *before* creating Alan and created him only on
+`--apply`, so the dry run reported his 59 as unattributable and the real run
+attributed them. A preview that does not match what the run does is worse than no
+preview. `backfill_activity_contractor.py` now does all its work in one
+transaction and rolls it back unless `--apply`.
+
+⚠️ **THIS CHANGES D116'S PREMISE.** Cost to serve does not read
+`activity_contractor` because it was blank; it is now **1,059 of 1,238 (86%)**.
+Whether to switch the allocation from venue-ownership to actual attribution is a
+real decision and has NOT been made.
+
+
+---
+
+**D140 — AN ADMIN IS A SUPERSET OF A CONTRACTOR, AND `auth_contractor_id()`
+THEREFORE DOES NOT TEST THE ROLE.**
+✅ operator ruling, 27 Aug 2026.
+
+*"As an admin though we should still be able to see our venues too the same way
+contractors can. Basically an admin should do everything a contractor can plus
+what it already could."* And, correcting an earlier misunderstanding of the
+question: **Phil and Nicholas are both admins; Eric is the only contractor.**
+
+Nicholas and Phil run the business AND work accounts. Keyed on
+`role = 'contractor'`, `auth_contractor_id()` returned NULL for them — so "My
+accounts" defaulted to a colleague and "My pay" was blank for the two people who
+own the company. It now reads the caller's own `contractor_id` **whatever their
+role**, and a `staff` profile may carry one, meaning *"this login is also this
+person in the field"*.
+
+**It grants nothing.** Staff already read every row of `contractor_pay` and
+`rate_card`, so scoping a view to their own `contractor_id` shows them strictly
+LESS than they can already see. For a contractor it is unchanged and still the
+whole of the boundary. A new CHECK keeps a **brand user** from ever carrying a
+`contractor_id`, which is the one direction where relaxing the role test would
+have mattered.
+
+**"Mine" is about the PERSON, not the role** — every ownership test on
+`venue.html` keys on `contractor_id`, so an admin who owns an account sees it as
+theirs.
+
+
+---
+
+**D141 — A USERS PAGE THAT CAN CREATE BUT NOT RE-SCOPE IS HALF FINISHED. THE
+SAME SHAPE AS D136.**
+✅ 27 Aug 2026, found by getting it wrong within the hour.
+
+The Users page shipped with create, deactivate and delete. Then the operator
+corrected who should be an admin, and the only route to fixing a role picked
+wrongly was **delete the account and make another** — destroying the auth user,
+its id and its sign-in history to correct a dropdown. That is exactly D136's
+finding about contractor pay, arrived at again from the other end.
+
+**Unlike a pay rise, a role is not effective-dated and has no history to
+restate.** It is a statement about what this person may read RIGHT NOW, so
+editing in place is the right shape here and the only correct one. `set_role()`
+REPLACES the mapping rather than merging it: a login moving from contractor to
+staff keeps neither a stale `contractor_id` nor a `brand_id`, because a stale one
+reads as a real answer long after it stopped being true.
+
+**The implementation lives in `create_portal_user.py` and the page is a second
+caller** — the `promote.py` arrangement (D64). Two copies of "how an account is
+made" drift, and the copy that drifts is the one nobody runs often enough to
+notice.
+
+**Deactivating is the one to reach for, not deleting.** `is_staff()`,
+`is_contractor()` and `auth_brand_id()` all test `is_active`, so a deactivated
+profile reads as no role at all and sees nothing — while the row, its mapping and
+its name survive for whoever asks in six months why the account existed. Same
+instinct as `contractors.is_active` and D119's `quantity = 0`: keep the record,
+remove the effect.
+
+
+---
+
+**D142 — THE ENUM VALUE HAD TO BE APPLIED IN ITS OWN TRANSACTION, AND THE SCHEMA
+FILE COULD NOT DO IT ALONE.**
+⚠️ found 27 Aug 2026, before it bit.
+
+Two separate traps, and they compound.
+
+**First, D91's rule in its enum form.** The `do $$ create type profile_role_enum
+... exception when duplicate_object then null` block only covers a FRESH
+database. On an existing one it raises and does nothing — so a value added to
+that list **never reaches Supabase**, passes every local test, and the failure is
+silent in the D120 way.
+
+**Second, Postgres refuses to USE a new enum value in the transaction that ADDED
+it** — *"unsafe use of new value of enum type"*. `apply_schema.py` sends the
+whole file as ONE implicit transaction, so an `alter type ... add value` and the
+CHECK constraint on `profiles` that reads the literal would have landed together
+and the constraint would have failed — on a database that does not have the value
+yet, and never again afterwards. The worst kind of intermittent.
+
+`schema.sql` now marks its `add value` statements between two markers;
+`apply_schema.py` extracts them, runs and COMMITS them first, **strips them**,
+and applies the remainder whole. Stripped rather than left to run twice: `add
+value if not exists` is a no-op the second time, but a no-op inside the very
+transaction that also uses the value is not worth relying on.
+
+**A related one, same session:** `auth_contractor_id()` was first defined beside
+`is_staff()` and the schema failed to apply — a SQL function body is validated at
+CREATE time, and it reads `profiles.contractor_id`, which the ALTER adds 2,000
+lines further down. It lives in SECTION 11 now, after the column exists.
+

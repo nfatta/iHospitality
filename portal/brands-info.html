@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Brands | iHospitality Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">Reference</span>
+        <h1>Brands</h1>
+        <p class="portal-sub">Everything you need to know about what we sell, on the road.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Coming soon</h2>
+        <span class="hint">Version 2</span>
+      </div>
+      <div class="state">
+        <strong>Not built yet.</strong>
+        This will hold each brand&rsquo;s price points, sales sheets and marketing material &mdash; the things worth having in your pocket at the bar rather than in an email you have to go and find.
+      </div>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { requireAuth, renderShell } from './portal.js';
+
+    // A DELIBERATE STUB, not an unfinished page. The tab exists so the shape of
+    // the portal is visible from the first day a contractor signs in -- the
+    // operator asked for both sections to be present and say "coming soon"
+    // rather than appear later and change the navigation under people.
+    const auth = await requireAuth();
+    if (auth) renderShell('brands-info.html', auth.profile);
+  </script>
+</body>
+</html>

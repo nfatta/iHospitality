@@ -6,6 +6,10 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Venues | iHospitality Brand Portal</title>
   <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -47,13 +51,36 @@
 
   <script type="module">
     import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum,
-             sortableTable, fillSelect } from './portal.js';
+             sortableTable, fillSelect, isContractor } from './portal.js';
 
     const STATUS_ORDER = ['reordering', 'placed', 'pitched', 'prospect', 'dormant', 'lost'];
 
     const auth = await requireAuth();
     if (auth) {
       renderShell('venues.html', auth.profile);
+
+      // TWO SURFACES, AND THE SPLIT IS THE DESIGN (D137).
+      //
+      // For a contractor this page is the LOOKUP -- every account in the
+      // business, for walking into one you do not own. `my-venues.html` is the
+      // other half: the accounts you DO own, with the days, the volume and your
+      // own earnings on them.
+      //
+      // What is withheld here is the quiet-day count: the column, the dormant
+      // ranking and the "quiet 90+" card. Not because it is secret -- THE
+      // ACTIVITY DATES ARE ON THE VENUE PAGE AND ANYONE CAN SUBTRACT -- but
+      // because a page that ranks a colleague's accounts by how long they have
+      // been neglected is passing judgement on that colleague, and this page is
+      // for looking up an account, not for grading a workmate.
+      //
+      // Do not "fix the leak" by hiding the dates. That would gut the one thing
+      // the page is for, to conceal a number that was never concealed.
+      const contractor = isContractor(auth.profile);
+      if (contractor) {
+        document.querySelector('.portal-eyebrow').textContent = 'Look up';
+        document.querySelector('.portal-head h1').textContent = 'All accounts';
+        document.querySelector('.panel-head h2').textContent = 'Every account on record';
+      }
 
       // v_venue_performance is driven from brand_venue_status with activities
       // LEFT JOINed, so a venue pitched but not yet visited still appears with
@@ -110,6 +137,7 @@
       // cards are how they see the account.
       const counts = {};
       for (const r of rows) counts[r.status_stored] = (counts[r.status_stored] || 0) + 1;
+      const contractor = isContractor(auth.profile);
       // "Placed" is the number that matters commercially — accounts actually
       // stocking the brand.
       const placed = (counts.placed || 0) + (counts.reordering || 0);
@@ -126,14 +154,15 @@
         <div class="stat-card"><span class="num">${fmtNum(rows.length)}</span>
           <span class="lbl">Total accounts</span></div>
         <div class="stat-card"><span class="num">${fmtNum(placed)}</span>
-          <span class="lbl">Stocking your brand</span>
+          <span class="lbl">${contractor ? 'Stocking' : 'Stocking your brand'}</span>
           <div class="meta">placed or reordering</div></div>
         <div class="stat-card"><span class="num">${fmtNum(counts.pitched || 0)}</span>
           <span class="lbl">Pitched</span>
           <div class="meta">visited, not yet placed</div></div>
+        ${contractor ? '' : `
         <div class="stat-card"><span class="num">${fmtNum(quiet)}</span>
           <span class="lbl">Quiet 90+ days</span>
-          <div class="meta">stocking, but not seen lately</div></div>`;
+          <div class="meta">stocking, but not seen lately</div></div>`}`;
     }
 
     function draw(rows) {
@@ -190,7 +219,10 @@
         { head: 'Last visit', always: true, nowrap: true,
           sortValue: r => r.last_touched || '',
           get: r => r.last_touched ? esc(fmtDate(r.last_touched)) : '<span class="muted">never</span>' },
-        { head: 'Quiet', cls: 'num', nowrap: true,
+        // Withheld from a contractor -- see the long note at the top of the
+        // script. Spread into the list rather than rendered blank, so the
+        // column and its sort disappear together.
+        ...(isContractor(auth.profile) ? [] : [{ head: 'Quiet', cls: 'num', nowrap: true,
           // Sorts on the raw day count so "412 days" ranks above "90 days"
           // rather than sorting as text. Never-visited rows have no number and
           // sink to the bottom, which is what sortableTable does with blanks.
@@ -201,9 +233,12 @@
             const d = Number(r.days_since);
             const cls = d > 180 ? 'pill pill-lost' : d > 90 ? 'pill pill-dormant' : 'muted';
             return `<span class="${cls}">${fmtNum(d)}d</span>`;
-          } },
+          } }]),
       ], {
-        sort: 'Quiet', dir: 'desc',
+        // A contractor's copy has no Quiet column, so it cannot open sorted by
+        // it. Falling back to Last visit keeps the most recent work at the top
+        // without ranking anyone's neglect.
+        sort: isContractor(auth.profile) ? 'Last visit' : 'Quiet', dir: 'desc',
         // Keyed on venue_id, never the name. `v_venue_performance` is one row
         // per BRAND per venue, so a staff user sees the same venue several
         // times over -- every one of those rows carries the same venue_id and

@@ -6,6 +6,10 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Contractor pay | iHospitality Brand Portal</title>
   <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -60,7 +64,7 @@
 
   <script type="module">
     import { db, requireAuth, renderShell, render, esc, isStaff,
-             fmtDate, fmtMonth, fmtNum, money, sortableTable } from './portal.js';
+             fmtDate, fmtMonth, fmtNum, money, sortableTable, guardStaffPage} from './portal.js';
 
     // How many times a year each cadence pays. EXACT for semimonthly and
     // monthly; an AVERAGE for weekly and biweekly, which land an extra time in
@@ -69,6 +73,10 @@
 
     const auth = await requireAuth();
     if (auth) {
+      // A contractor is redirected off the admin pages. RLS already makes
+      // every one of them a page of nulls, which is the real lock -- this is
+      // so it reads as "not yours" rather than "broken" (D137).
+      await guardStaffPage(auth.profile);
       renderShell('pay.html', auth.profile);
       const el = document.getElementById('people');
 

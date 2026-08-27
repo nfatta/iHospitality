@@ -6,6 +6,10 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Dashboard | iHospitality Brand Portal</title>
   <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -49,10 +53,13 @@
 
   <script type="module">
     import { db, requireAuth, renderShell, render, esc, fmtDate, fmtMonth, fmtNum,
-             sortableTable } from './portal.js';
+             money, sortableTable, isContractor } from './portal.js';
 
     const auth = await requireAuth();
-    if (auth) {
+    if (auth && isContractor(auth.profile)) {
+      renderShell('index.html', auth.profile);
+      await contractorDashboard(auth.profile);
+    } else if (auth) {
       renderShell('index.html', auth.profile);
       document.getElementById('title').textContent = auth.profile.brands?.name || 'All brands';
 
@@ -75,6 +82,166 @@
       renderStats(months, venues);
       renderMonths(months);
       renderRecent(log);
+    }
+
+    /* ==========================================================
+       THE CONTRACTOR'S WORKLIST (D137)
+
+       "Where do I go this week?" -- built from FACTS the data already
+       holds, never from GRADES. `v_venue_performance` carries the status
+       with dormancy derived live, the days since anyone was in the room,
+       and whether the account has ever bought. Ranking on those answers
+       the question without any A/B/C/D, any cap and any campaign.
+
+       THAT IS DELIBERATE. Venue grading and the routed week are DESIGNED
+       AND NOT AGREED (D117) -- the arithmetic only works if A is capped
+       as a share of capacity and a B graded on potential drops after 90
+       days. Putting a grade-driven route on the dashboard would settle
+       all of that by default, the first time somebody opened the page.
+       The grade is shown where it exists and nothing is ranked by it.
+       ========================================================== */
+    async function contractorDashboard(profile) {
+      document.querySelector('.portal-eyebrow').textContent = 'My work';
+      document.getElementById('title').textContent = profile.contractors?.name || 'Dashboard';
+      document.querySelector('.panel-head h2').textContent = 'Needs attention';
+      document.querySelectorAll('.panel-head .hint')[0].textContent =
+        'Your accounts, longest quiet first';
+      document.querySelectorAll('.panel-head h2')[1].textContent = 'My recent work';
+
+      const el = document.getElementById('months');
+
+      if (!profile.contractor_id) {
+        document.getElementById('range').textContent = '';
+        return render(el, { empty: {
+          title: 'No contractor linked',
+          body: 'This login is not linked to a contractor, so it owns no accounts.' } });
+      }
+
+      const { data: mine, error: e1 } = await db.from('venue_grading')
+        .select('venue_id, grade').eq('owner_contractor_id', profile.contractor_id);
+      if (e1) return render(el, { error: e1 });
+
+      // My recent work reads the SAME view the pay page does, so "what I did"
+      // has one definition. It is empty for work with nobody recorded against
+      // it -- blank means NOT RECORDED, never "nobody" (D135).
+      const { data: recent } = await db.from('v_my_activity_pay')
+        .select('*').order('activity_date', { ascending: false }).limit(10);
+      renderMyRecent(recent || []);
+
+      if (!mine.length) {
+        document.getElementById('range').textContent = 'No accounts assigned to you yet';
+        return render(el, { empty: {
+          title: 'No accounts assigned yet',
+          body: 'Venues assigned to you will appear here.' } });
+      }
+
+      const grades = Object.fromEntries(mine.map(m => [m.venue_id, m.grade]));
+      const { data, error } = await db.from('v_venue_performance')
+        .select('*').in('venue_id', mine.map(m => m.venue_id));
+      if (error) return render(el, { error });
+
+      // One row per venue, not per brand-venue pair. A venue is SHARED (D129),
+      // so a worklist keyed per brand would send someone to the same bar eight
+      // times over.
+      const byVenue = new Map();
+      for (const r of data) {
+        const cur = byVenue.get(r.venue_id);
+        if (!cur) {
+          byVenue.set(r.venue_id, { ...r, grade: grades[r.venue_id] });
+        } else if ((r.last_touched || '') > (cur.last_touched || '')) {
+          Object.assign(cur, r, { grade: grades[r.venue_id] });
+        }
+      }
+      const rows = [...byVenue.values()];
+
+      // COUNTS READ `status_stored`, NOT the displayed status (D87). Dormancy
+      // layers over the stored value, so counting stocking accounts off the
+      // display drops every one that has gone quiet -- which is exactly the set
+      // this page exists to surface.
+      const counts = {};
+      for (const r of rows) counts[r.status_stored] = (counts[r.status_stored] || 0) + 1;
+      const stocking = (counts.placed || 0) + (counts.reordering || 0);
+      const quiet = rows.filter(r => r.days_since !== null && Number(r.days_since) > 90 &&
+        (r.status_stored === 'placed' || r.status_stored === 'reordering')).length;
+      const never = rows.filter(r => r.days_since === null).length;
+
+      document.getElementById('range').textContent =
+        `${fmtNum(rows.length)} accounts you own`;
+
+      const stats = document.getElementById('stats');
+      stats.className = 'stat-grid';
+      stats.innerHTML = `
+        <div class="stat-card"><span class="num">${fmtNum(rows.length)}</span>
+          <span class="lbl">My accounts</span></div>
+        <div class="stat-card"><span class="num">${fmtNum(stocking)}</span>
+          <span class="lbl">Stocking</span><div class="meta">placed or reordering</div></div>
+        <div class="stat-card"><span class="num">${fmtNum(quiet)}</span>
+          <span class="lbl">Quiet 90+ days</span><div class="meta">stocking, not seen lately</div></div>
+        <div class="stat-card"><span class="num">${fmtNum(never)}</span>
+          <span class="lbl">Never visited</span><div class="meta">no activity on record</div></div>`;
+
+      // The worklist itself: quiet accounts first, then the never-visited.
+      // Capped at 20 -- a dashboard is a place to start, and the whole list is
+      // one click away on My accounts.
+      const needing = rows
+        .filter(r => r.days_since === null || Number(r.days_since) > 60)
+        .sort((a, b) => {
+          const av = a.days_since === null ? Infinity : Number(a.days_since);
+          const bv = b.days_since === null ? Infinity : Number(b.days_since);
+          return bv - av;
+        })
+        .slice(0, 20);
+
+      if (!needing.length) {
+        return render(el, { empty: {
+          title: 'Nothing is waiting',
+          body: 'Every account you own has been touched in the last two months.' } });
+      }
+
+      sortableTable(el, needing, [
+        { head: 'Account', always: true, cls: 'venue', value: r => r.venue_name,
+          get: r => esc(r.venue_name) },
+        { head: 'City', value: r => r.city,
+          get: r => r.city ? esc(r.city) : '<span class="muted">—</span>' },
+        { head: 'Grade', value: r => r.grade,
+          get: r => r.grade ? `<span class="pill">${esc(r.grade)}</span>`
+                            : '<span class="muted">—</span>' },
+        { head: 'Status', always: true, value: r => r.status,
+          get: r => `<span class="pill pill-${esc(r.status)}">${esc(r.status)}</span>` },
+        { head: 'Last visit', always: true, nowrap: true,
+          sortValue: r => r.last_touched || '',
+          get: r => r.last_touched ? esc(fmtDate(r.last_touched)) : '<span class="muted">never</span>' },
+        { head: 'Quiet', always: true, cls: 'num', nowrap: true,
+          sortValue: r => r.days_since === null ? Infinity : Number(r.days_since),
+          get: r => {
+            if (r.days_since === null) return '<span class="pill pill-lost">never</span>';
+            const d = Number(r.days_since);
+            const cls = d > 180 ? 'pill pill-lost' : d > 90 ? 'pill pill-dormant' : 'muted';
+            return `<span class="${cls}">${fmtNum(d)}d</span>`;
+          } },
+      ], {
+        sort: 'Quiet', dir: 'desc',
+        onRowClick: r => { location.href = `venue.html?id=${encodeURIComponent(r.venue_id)}`; },
+      });
+    }
+
+    function renderMyRecent(rows) {
+      const el = document.getElementById('recent');
+      if (!rows.length) {
+        return render(el, { empty: {
+          title: 'No work recorded against you yet',
+          body: 'Activities recorded as yours will appear here.' } });
+      }
+      el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Date</th><th>Account</th><th>Brand</th><th>What</th>
+          <th class="num">Earned</th></tr></thead>
+        <tbody>${rows.map(r => `<tr>
+          <td class="nowrap">${esc(fmtDate(r.activity_date))}</td>
+          <td class="venue">${esc(r.venue_name || '—')}</td>
+          <td>${esc(r.brand_name || '—')}</td>
+          <td>${esc(r.activity_type || '—')}</td>
+          <td class="num">${r.earned === null ? '<span class="muted">—</span>' : money(r.earned)}</td>
+        </tr>`).join('')}</tbody></table></div>`;
     }
 
     function renderStats({ data, error }, venues) {

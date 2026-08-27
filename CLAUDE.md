@@ -54,8 +54,11 @@ python verify_live.py                  # read-only health check
 python apply_schema.py --apply         # re-apply db/schema.sql (idempotent)
 python seed_from_csv.py                # dry run; --apply to load
 python create_portal_user.py --list    # who has portal access
+python create_portal_user.py --email x@y --contractor "Eric Anderson"   # a field login
+python create_portal_user.py --email x@y --set-role staff --contractor "Nick Fatta"
+python backfill_activity_contractor.py # who did the work, from HubSpot; --apply to write
 python -m pytest test_normalize.py test_sync.py test_admin_sql.py -q  # 103 tests
-bash db/test/run.sh                    # schema + RLS + staging suite, no network
+bash db/test/run.sh                    # schema + RLS + contractor isolation, no network
 python backfill_staging.py             # one-time; already applied 19 Aug
 bash test_seed_integration.sh          # end-to-end load, asserts idempotency
 ```
@@ -96,13 +99,68 @@ reproduces it; keep it that way.
   string through, and the allowlist matches only the filename half so
   `?slug=`/`?id=` survive a login.
 - **A NEW `profiles.role` VALUE FAILS SILENTLY, WITH EMPTY RESULT SETS** (D120).
-  `is_staff()` tests the literal string `'staff'` and `profile_role_enum` has
-  exactly two values, so an unrecognised role returns **false** and every
-  staff-gated table returns zero rows with no error, on a page that renders
-  perfectly. The admin portal is therefore the `staff` role with "Admin" as a UI
-  label — no schema change. A real `contractor` role IS an enum change plus ~15
-  policies, done deliberately. The failure direction is the useful part: an
-  unknown role sees less, never more.
+  `is_staff()` and `is_contractor()` each test a LITERAL STRING, and `portal.js`
+  spells them a third time. A role spelled differently in any one of those places
+  returns **false**, so every gated table returns zero rows with no error, on a
+  page that renders perfectly. The failure direction is the useful part — an
+  unknown role sees LESS, never more — but it is silent, so the spellings must be
+  kept in step. `profile_role_enum` now holds THREE values: `brand_user`,
+  `staff`, `contractor` (D137). "Admin" is still only a UI label for `staff`.
+- **THE CONTRACTOR ROLE: `is_internal()` IS THE LINE FOR INTERNAL DATA, NEVER
+  FOR MONEY** (D137). `is_internal()` = `is_staff() or is_contractor()`, and it
+  gates venues, activities, photos, notes, grades and who did what. `rate_card`,
+  `contractor_pay`, `brand_retainer`, `brand_product`, `invoice_recap` and the
+  billing tables **stay `is_staff()`** — a contractor holding their own pay rate
+  AND the charge for the same row holds the margin on their own work. Moving a
+  table across that line is a disclosure decision, not a convenience.
+- **`v_internal_activity` AND `v_contractor_names` ARE `SECURITY DEFINER` VIEWS,
+  SO THEIR `where` CLAUSE IS THE ENTIRE BOUNDARY** (D137). They exist because
+  `activities.notes` CANNOT be column-granted: the grant is to `authenticated`,
+  which is brand users and contractors alike, so widening it hands `notes` back
+  to every brand and undoes D134. There is no RLS policy underneath a definer
+  view — one added without its gate is world-readable to every logged-in brand.
+  `db/test/11_contractor_test.sql` asserts a brand reads zero from both, and that
+  assertion is proven able to fail.
+- **THE PAY VIEWS GO THROUGH DEFINER *FUNCTIONS*, NOT DEFINER VIEWS** (D137).
+  `security_invoker` keys off `current_user`, and a definer VIEW does not change
+  it — so `v_my_pay` over `v_contractor_month_cost` came back EMPTY and
+  `v_my_activity_pay` came back full of NULL money. A `security definer`
+  FUNCTION does change `current_user`. Never recompute the monthly spread (D136)
+  or the pricing (D90) to work around it.
+- **A CONTRACTOR READING `v_activity_money` GETS ROWS WITH NO MONEY** (D137) —
+  not zero rows. Contractor pages must never read it: it renders a full activity
+  list with every figure blank, which looks like broken data rather than a
+  boundary. They read `v_my_activity_pay`.
+- **AN ADMIN IS A SUPERSET OF A CONTRACTOR, AND `auth_contractor_id()` DOES NOT
+  TEST THE ROLE** (D140). Phil and Nicholas are **admins**; Eric is the only
+  contractor. Both of them also work accounts, so a `staff` profile may carry a
+  `contractor_id` meaning "this login is also this person in the field" — which
+  grants nothing, because staff already read every rate and every salary. Every
+  ownership test keys on `contractor_id`, never on the role.
+- **TWO VENUE SURFACES, AND WHAT IS WITHHELD IS THE JUDGEMENT, NOT THE FACT**
+  (D138). *My accounts* shows days, volume and your own earnings; *All accounts*
+  shows every venue with no money and no days-since. ⚠️ **The quiet count is NOT
+  concealed** — the dated activity list is right there and anyone can subtract.
+  What is removed is the column, the dormant badge and the sort, because ranking
+  a colleague's accounts by neglect is passing judgement on that colleague. **Do
+  not "fix the leak" by hiding the dates** — that guts the tab to conceal a
+  number that was never concealed.
+- **A USERS PAGE THAT CAN CREATE BUT NOT RE-SCOPE IS HALF FINISHED** (D141, the
+  same shape as D136). A role has no history to restate, so `set_role()` edits in
+  place and REPLACES the mapping — a login moving to staff keeps no stale
+  `contractor_id`. **Deactivate rather than delete**: every role helper tests
+  `is_active`, so a deactivated profile sees nothing while the row survives.
+  `create_portal_user.py` holds the implementation and the admin page is a second
+  caller — the `promote.py` arrangement.
+- **⚠️ AN ENUM VALUE MUST BE APPLIED AND COMMITTED BEFORE ANYTHING USES IT**
+  (D142). The `do $$ create type ... exception when duplicate_object` block only
+  covers a FRESH database — D91's rule in its enum form — and Postgres refuses to
+  USE a new value in the transaction that ADDED it. `schema.sql` marks its
+  `alter type ... add value` statements between two markers and
+  `apply_schema.py` runs, commits and STRIPS them before applying the rest. Put
+  any new enum value between those markers. Related: a SQL function body is
+  validated at CREATE time, so a function reading a column must be defined AFTER
+  the ALTER that adds it.
 - **THE GALLERY IS BOUNDED, AND PHOTOS ARE THE ONLY TABLE HERE THAT GROWS
   WITHOUT LIMIT** (D122). Postgres orders and slices (`.order(...).range(...)`),
   the filters are applied **server-side** — filtering a page after it arrives
@@ -171,9 +229,14 @@ reproduces it; keep it that way.
 - **WHO DID THE WORK IS `activity_contractor`, STAFF ONLY — NEVER A COLUMN ON
   `activities`** (D135, same trap as D88). A brand can `select *` on
   `activities`, so a `contractor_id` there publishes our staffing of their
-  accounts. Blank means NOT RECORDED, never "nobody", and the 1,236 existing
-  rows are deliberately unassigned. **Cost to serve does NOT read it yet**
-  (D116) — with most rows blank it would reattribute the business to nobody.
+  accounts. Blank means NOT RECORDED, never "nobody". **It is now 1,059 of 1,238
+  (86%) filled from the HubSpot DEAL OWNER** (D139) — not a guess: every one of
+  the 1,057 deal-linked activities resolved, and the 179 with no deal id stay
+  blank. Refresh with `backfill_activity_contractor.py` (dry run by default; the
+  dry run runs and rolls back, so it is a true preview). **Cost to serve still
+  does NOT read it** (D116) — that was because it was blank, and it no longer is,
+  so switching the allocation from venue-ownership to real attribution is now a
+  live decision nobody has made.
 - **A PAY PERIOD CAN BE CORRECTED IN PLACE, AND A RISE STILL CANNOT** (D136,
   D91's rule applied to `contractor_pay`). "Set or change pay" is add-only for a
   RISE; "Correct a pay period" edits in place for a record that was never true,
@@ -552,7 +615,10 @@ reproduces it; keep it that way.
 
 | Path | What |
 |---|---|
-| `portal/` | The twelve portal pages, `portal.css`, `portal.js`. Servable files only. |
+| `portal/` | The sixteen portal pages, `portal.css`, `portal.js`, `sw.js`, `manifest.webmanifest`, `icons/`. Servable files only. |
+| `portal/my-venues.html`, `my-pay.html` | The contractor's own surface (D137). Also on the admin rail (D140). |
+| `portal/brands-info.html`, `training.html` | Deliberate "Coming soon" stubs — V2. |
+| `portal/sw.js` | Service worker. **Caches the SHELL ONLY, never a Supabase response** — read its header before touching it. Scope is `/portal/`, so it cannot reach the public site. |
 | `portal/brands.html`, `brand.html`, `activity-detail.html` | The admin surface (D120). Staff-labelled "Admin"; RLS does the gating. |
 | `css/site.css` | Shared tokens, nav, buttons, section base, footer, mobile nav. |
 | `docs/` | The internal documents. **Force-404'd by `_redirects` — not public.** |
@@ -560,5 +626,7 @@ reproduces it; keep it that way.
 | `docs/HANDOFF.md` | Where the last session stopped, and the next prompt. |
 | `../../Hubspot/portal_seed/admin/` | The staff admin (Streamlit). Analysis, review, cleanup. |
 | `../../Hubspot/portal_seed/promote.py` | Promote / reject / suppress a staged deal. One definition, two callers. |
+| `../../Hubspot/portal_seed/create_portal_user.py` | Create / re-scope / deactivate a login. One definition; the CLI and the admin's Users page both call it. |
+| `../../Hubspot/portal_seed/backfill_activity_contractor.py` | Who did the work, from the HubSpot deal owner (D139). |
 | `../../Hubspot/portal_seed/` | Python tooling + `db/schema.sql`. Separate repo. |
 | `../../Hubspot/.env` | HubSpot token, Supabase keys, `DATABASE_URL`. Not in git. |

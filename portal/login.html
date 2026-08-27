@@ -6,6 +6,10 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Sign In | iHospitality Brand Portal</title>
   <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -37,7 +41,7 @@
 
       <p class="login-note">
         Accounts are created by iHospitality — there is no self-signup.<br>
-        Need access? Email <a href="mailto:nicholas@ihospitality.vip" style="color:var(--gold)">nicholas@ihospitality.vip</a>
+        Need access? Email <a href="mailto:nick@ihospitality.vip" style="color:var(--gold)">nick@ihospitality.vip</a>
       </p>
     </div>
   </div>
@@ -59,6 +63,10 @@
       'index.html', 'activity.html', 'venues.html', 'venue.html', 'photos.html',
       'brands.html', 'brand.html', 'activity-detail.html', 'business.html',
       'rate-card.html', 'pay.html',
+      // The contractor portal (D137). A page left out of this list is NOT
+      // blocked -- it is silently redirected to the dashboard after a
+      // successful sign-in, with no error anywhere (D124).
+      'my-venues.html', 'my-pay.html', 'brands-info.html', 'training.html',
     ];
 
     // `next` may carry a query string (?slug=…, ?id=…) so a deep link survives

@@ -1576,3 +1576,54 @@ Found by profiling the six `hubspot-crm-exports-*.csv` files (315 rows):
    `account_status_enum` yet.
 4. Venue naming consistency across months is untested — the plan predicts this is
    the real work of Phase 2, and profiling has not yet confirmed the extent.
+
+## Session of 27 Aug 2026 — the contractor role, and adding a user (D137–D142)
+
+Two things asked for, and the second turned out to be the larger one: a way to
+add a user from the admin, and a contractor portal — *"a central location of
+information and use for the contractor"*.
+
+### Built
+
+- **The contractor role** (D137). `profile_role_enum` gains a third value;
+  `is_internal()` gates internal-but-not-financial data while every money table
+  stays `is_staff()`. Four new views, two of them SECURITY DEFINER because
+  `activities.notes` cannot be column-granted without undoing D134.
+- **`admin/pages/10_Users.py`** — create, re-scope, deactivate or delete a login,
+  for all three kinds. It stays in Streamlit because creating a login needs the
+  service key, and that key in a browser dissolves D61.
+- **`backfill_activity_contractor.py`** (D139) — 1,057 rows written from the
+  HubSpot deal owner. Alan Merrick created as an INACTIVE contractor.
+- **Four portal pages** and a two-way render of `venue.html` / `venues.html`
+  (D138), plus a **PWA**: manifest, icons and a service worker scoped to
+  `/portal/` that caches the shell and never a Supabase response.
+
+### Corrected mid-session, by the operator
+
+- **Phil and Nicholas are ADMINS; Eric is the only contractor** — and an admin
+  must do everything a contractor can, plus what it already could (D140).
+- **The two venue surfaces** (D138), and what is withheld on a colleague's
+  account is the *judgement*, not the fact.
+- **`nicholas@ihospitality.vip` is not his address.** `portal/login.html` had
+  offered it as the "Need access?" contact since the day it was written.
+
+### Found by building it
+
+- **A definer VIEW does not change `current_user`,** so it does not lift
+  `security_invoker` on a view it reads. The pay views had to become definer
+  FUNCTIONS (D137).
+- **An enum value cannot be used in the transaction that added it,** and the
+  `create type ... exception when duplicate_object` block never reaches a live
+  database at all (D142). `apply_schema.py` now applies enum values first.
+- **Two rendering bugs only a browser could show** (D79): the rail read
+  "Contractor" and a venue read "Owned by: nobody yet", both because
+  `contractors` is staff-only and a PostgREST embed came back null.
+- **A Users page that can create but not re-scope is half finished** (D141) —
+  D136's finding, arrived at again from the other end, within the hour.
+
+### Verified
+
+Live impersonation with the control; `11_contractor_test.sql` proved able to
+fail; 153 Python tests; every page opened signed in as both a contractor and an
+admin; the phone drawer; the service-worker cache inspected. **Dame Mas still
+reads $14,036.78 / $9,000.00 / $5,036.78 — the money did not move.**

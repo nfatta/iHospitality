@@ -17,6 +17,19 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 export const db = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
+/* ---------- installable on a phone (D137) ----------
+   Registered from here so every page gets it without repeating the snippet.
+
+   The worker caches THE SHELL ONLY and never a Supabase response -- read the
+   header of sw.js before changing it. Registration is best-effort: on
+   file://, in a private window, or anywhere the browser refuses, the portal
+   works exactly as it did before. */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
 /* ---------- auth ---------- */
 
 /** Redirect to the login page unless signed in. Returns {session, profile}. */
@@ -33,16 +46,29 @@ export async function requireAuth() {
   }
   const { data: profile, error } = await db
     .from('profiles')
-    .select('full_name, role, brand_id, brands(name, slug)')
+    .select('full_name, role, brand_id, contractor_id, brands(name, slug)')
     .eq('user_id', session.user.id)
     .single();
+
+  // THE CONTRACTOR'S NAME COMES FROM v_contractor_names, NOT FROM AN EMBED.
+  // `contractors` is staff-only -- its `note` column is internal writing about
+  // a person (D88) -- so `contractors(name)` embedded above came back null for
+  // the very people it was fetched for, and the rail read a flat "Contractor"
+  // while the venue page announced "Owned by: nobody yet" on accounts that
+  // plainly had an owner. Shaped as `profile.contractors` so every caller reads
+  // it the same way whichever query filled it.
+  if (profile && profile.role === 'contractor' && profile.contractor_id) {
+    const { data: me } = await db.from('v_contractor_names')
+      .select('name').eq('id', profile.contractor_id).maybeSingle();
+    if (me) profile.contractors = me;
+  }
 
   if (error || !profile) {
     // A login with no profile row can see nothing — RLS matches on the profile.
     // Say so plainly instead of rendering five empty pages.
     document.body.innerHTML = `<div class="login-wrap"><div class="login-card">
-      <div class="err">This account is not linked to a brand yet. Contact
-      iHospitality and we will finish setting it up.</div>
+      <div class="err">This account is not linked to a brand or a contractor yet.
+      Contact iHospitality and we will finish setting it up.</div>
       <button class="btn-full" id="so">Sign out</button></div></div>`;
     document.getElementById('so').onclick = signOut;
     return null;
@@ -75,10 +101,73 @@ const ADMIN_NAV = [
   ['pay.html', 'Contractor pay'],
 ];
 
+/* A contractor's portal (D137). Three groups, because the split between them
+   IS the design and a flat list of eight would hide it:
+
+     MY WORK   — scoped to them. Their accounts, their earnings.
+     LOOK UP   — every venue and every activity, for walking into an account
+                 they do not own. No money on any of it.
+     REFERENCE — brand information and training. Stubs until V2.
+
+   `venues.html` appears in both worlds and renders differently in each: for a
+   contractor it drops the money and the quiet-day columns, because those are a
+   judgement about a colleague's account (see the note on that page). */
+const CONTRACTOR_NAV_MINE = [
+  ['index.html', 'Dashboard'],
+  ['my-venues.html', 'My accounts'],
+  ['my-pay.html', 'My pay'],
+];
+
+const CONTRACTOR_NAV_LOOKUP = [
+  ['venues.html', 'All accounts'],
+  ['activity.html', 'Activity'],
+  ['photos.html', 'Photos'],
+];
+
+const CONTRACTOR_NAV_REFERENCE = [
+  ['brands-info.html', 'Brands'],
+  ['training.html', 'Training'],
+];
+
+/* Pages a contractor must never land on. RLS already makes every one of them a
+   page of nulls, which is the real lock — this is so it reads as "not yours"
+   instead of "broken". Hiding a link is convenience; the redirect is courtesy;
+   neither is the security. */
+const STAFF_ONLY_PAGES = new Set([
+  'brands.html', 'brand.html', 'business.html', 'rate-card.html',
+  'pay.html', 'activity-detail.html',
+]);
+
 /** The one place the admin/brand distinction is decided in the client.
     `is_staff()` in Postgres tests this same string; a mismatch there returns
     zero rows with no error, so the two must stay spelled the same way. */
 export const isStaff = (profile) => profile?.role === 'staff';
+
+/** A field rep (D137). Spelled exactly as `profile_role_enum` and as
+    `is_contractor()` in Postgres spell it — a mismatch in any of the three
+    returns zero rows with no error, on a page that renders perfectly (D120). */
+export const isContractor = (profile) => profile?.role === 'contractor';
+
+/** Someone who works here. The line for data that is internal but not
+    financial; NOT the line for money. */
+export const isInternal = (profile) => isStaff(profile) || isContractor(profile);
+
+/**
+ * Send a contractor away from a staff page. `await` it right after
+ * requireAuth() on any page in STAFF_ONLY_PAGES.
+ *
+ * When it redirects it never resolves, so the rest of the module simply does
+ * not run. A `throw` would do the same job and leave an uncaught error in the
+ * console of a page that behaved perfectly correctly -- which is exactly the
+ * kind of noise that trains people to ignore the console.
+ */
+export async function guardStaffPage(profile) {
+  const here = location.pathname.split('/').pop() || 'index.html';
+  if (isContractor(profile) && STAFF_ONLY_PAGES.has(here)) {
+    location.replace('index.html');
+    await new Promise(() => {});
+  }
+}
 
 /**
  * Render the sidebar, the mobile top bar and the footer.
@@ -95,6 +184,14 @@ export const isStaff = (profile) => profile?.role === 'staff';
 export function renderShell(active, profile) {
   const brand = profile.brands?.name || 'All brands';
   const staff = isStaff(profile);
+  const contractor = isContractor(profile);
+  // What the footer and the rail call this person. A contractor is named, not
+  // labelled: "Eric Anderson", because the whole portal is scoped around who
+  // they are and a generic word would be less informative, not more.
+  const who = staff ? 'Admin' : contractor ? (profile.contractors?.name || 'Contractor') : brand;
+  // The rail says WHO you are, the footer says WHAT you are. For a contractor
+  // those were both the name, so the footer read "Nick Fatta · Nick Fatta".
+  const roleLabel = staff ? 'Admin' : contractor ? 'Contractor' : brand;
 
   const group = (label, items) => `
     ${label ? `<p class="side-group-label">${esc(label)}</p>` : ''}
@@ -103,9 +200,19 @@ export function renderShell(active, profile) {
     ).join('')}</ul>`;
 
   // Group headings only earn their space when there is more than one group.
+  // ADMIN IS A SUPERSET OF CONTRACTOR (operator, 27 Aug 2026): "an admin
+  // should do everything a contractor can plus what it already could".
+  // Nicholas and Phil run the business and also work accounts, so the staff
+  // rail carries My accounts and My pay as well -- scoped to whoever the
+  // profile's contractor_id names, exactly as it is for a contractor.
   const links = staff
-    ? group('Portal', NAV) + group('Admin', ADMIN_NAV)
-    : group('', NAV);
+    ? group('My work', CONTRACTOR_NAV_MINE) + group('Portal', NAV.slice(1))
+      + group('Admin', ADMIN_NAV)
+    : contractor
+      ? group('My work', CONTRACTOR_NAV_MINE)
+        + group('Look up', CONTRACTOR_NAV_LOOKUP)
+        + group('Reference', CONTRACTOR_NAV_REFERENCE)
+      : group('', NAV);
 
   const logo = (cls) => `
     <a href="index.html" class="${cls}">
@@ -119,7 +226,7 @@ export function renderShell(active, profile) {
     ${logo('side-logo')}
     <div class="side-scroll">${links}</div>
     <div class="side-foot">
-      <span class="side-who">${esc(staff ? 'Admin' : brand)}</span>
+      <span class="side-who">${esc(who)}</span>
       ${profile.full_name ? `<span class="side-name">${esc(profile.full_name)}</span>` : ''}
       <button class="link-btn" id="signout">Sign out</button>
     </div>`;
@@ -139,7 +246,7 @@ export function renderShell(active, profile) {
   foot.innerHTML = `
     <div class="footer-bottom">
       <p>&copy; ${new Date().getFullYear()} iHospitality. Private brand portal.</p>
-      <p>Signed in as ${esc(profile.full_name || '')} &middot; ${esc(staff ? 'Admin' : brand)}</p>
+      <p>Signed in as ${esc(profile.full_name || who)} &middot; ${esc(roleLabel)}</p>
     </div>`;
 
   // A tap target covering the page while the rail is out, so the next tap
