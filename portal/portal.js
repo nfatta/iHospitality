@@ -207,8 +207,12 @@ const CONTRACTOR_NAV_REFERENCE = [
    neither is the security. */
 const STAFF_ONLY_PAGES = new Set([
   'brands.html', 'brand.html', 'business.html', 'rate-card.html',
-  'pay.html', 'activity-detail.html',
+  'pay.html',
 ]);
+// activity-detail.html was in this list and should not have been. A contractor
+// could not open their own work to see the photos or what happened -- the page
+// bounced them to the dashboard. It shows the DETAIL to anyone internal and the
+// MONEY only to staff, which is the same split every other page uses.
 
 /** The one place the admin/brand distinction is decided in the client.
     `is_staff()` in Postgres tests this same string; a mismatch there returns

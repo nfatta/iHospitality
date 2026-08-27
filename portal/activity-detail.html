@@ -47,15 +47,11 @@
   </div>
 
   <script type="module">
-    import { db, requireAuth, renderShell, render, esc, isStaff, param,
-             fmtDate, fmtNum, money, MARKET_LABEL, guardStaffPage} from './portal.js';
+    import { db, requireAuth, renderShell, render, esc, isStaff, isContractor, param,
+             fmtDate, fmtNum, money, MARKET_LABEL} from './portal.js';
 
     const auth = await requireAuth();
     if (auth) {
-      // A contractor is redirected off the admin pages. RLS already makes
-      // every one of them a page of nulls, which is the real lock -- this is
-      // so it reads as "not yours" rather than "broken" (D137).
-      await guardStaffPage(auth.profile);
       // Staff arrive from a brand; a brand user arrives from their own log.
       renderShell(isStaff(auth.profile) ? 'brands.html' : 'activity.html', auth.profile);
 
@@ -99,10 +95,20 @@
          panel when there is no money in it.
          `notes` is nowhere here on purpose: it is internal and candid, and no
          brand-facing view selects it. */
-      const [act, mon, pics] = await Promise.all([
+      const internalUser = isStaff(auth.profile) || isContractor(auth.profile);
+      const [act, mon, pics, myPay, internalAct] = await Promise.all([
         db.from('v_brand_activity_log').select('*').eq('id', id).maybeSingle(),
         db.from('v_activity_money').select('*').eq('activity_id', id).maybeSingle(),
         db.from('v_brand_photos').select('*').eq('activity_id', id),
+        // Their own earnings on this row, if it is theirs.
+        internalUser
+          ? db.from('v_my_activity_pay').select('activity_id, earned').eq('activity_id', id)
+          : Promise.resolve({ data: [] }),
+        // The internal note and who did it (D137).
+        internalUser
+          ? db.from('v_internal_activity').select('notes, contractor')
+              .eq('activity_id', id).maybeSingle()
+          : Promise.resolve({ data: null }),
       ]);
 
       if (act.error) {
@@ -117,6 +123,7 @@
         const a = act.data;
         const m = mon.data || {};
         const staff = isStaff(auth.profile);
+        const internalRow = internalAct.data || null;
 
         document.title = `${a.activity_type || 'Activity'} — ${a.venue_name || a.brand_name} | iHospitality`;
         document.getElementById('eyebrow').textContent = a.brand_name || 'Activity';
@@ -132,6 +139,13 @@
         const fact = (k, v) => v === null || v === undefined || v === ''
           ? '' : `<div class="fact"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`;
 
+        // WHAT THE CONTRACTOR GETS INSTEAD: their own earnings on their own
+        // work, and nothing about what it was charged. v_my_activity_pay is
+        // scoped in Postgres to activities they actually did, so this is empty
+        // for a job somebody else logged -- which is correct, and the same rule
+        // the venue page follows.
+        const mineHere = (myPay.data || []).find(r => r.activity_id === id);
+
         const facts = [
           fact('Date', esc(fmtDate(a.activity_date))),
           fact('Brand', esc(a.brand_name)),
@@ -142,11 +156,32 @@
           fact('Quantity', a.quantity ? fmtNum(a.quantity) : ''),
           fact('Value', a.amount ? money(a.amount) : ''),
           fact('Points of distribution', a.pods ? fmtNum(a.pods) : ''),
+          // Blank when they did not do this one. Not zero -- blank.
+          (!staff && mineHere && mineHere.earned != null)
+            ? fact('You earned', money(mineHere.earned)) : '',
+          // The internal note, for anyone internal. It is why v_internal_activity
+          // exists: `activities.notes` cannot be column-granted without handing
+          // it to every brand (D134).
+          internalRow?.notes
+            ? fact('Internal note',
+                   `<span style="font-size:0.78rem;line-height:1.5">${esc(internalRow.notes)}</span>`)
+            : '',
+          internalRow?.contractor
+            ? fact('Done by', esc(internalRow.contractor)) : '',
         ].join('');
 
-        // Money is a staff panel by construction — for a brand login every one
-        // of these columns comes back NULL, and an empty panel says nothing.
-        const hasMoney = m.charge != null || m.cost != null || m.unpriced;
+        // ⚠️ GATED ON `staff`, NOT ON WHETHER THE COLUMNS CAME BACK.
+        //
+        // It used to test `m.charge != null || m.cost != null || m.unpriced`,
+        // which was fine while only brands and staff existed. A CONTRACTOR
+        // breaks it: `unpriced` is computed as "no rate-card line matched", and
+        // rate_card is invisible to them, so the join misses and the flag comes
+        // back TRUE on every activity. They would have been shown a money panel
+        // full of warnings about work that is priced perfectly well.
+        //
+        // The money is staff's. Whether a column happens to be null is not the
+        // question -- who is asking is.
+        const hasMoney = staff && (m.charge != null || m.cost != null || m.unpriced);
         const moneyPanel = !hasMoney ? '' : `
           <div class="panel">
             <div class="panel-head"><h2>What it billed</h2><span class="hint">Internal</span></div>
@@ -191,6 +226,10 @@
          leave the reader to remember which way each one bends. */
       function flags(m) {
         const out = [];
+        // Staff only, for the reason on `hasMoney` above: every one of these
+        // reads the rate card, which a contractor cannot see, so they would all
+        // fire wrongly.
+        if (!staff) return out;
         if (m.unpriced) out.push(['warn', 'Unpriced',
           'No rate line matched this work at all, so it charged nothing. This UNDERSTATES revenue — the work happened and was not billed for here.']);
         if (m.uncosted) out.push(['warn', 'Uncosted',
