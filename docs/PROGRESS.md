@@ -1627,3 +1627,47 @@ Live impersonation with the control; `11_contractor_test.sql` proved able to
 fail; 153 Python tests; every page opened signed in as both a contractor and an
 admin; the phone drawer; the service-worker cache inspected. **Dame Mas still
 reads $14,036.78 / $9,000.00 / $5,036.78 — the money did not move.**
+
+## Session of 27 Aug 2026, later — it goes live (D143–D151)
+
+The portal was merged to `main` and deployed. Three people are using it.
+
+### Shipped
+
+- **The merge itself.** 94 commits. Production had been serving `origin/main`
+  from **27 July**, so this also deployed the `css/site.css` refactor for the
+  first time — checked on a deploy preview before merging.
+- **It closed a live exposure**: `ihospitality.vip/GALLERY_PLAN.md` was returning
+  **200** that morning.
+- **A Log in link** in the public nav (D147), **self-service password reset**
+  (D144), **Google sign-in** (D145), **the PWA** with an install control and a
+  `_headers` file (D148), and **an editable Users table** in the admin (D146).
+- **A verified database backup** — `backup_db.py`, to `~/Backups` outside
+  OneDrive, checked row-for-row against live rather than by the file existing.
+
+### Verified by the operator rather than reasoned about
+
+A Google account with no portal login is **refused** — his personal Gmail was
+turned away, which confirms pre-created accounts plus `disable_signup` in one
+click. Eric signed in and found his 50 venues and 147 activities. The PWA
+installs and the icon reads correctly.
+
+### Three faults that were mine
+
+- **`hd` locked the brands out of Google** (D149), and the comment beside it
+  called the parameter "a hint, not a control" — right about security, wrong
+  about behaviour, and the wrong half mattered.
+- **`check_auth_settings.py` reported its own bug as a dashboard fault** (D151).
+  The operator changed Supabase settings twice chasing a redirect that was
+  already correct.
+- **A hardcoded contractor name** in the backfill (D143), found because the
+  operator asked directly whether anything had been hardcoded to make the pages
+  pass. The rest of that audit came back clean, and was proved rather than
+  asserted.
+
+### And one that was not
+
+A phone reported the rail unscrollable and the icon stale. The rail was a real
+bug — `100vh` plus a flex item without `min-height: 0` — but the second report,
+and the persistence of the first, were **a stale service-worker cache** (D150).
+

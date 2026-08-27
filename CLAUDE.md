@@ -53,6 +53,9 @@ python -m streamlit run admin/app.py   # THE STAFF ADMIN — analysis, review, c
 python verify_live.py                  # read-only health check
 python apply_schema.py --apply         # re-apply db/schema.sql (idempotent)
 python seed_from_csv.py                # dry run; --apply to load
+python check_auth_settings.py          # what sign-in actually allows (the dashboard)
+python backup_db.py                    # pg_dump to ~/Backups, outside OneDrive
+python make_portal_icons.py            # regenerate the app icons
 python create_portal_user.py --list    # who has portal access
 python create_portal_user.py --email x@y --contractor "Eric Anderson"   # a field login
 python create_portal_user.py --email x@y --set-role staff --contractor "Nick Fatta"
@@ -152,6 +155,50 @@ reproduces it; keep it that way.
   `is_active`, so a deactivated profile sees nothing while the row survives.
   `create_portal_user.py` holds the implementation and the admin page is a second
   caller — the `promote.py` arrangement.
+- **⚠️ THE SITE IS LIVE, AND `main` DEPLOYS TO ihospitality.vip ON MERGE.**
+  Work on a branch, open a PR, and check the **deploy preview** before merging —
+  the public homepage is the only thing that can regress and it is the thing
+  nobody looks at. Production sat three weeks behind `main` until 27 Aug 2026,
+  so the merge also shipped a CSS refactor that had never been deployed.
+- **⚠️ BEFORE DEBUGGING ANYTHING REPORTED FROM A PHONE, CONFIRM THE PHONE HAS
+  THE DEPLOY** (D150). The portal is a PWA whose service worker caches the shell
+  BY DESIGN, so a stale phone is a permanent failure mode rather than an
+  occasional one. Two reports came in the same afternoon; one was a real bug and
+  one was entirely cache, and both cost a round of investigation.
+- **AND CHECK YOUR OWN TOOLING BEFORE BLAMING A SETTING** (D151).
+  `check_auth_settings.py` reported a broken redirect that was its own bug —
+  `redirect_to` is silently ignored when nested under `options` — and the
+  operator changed Supabase settings twice chasing it. **Check the endpoint the
+  APPLICATION calls**, not a convenient admin equivalent: `/auth/v1/recover`
+  answers in one call what the admin API obscured.
+- **THE DASHBOARD IS THE ONE PART SOURCE CONTROL CANNOT SEE.** Site URL, Redirect
+  URLs, SMTP, providers and `disable_signup` all live in Supabase.
+  `python check_auth_settings.py` reads GoTrue's own settings and reports what is
+  TRUE rather than what was intended. Run it after any change there.
+- **WHAT KEEPS STRANGERS OUT IS PRE-CREATED ACCOUNTS PLUS `disable_signup`, NOT
+  ANYTHING IN THE PAGE** (D149). Google's consent screen is **External** on
+  purpose — Internal would lock out brands, who are most of who the button is
+  for. `hd` was tried and removed: it locks the account chooser to a workspace,
+  which is a real behaviour even though it is not a security control. Verified
+  by the operator: a Google account with no portal login is refused.
+- **`beforeinstallprompt` FIRES ONCE AND EARLY, SO IT IS CAUGHT AT MODULE SCOPE**
+  (D148). A listener inside `renderShell()` misses it on a slow connection and
+  the Install button never appears, on a portal that is perfectly installable.
+  iOS fires nothing at all, so it shows instructions rather than hiding.
+- **A FLEX ITEM THAT MUST SCROLL NEEDS `min-height: 0`** (D150). It defaults to
+  `min-height: auto` and refuses to shrink below its content, so the rail's link
+  list pushed the footer — holding Sign out — off the bottom instead of
+  scrolling, *whatever height the rail had*. `100vh` was the other half: on a
+  phone it is the LARGE viewport, so the rail ran past the fold whenever the
+  address bar was showing. It is `100dvh` now.
+- **ONE ICON ARTWORK, DECLARED `"any maskable"`** (D150). Separate `any` and
+  `maskable` entries let Chrome pick the `any` one and shrink it onto a white
+  square. A solid colour field with centred letters needs no separate versions.
+  Android masks every home-screen icon to the launcher's shape, so a hard-edged
+  square cannot survive one — do not try to fight it. Regenerate with
+  `python make_portal_icons.py` in `portal_seed`; it writes across into the
+  website repo, because that repo gitignores `*.py` so a script cannot be served
+  at `ihospitality.vip/<name>`.
 - **`reset.html` IS THE ONE PORTAL PAGE THAT MUST NOT CALL `requireAuth()`, AND
   MUST NOT BE IN `ALLOWED`** (D144). It is reached from a recovery link with no
   session; `requireAuth()` would bounce the person back to the login page they
@@ -637,6 +684,8 @@ reproduces it; keep it that way.
 | `portal/my-venues.html`, `my-pay.html` | The contractor's own surface (D137). Also on the admin rail (D140). |
 | `portal/brands-info.html`, `training.html` | Deliberate "Coming soon" stubs — V2. |
 | `portal/reset.html` | Set a new password. No `requireAuth()`, not in `ALLOWED` (D144). |
+| `_headers` | Netlify response headers: the manifest's content type, `sw.js` not cached, `/portal/*` noindex (D148). |
+| `_redirects` | Force-404s `docs/` and `CLAUDE.md`. **The `!` is required** or Netlify serves the file instead (D133). |
 | `portal/sw.js` | Service worker. **Caches the SHELL ONLY, never a Supabase response** — read its header before touching it. Scope is `/portal/`, so it cannot reach the public site. |
 | `portal/brands.html`, `brand.html`, `activity-detail.html` | The admin surface (D120). Staff-labelled "Admin"; RLS does the gating. |
 | `css/site.css` | Shared tokens, nav, buttons, section base, footer, mobile nav. |

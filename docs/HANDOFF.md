@@ -2,83 +2,112 @@
 
 Written at the close of **27 Aug 2026**.
 
-## THE CONTRACTOR ROLE IS BUILT, APPLIED TO LIVE, AND OPENED IN A BROWSER
+## IT IS LIVE. THE PORTAL IS ON ihospitality.vip AND PEOPLE ARE SIGNING IN.
 
-**D137–D142.** The portal now has three kinds of login — brand user, contractor,
-admin — and an admin is a **superset** of a contractor (D140). Phil and Nicholas
-are admins; **Eric is the only contractor.**
+`main` was merged and deployed. Three logins are in use: **Nicholas and Phil as
+admins, Eric as the only contractor.** Eric has signed in successfully and lands
+on a populated portal — 50 venues and 147 activities attributed to him.
 
-### What exists now
+### What went live today
 
 | | |
 |---|---|
-| Schema | `profile_role_enum` gains `contractor`; `profiles.contractor_id`; `contractors.hubspot_owner_id`; `is_contractor()`, `is_internal()`, `auth_contractor_id()`; seven policies moved to `is_internal()`; `v_internal_activity`, `v_contractor_names`, `v_my_pay`, `v_my_activity_pay`. **Applied to Supabase.** |
-| Attribution | **1,059 of 1,238 activities now say who did the work** (86%), from the HubSpot deal owner (D139). 179 have no deal id and stay blank. |
-| Admin | `admin/pages/10_Users.py` — create, re-scope, deactivate, delete a login. Implementation is in `create_portal_user.py`; the CLI and the page are two callers of it. |
-| Portal | `my-venues.html`, `my-pay.html`, `brands-info.html` and `training.html` (the last two are deliberate "Coming soon" stubs — V2). `venue.html` and `venues.html` render two ways. Installable as a **PWA**. |
+| The portal | `ihospitality.vip/portal` — brand, admin and contractor surfaces |
+| Internal docs | **`GALLERY_PLAN.md` was returning 200 in production this morning.** Now 404, with the rest, via `_redirects` (D133) |
+| Public site | A **Log in** link, top right and in the mobile drawer (D147) |
+| Sign-in | Self-service password reset (D144) and Google, working for **any** domain (D145, D149) |
+| PWA | Installable, blue-square icon, install control in the rail (D148) |
+| Admin | A Users page that creates, re-scopes and deactivates logins (D141, D146) |
 
-### Verified, so it does not get re-done
+⚠️ **PRODUCTION WAS THREE WEEKS BEHIND `main` BEFORE THIS.** `origin/main` was
+still on the 27 July commit, so the deploy also shipped the `css/site.css`
+refactor for the first time. It was checked on a deploy preview before merging
+and the public site renders correctly — but that is why the homepage was the
+thing to look at, not the portal.
 
-- **Live impersonation with the control (D125/D114).** A contractor reads **0**
-  from `rate_card`, `contractor_pay`, `brand_retainer`, `brand_product` and
-  `invoice_recap`, against service_role baselines of **253 / 3 / 13 / 2 / 56** —
-  and reads all 1,238 activities, 340 venues and 632 internal notes.
-- **`db/test/run.sh` gained `11_contractor_test.sql`**, and its key assertion was
-  **proved able to fail**: with the definer view's gate removed it reports *"A
-  BRAND LOGIN READ 4 ROW(S) OF v_internal_activity — internal notes are
-  published"*.
-- **Every page opened in a browser, signed in** (D79), as a contractor and then
-  as an admin. Both venue renderings, the redirect off the admin pages, the
-  phone drawer at 375px, and the Users page **typed into** (D92).
-- **THE MONEY DID NOT MOVE.** Dame Mas over the default window still reads
-  revenue **$14,036.78**, retainer **$9,000.00**, activity charge **$5,036.78**.
-- **The service worker cache holds the shell and nothing else** — checked in the
-  browser: zero Supabase entries, zero CDN entries.
+### Verified by the operator, not just reasoned about
 
-### Two bugs the browser found, both fixed
+- **A Google account with no portal login is REFUSED.** His personal Gmail was
+  turned away. That is the whole safety model — pre-created accounts plus
+  `disable_signup` — confirmed in one click.
+- **Eric signed in and his data is there.**
+- **The PWA installs**, and the icon reads as a solid blue squircle with "iH".
 
-Neither would have shown in SQL. **The rail read a flat "Contractor" and the
-venue page announced "Owned by: nobody yet" on accounts that plainly had an
-owner** — `contractors` is staff-only (D88), so the PostgREST embed
-`contractors(name)` came back null for exactly the people it was fetched for.
-Both now read `v_contractor_names`.
+### Open, and none of it blocking
 
-### ⚠️ SIGN-IN: THE CODE IS DONE, THE SUPABASE CONFIG IS NOT (D144, D145)
-
-Self-service password reset and "Continue with Google" are both built and
-committed. **Neither works until four dashboard settings change, and none of it
-is code.** Proved, not guessed: asking Supabase for a recovery link redirecting
-to the portal comes back pointing at `http://localhost:3000`.
-
-| Setting | Now | Needs to be |
-|---|---|---|
-| Site URL | `http://localhost:3000` | `https://ihospitality.vip` |
-| Redirect URLs | (does not include the portal) | add `https://ihospitality.vip/portal/reset.html`, and the localhost one for testing |
-| SMTP | Supabase built-in, rate-limited per address | a real provider (Resend / Postmark / SES) |
-| Google provider | `false` | enabled, with a Google Cloud OAuth client |
-| `disable_signup` | `false` — anyone with the publishable key can sign up | `true` |
-
-The Google button **hides itself** until the provider is on, so nothing looks
-broken in the meantime.
-
-### Open, and needing you rather than code
-
-1. **Eric has no login yet.** `python create_portal_user.py --email
-   eric@ihospitality.vip --contractor "Eric Anderson"`, or the Users page.
-2. **`nick@ihospitality.vip`'s password was generated in a session transcript.**
-   Change it.
-3. **The three real pay start dates** (D128) — the correction tool exists
-   (D136) and moving Eric to April 2026 previews base pay −$7,000 and company
-   net +$7,000 before saving.
-4. **Cost to serve's premise has changed** (D139). It does not read
-   `activity_contractor` because that was blank; it is now 86% filled. Switching
-   the allocation from venue-ownership to real attribution is a live decision
+1. **SMTP is still Supabase's built-in mailer**, rate-limited per address. Fine
+   for three people; needs a real provider before brands rely on password reset.
+2. **The test logins are still active** — `test-bluerun@example.com` and
+   `test-wodka@example.com`, left deliberately. Revisit before brands get URLs.
+3. **Cost to serve's premise has changed** (D139). It attributes by who owns the
+   venue NOW because `activity_contractor` was blank; it is now **1,059 of 1,238
+   (86%)**. Switching the allocation to real attribution is a live decision
    nobody has made.
-5. **V2 and V3.** V2 is the Brand section (price points, sales sheets, marketing)
-   and the Training section with self-testing. **V3 is logging** — contractors
-   entering their own work, HubSpot stops being the input, and D61's read-only
-   guarantee has to be reopened deliberately.
-6. Everything below this line, unchanged.
+4. **The three real pay start dates** (D128). D136's "Correct a pay period"
+   previews Eric's move to April 2026 as base pay −$7,000 and company net
+   +$7,000 before saving.
+5. **Dame Mas's nine commission months** — needs the distributor's per-venue
+   depletion reports for Jul 2025 – Mar 2026. Loading them dissolves the problem
+   with no code change (D93). Detail at the bottom of this file.
+6. **V2 and V3 of the contractor portal.** V2 is the Brand section (price
+   points, sales sheets, marketing) and Training with self-testing — both are
+   live as "Coming soon" stubs. **V3 is logging**, where contractors enter their
+   own work and HubSpot stops being the input, and where **D61's read-only
+   guarantee has to be reopened deliberately** rather than by accident.
+7. **The reconciliation, still 64 of 83.** Untouched for two days. Start with
+   Heaven's Door — see the section further down.
+
+### Two things to know before debugging anything on a phone
+
+**CONFIRM THE PHONE HAS THE DEPLOY FIRST** (D150). Two reports came in from a
+phone; one was a real bug and one was entirely a stale cache, and both cost a
+round of investigation. The portal is a PWA with a service worker that caches
+the shell by design, so this failure mode is permanent, not incidental.
+
+**AND CHECK YOUR OWN TOOLING BEFORE BLAMING A SETTING** (D151).
+`check_auth_settings.py` reported a broken redirect that was entirely its own
+bug, and the operator changed Supabase settings twice chasing it. Check the
+endpoint the APPLICATION calls, not a convenient admin equivalent.
+
+---
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D137–D151** in `docs/DECISIONS.md`.
+>
+> The portal is LIVE at ihospitality.vip and three people are using it. Nothing
+> below is urgent, so **ask me which I want before starting.**
+>
+> **A — the reconciliation**, still 64 of 83 and untouched since 25 Aug. Start
+> with **Heaven's Door**: its commission ties exactly in both checked months, so
+> the whole difference is that it bills **account visits at $20** inside the
+> consulting block where every other brand reads "no charge" and the rate card
+> prices `account visit` at $0.00 for all eight brands — plus a "Smoke Tops"
+> line. Confirm on the other invoices before changing a rate, because editing
+> one **restates history** (D91).
+>
+> **B — Cost to serve, on real attribution** (D139). It splits base pay by who
+> owns the venue NOW because `activity_contractor` was empty. It is 86% filled
+> from the HubSpot deal owner now. Whether to switch is a decision, not a task:
+> read D116 first, and note the page's weaknesses are on it on purpose.
+>
+> **C — V2 of the contractor portal.** The Brand section (price points, sales
+> sheets, marketing material) and Training with self-testing. Both are live as
+> "Coming soon" stubs, so the shape is already visible to Eric.
+>
+> **D — V3, logging.** The big one. Contractors enter their own work and HubSpot
+> stops being the input — the direction D84 already points. **It reopens D61**,
+> which is the portal's read-only-by-construction guarantee, and that has to be
+> a deliberate decision rather than a side effect. Do not start it casually.
+>
+> Whichever: the billing is the truth (D56), no hardcoded business data (D60),
+> base pay is never allocated to a brand in a view (D67), a reimbursement never
+> earns (D78), and reclassifying must not move money unless moving it is the
+> point (D93/D112).
+>
+> Before calling it done: **open every page AND every tab in a browser, and type
+> into anything that takes input** (D79/D89/D92). And if the report came from a
+> phone, **check the phone has the deploy before debugging it** (D150).
 
 ---
 

@@ -6285,3 +6285,206 @@ with strangers, and the Users page flags them as orphans. Turning it off is a
 dashboard setting and there is no Management API token in `.env`, so it is the
 operator's to do.
 
+---
+
+**D146 — THE USERS TABLE IS THE EDIT SURFACE, AND ROLE AND MAPPING ARE ONE
+COLUMN.**
+✅ 27 Aug 2026. Operator: *"if I wanted to add phil's last name or such right
+now I cant — ideally if we can just make that table editable that would be
+great."*
+
+Name, scope and active are edited in the grid and saved together. The standalone
+"change what a login can see" block and the separate Deactivate button are gone:
+**two controls doing one job is how they drift apart.**
+
+**ROLE AND MAPPING ARE A SINGLE COLUMN**, whose options are every combination
+that is actually legal — "Admin", "Admin, and works accounts as X",
+"Contractor — X", "Brand — Y". Two columns would let "brand user / Eric
+Anderson" be saved and the database would refuse it with a constraint violation
+at the very end of the run. Same instinct as the CHECK constraints on
+`profiles`: **make the invalid state unrepresentable** rather than validating it
+afterwards.
+
+`set_role()` is an UPSERT, so it also **repairs a login with no profile row** —
+the most confusing state an account can be in, where the person signs in
+successfully and sees a perfectly rendered portal with nothing in it (D120). An
+UPDATE hitting zero rows would have refused to fix the one case that most needs
+fixing.
+
+⚠️ **A BUG THE BROWSER FOUND, AND IT MISREPORTED A WORKING ACCOUNT AS BROKEN.**
+The options were filtered to `is_active`. **Seven of the twelve brands are
+inactive**, Blue Run among them, so `test-bluerun@example.com` — a perfectly
+good brand login — had no option to display as and fell through to "not set up
+yet". The rule now: **an existing mapping is a FACT and must always be
+displayable** (inactive ones are shown and marked); **a new mapping is a CHOICE**,
+so the Add form still offers only live ones.
+
+⚠️ **EDITING `create_portal_user.py` NEEDS STREAMLIT RESTARTED.** It sits above
+the app directory, outside the tree Streamlit watches, so a reload keeps the old
+module and the page dies with a stale-cache ImportError. The instance found
+running had been up since **24 Aug**.
+
+
+---
+
+**D147 — THE PUBLIC SITE GETS A LOG IN LINK, AND IT IS DELIBERATELY QUIETER THAN
+THE CTA.**
+✅ 27 Aug 2026. There was no way to reach the portal from the website at all —
+you had to know the URL.
+
+Top right on desktop, bottom of the drawer on mobile, on `index.html` and
+`gallery.html`.
+
+**"Partner With Us" is what this site is for** and stays the loudest thing in
+the bar. A second gold button beside it would split the eye between winning a
+client and serving one. So Log In is muted until hovered, with a hairline
+separating it — a different *kind* of action, not a lesser version of the same
+one. In the mobile drawer it is gold, because there is no competing CTA there to
+lose it against.
+
+**Repeated in the drawer on purpose:** `.nav-links` is `display:none` below
+900px, so a link only in the desktop bar disappears exactly where a contractor
+standing in a bar would look for it.
+
+It touches `css/site.css`, which is **shared with the portal** (D121). Both new
+classes exist only in the public nav, and the portal reports
+`controlledBySW: false` with its worker scoped to `/portal/` — so neither the
+CSS nor the service worker can cross over.
+
+
+---
+
+**D148 — THE PORTAL IS INSTALLABLE, AND `beforeinstallprompt` MUST BE CAUGHT AT
+MODULE SCOPE.**
+✅ 27 Aug 2026.
+
+**The event fires ONCE, and EARLY** — before a page waiting on its data has
+finished rendering. A listener registered inside `renderShell()` would miss it
+on a slow connection and the button would never appear, **on a portal that was
+perfectly installable**. It is captured at module scope in the shared client and
+the button asks for it later.
+
+**iOS fires nothing at all**: Safari has no install API, only Share → Add to
+Home Screen. So on iOS the button shows **instructions** rather than hiding,
+which would leave the people most likely to want this — reps on iPhones — with
+no idea it was possible.
+
+**`_headers` was needed too, and the manifest fault is the instructive one.**
+Netlify has no mapping for `.webmanifest`, so it served
+`application/octet-stream`. Chrome is forgiving and installed the portal anyway
+— **which is exactly why it was worth fixing**: it worked, so nothing
+complained, and the first stricter browser or audit tool would have rejected it
+with no obvious cause. The file also stops `sw.js` being cached (a stale worker
+is the one thing shipping a new version cannot fix, because the old worker keeps
+serving the old shell) and adds `X-Robots-Tag` to `/portal/*` — the pages
+already say `noindex` in markup, but a crawler that never renders the HTML reads
+the header.
+
+
+---
+
+**D149 — `hd` LOCKED OUT THE BRANDS. A COMMENT THAT WAS RIGHT ABOUT SECURITY AND
+WRONG ABOUT BEHAVIOUR.**
+⚠️ shipped and fixed the same day, 27 Aug 2026.
+
+`signInWithOAuth` passed `hd: 'ihospitality.vip'`, which **locks Google's account
+chooser to that workspace** — so a brand on Google Workspace could not sign in
+at all. Brands are most of who that button is for.
+
+**The comment beside it is the actual lesson.** It called `hd` *"a hint to
+Google, not a control"*. That is true of its **security** value and quite wrong
+about its **behaviour** — and the wrong half is the half that mattered. It
+really does force the domain in the browser flow. A caveat that is accurate
+about one axis and silent about another reads as reassurance on both.
+
+**Domain was never that page's job.** Pre-created accounts plus disabled signups
+already decide who gets in, and they do it for password logins too — so removing
+`hd` lost no protection.
+
+**The consent screen is EXTERNAL, not Internal**, for the same reason. Internal
+restricts to the Workspace and would have shut brands out permanently. External
+is safe here because signups are closed: a Google account nobody created is
+refused by GoTrue and never becomes a row. **Verified by the operator** — his
+personal Gmail was refused, and Eric's contractor login worked.
+
+Only non-sensitive scopes (`email`, `profile`, `openid`), so there is no Google
+review — but the app must be **published to Production**, or External sits in
+Testing and rejects anyone not on a manual list.
+
+
+---
+
+**D150 — TWO REPORTS FROM A PHONE, AND THE ANSWER TO BOTH WAS A STALE CACHE.**
+⚠️ 27 Aug 2026, and worth reading before chasing the next one.
+
+The operator reported, from his phone: the rail could not be scrolled to reach
+Sign out and Install app, and the icon showed the old round mark rather than the
+new blue square.
+
+**The first was a real bug and the fix was real.** `height: 100vh` on the rail:
+`vh` is the LARGE viewport — the height the page would have if the address bar
+were hidden — so with the bar showing, the bottom of the rail sat below the
+fold. Retracting the bar by scrolling was what brought it back, which is exactly
+what he described. `100dvh` tracks the visible area and fixed it.
+
+Two things had to change with it, and the second is the one that looks fine and
+is not. `.side-scroll` needed **`min-height: 0`**: a flex item defaults to
+`min-height: auto` and refuses to shrink below its content, so the links pushed
+the footer off the bottom instead of scrolling — *whatever height the rail had*.
+Fixing only the unit would have left the bug on any short screen. And
+`.side-foot` is `flex-shrink: 0`, because it holds Sign out.
+
+**But he was still seeing it after the fix shipped, and it was his phone being
+behind.** A second attempt was written — `top: 0; bottom: 0`, which needs no
+viewport unit at all — and then **dropped**, because `100dvh` had reached his
+phone by then and worked. Changing a live site again for a problem that had gone
+would have been churn.
+
+**The icon was never broken.** Android masks every home-screen icon to the
+launcher's shape, so a blue square arrives as a blue squircle. The operator's
+brief settled it: *"I am ok with rounded corners if it defaults to that, I just
+want it to be a solid base color with iH thats it."* A hard-edged square cannot
+survive an Android home screen and there is no point fighting it.
+
+**One real icon fault remained**, in the install dialog rather than on the home
+screen: offering `any` and `maskable` as **separate entries** let Chrome pick the
+`any` one and give it the legacy treatment — shrunk onto a white square. One
+artwork declared `"any maskable"` fixes it, and a solid colour field with centred
+letters is the one design that needs no separate versions. Measured rather than
+guessed: the furthest white pixel sits **164px from centre against a maskable
+safe radius of 205px**.
+
+⚠️ **THE STANDING LESSON: BEFORE DEBUGGING A PHONE REPORT, CONFIRM THE PHONE HAS
+THE DEPLOY.** Two reports, two rounds of investigation, and one of them was
+entirely a cache. The portal is a PWA with a service worker, so it caches the
+shell by design — which makes this failure mode permanent, not incidental.
+
+
+---
+
+**D151 — TOOLING THAT REPORTS ITS OWN BUG AS SOMEONE ELSE'S FAULT.**
+⚠️ 27 Aug 2026. Happened twice in one afternoon, so it is a class rather than an
+incident.
+
+`check_auth_settings.py` reported *"a reset link lands on
+https://ihospitality.vip"* and told the operator to fix his Redirect URLs. **The
+Redirect URLs were already correct.** He changed Supabase settings twice chasing
+a fault that was entirely in the checker: `redirect_to` goes at the **top level**
+of an `admin/generate_link` body, and nested under `options` it is **silently
+ignored** — so the link came back pointing at the Site URL, which is
+indistinguishable from a target that is not allow-listed.
+
+The same file also probed with an address that does not exist, got a 404, and
+blamed rate limiting; and read the action link only from `properties` when this
+GoTrue returns it at the top level, so a perfectly good 200 reported "could not
+read a link back".
+
+**What separates a real finding from this**: check the thing the APPLICATION
+actually calls, not a convenient admin equivalent. `/auth/v1/recover` — the
+endpoint `resetPasswordForEmail` uses, with the publishable key — returns 200,
+and a disallowed redirect there is a 400. One call would have settled it at the
+start.
+
+A checker that cannot be wrong is worth more than a checker that is usually
+right, because the operator cannot tell the difference from the output.
+
