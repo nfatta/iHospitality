@@ -152,6 +152,24 @@ reproduces it; keep it that way.
   `is_active`, so a deactivated profile sees nothing while the row survives.
   `create_portal_user.py` holds the implementation and the admin page is a second
   caller — the `promote.py` arrangement.
+- **`reset.html` IS THE ONE PORTAL PAGE THAT MUST NOT CALL `requireAuth()`, AND
+  MUST NOT BE IN `ALLOWED`** (D144). It is reached from a recovery link with no
+  session; `requireAuth()` would bounce the person back to the login page they
+  cannot get past. `ALLOWED` is the set of places a SUCCESSFUL sign-in may land,
+  and this is not one. **Password changes do NOT weaken D61** — they go through
+  GoTrue, not PostgREST, and add no write grant on any table in `public`.
+- **⚠️ THE RESET FLOW IS BLOCKED ON SUPABASE CONFIG, NOT ON CODE** (D144). A
+  recovery link asking to redirect to the portal comes back pointing at
+  `http://localhost:3000`: the requested redirect is silently overridden by the
+  **Site URL**, still the project default. Fix the Site URL and add the reset
+  page to the **Redirect URLs** allow-list, and configure custom SMTP — the
+  built-in mailer is rate-limited per address.
+- **THE GOOGLE BUTTON ASKS WHETHER IT IS ENABLED** (D145). `/auth/v1/settings`
+  is readable with the publishable key, so `login.html` queries it rather than
+  carrying a provider list (D60). **Accounts are still made once, in the admin**
+  — Google ATTACHES to the existing account with the same verified address.
+  **`hd` is a hint to Google's account chooser, not a control**; what stops a
+  stranger is pre-created accounts plus `disable_signup`.
 - **⚠️ AN ENUM VALUE MUST BE APPLIED AND COMMITTED BEFORE ANYTHING USES IT**
   (D142). The `do $$ create type ... exception when duplicate_object` block only
   covers a FRESH database — D91's rule in its enum form — and Postgres refuses to
@@ -618,6 +636,7 @@ reproduces it; keep it that way.
 | `portal/` | The sixteen portal pages, `portal.css`, `portal.js`, `sw.js`, `manifest.webmanifest`, `icons/`. Servable files only. |
 | `portal/my-venues.html`, `my-pay.html` | The contractor's own surface (D137). Also on the admin rail (D140). |
 | `portal/brands-info.html`, `training.html` | Deliberate "Coming soon" stubs — V2. |
+| `portal/reset.html` | Set a new password. No `requireAuth()`, not in `ALLOWED` (D144). |
 | `portal/sw.js` | Service worker. **Caches the SHELL ONLY, never a Supabase response** — read its header before touching it. Scope is `/portal/`, so it cannot reach the public site. |
 | `portal/brands.html`, `brand.html`, `activity-detail.html` | The admin surface (D120). Staff-labelled "Admin"; RLS does the gating. |
 | `css/site.css` | Shared tokens, nav, buttons, section base, footer, mobile nav. |

@@ -43,6 +43,24 @@ owner** — `contractors` is staff-only (D88), so the PostgREST embed
 `contractors(name)` came back null for exactly the people it was fetched for.
 Both now read `v_contractor_names`.
 
+### ⚠️ SIGN-IN: THE CODE IS DONE, THE SUPABASE CONFIG IS NOT (D144, D145)
+
+Self-service password reset and "Continue with Google" are both built and
+committed. **Neither works until four dashboard settings change, and none of it
+is code.** Proved, not guessed: asking Supabase for a recovery link redirecting
+to the portal comes back pointing at `http://localhost:3000`.
+
+| Setting | Now | Needs to be |
+|---|---|---|
+| Site URL | `http://localhost:3000` | `https://ihospitality.vip` |
+| Redirect URLs | (does not include the portal) | add `https://ihospitality.vip/portal/reset.html`, and the localhost one for testing |
+| SMTP | Supabase built-in, rate-limited per address | a real provider (Resend / Postmark / SES) |
+| Google provider | `false` | enabled, with a Google Cloud OAuth client |
+| `disable_signup` | `false` — anyone with the publishable key can sign up | `true` |
+
+The Google button **hides itself** until the provider is on, so nothing looks
+broken in the meantime.
+
 ### Open, and needing you rather than code
 
 1. **Eric has no login yet.** `python create_portal_user.py --email

@@ -6157,3 +6157,131 @@ transaction that also uses the value is not worth relying on.
 CREATE time, and it reads `profiles.contractor_id`, which the ALTER adds 2,000
 lines further down. It lives in SECTION 11 now, after the column exists.
 
+---
+
+**D143 — NO CONTRACTOR NAME IS COMPILED INTO THE BACKFILL. THE OPERATOR ASKED
+WHETHER THE PAGES HAD BEEN MADE TO PASS, AND THE AUDIT FOUND ONE.**
+✅ 27 Aug 2026, asked for and found.
+
+*"I want to ensure nothing that should be a variable is hardcoded... I just want
+to ensure we are not creating false fixes and passing them as fixes."* A fair
+challenge, and it found something.
+
+`backfill_activity_contractor.py` carried
+`SEED_CONTRACTORS_INACTIVE = ["Alan Merrick"]` — a business fact compiled into a
+script, which is precisely what D60 forbids: a rule the operator cannot reach. It
+would not have survived contact with reality either. The second time a new rep
+appeared in HubSpot the script would have skipped them and said so in a line
+nobody reads.
+
+**An owner HubSpot knows and `contractors` does not is now REPORTED and left
+alone.** Creating them is an operator ruling on the command line,
+`--create-contractor "Name"` — the same shape as D97's `--assign`, where a
+person answers the question rather than a threshold being lowered until the
+machine guesses. **A name HubSpot has never seen is REFUSED**, in a sentence,
+with the real owner list — rather than creating a contractor nothing ever
+attributes to, which would look perfectly fine for ever.
+
+The flag also had to work when there is nothing left to attribute. It did not at
+first: the early "nothing to do" return skipped it, so a second run would have
+silently done nothing and reported success.
+
+**THE REST OF THE AUDIT CAME BACK CLEAN, AND WAS PROVED RATHER THAN ASSERTED.**
+Every ownership read in `portal/` is `profile.contractor_id` or
+`venue_grading.owner_contractor_id` from the database; the only names in the
+directory are in comments. Demonstrated by reassigning a venue inside a
+rolled-back transaction and watching the counts move (Nick 29→28, Eric 50→51),
+and by a brand-new contractor being picked up with no code change at all.
+
+**What the operator actually saw was D137's real bug**, since fixed: before it,
+`venue.html` read "Owned by: nobody yet" on *every* venue including his own,
+because `contractors` is staff-only and the PostgREST embed came back null. The
+present ownership is simply what the data says — **Phil 260, Eric 50, Nick 29,
+and one venue with no grading row at all.** If that split is wrong it is a data
+fix, not a code one.
+
+
+---
+
+**D144 — A USER CAN RESET THEIR OWN PASSWORD, AND `reset.html` IS THE ONE PAGE
+THAT MUST NOT CALL `requireAuth()`.**
+✅ 27 Aug 2026.
+
+Operator: *"if Eric wants to reset the password and I not know it how can he do
+it?"* — he could not. There was no reset path at all, and the only recovery was
+deleting the account and making another.
+
+`reset.html` is reached from a recovery link **without a session**. Calling
+`requireAuth()` there would bounce the person straight back to the login page
+they cannot get past, which is the whole reason they are there. **It is therefore
+also NOT in `login.html`'s `ALLOWED` list, and that is correct** — `ALLOWED` is
+the set of places a SUCCESSFUL sign-in may land, and this is not one of them.
+Adding it there is the obvious instinct and the wrong one.
+
+**THIS DOES NOT WEAKEN D61.** Password changes go through GoTrue
+(`/auth/v1/…`), not PostgREST. They touch only the caller's own auth record and
+add no write grant on any table in `public`. "The portal can now write" sounds
+like it should be a problem and is not.
+
+**The reply is identical whether or not the account exists**, for the same
+reason the sign-in error is deliberately generic: distinguishing them turns the
+box into a way to test which client email addresses are real.
+
+**THE PAGE HANDLES BOTH SHAPES OF LINK SUPABASE CAN SEND**, and which arrives
+depends on the email template rather than on anything in the code.
+`{{ .ConfirmationURL }}` — the default — lands with tokens in the URL hash and
+supabase-js consumes them; a template edited to use `{{ .TokenHash }}` lands with
+`?token_hash=` and the app must exchange it itself. Handling only the first works
+until somebody edits the template in the dashboard, and then a perfectly good
+link reads "expired".
+
+⚠️ **AND IT IS PROVEN BROKEN ON CONFIG RIGHT NOW.** Asking Supabase for a
+recovery link redirecting to the portal comes back pointing at
+**`http://localhost:3000`** — the requested redirect is silently overridden by
+the project's **Site URL**, still the default. Until the Site URL is
+`https://ihospitality.vip` and the reset page is in the **Redirect URLs**
+allow-list, a reset link sends people nowhere. The built-in mailer is also
+rate-limited per address (`over_email_send_rate_limit` on a second request inside
+a minute), so real use needs custom SMTP. **None of that is code, and the happy
+path could not be verified end to end because of it.**
+
+
+---
+
+**D145 — GOOGLE SIGN-IN, AND THE BUTTON ASKS WHETHER IT IS ENABLED RATHER THAN
+ASSUMING.**
+✅ 27 Aug 2026. Operator: *"ideally I would like to build it where we can just
+log in with our ihospitality email... but we would need password options for
+brands."*
+
+Google for iHospitality addresses, password for brands, and both work on the
+same account.
+
+**THE BUTTON IS NOT SHOWN UNLESS THE PROVIDER IS ACTUALLY ENABLED.** GoTrue
+publishes that at `/auth/v1/settings`, readable with the publishable key, so the
+page asks rather than carrying a provider list of its own (D60). Enable Google in
+the dashboard and the button appears by itself; a dead button that errors on
+click never exists. Verified both ways in a browser — hidden while `google` is
+false, rendering correctly when the settings response says true.
+
+**ACCOUNTS ARE STILL MADE ONCE, IN THE ADMIN**, with a role and a mapping.
+Signing in with Google **attaches** that identity to the existing account with
+the same address, because Google's emails are verified. So nothing about the
+Users page changes and **no invite table is needed** — the alternative design,
+considered and rejected as disproportionate for three people and a handful of
+brands. It becomes the right answer if accounts ever outgrow being made by hand.
+
+⚠️ **WHAT STOPS A STRANGER IS NOT THIS PAGE.** Accounts are pre-created and
+signups are disabled at the project level, so a Google account nobody created is
+refused by GoTrue and never becomes a row. **`hd` only narrows Google's own
+account chooser** to the workspace — it is a hint to Google, not a control, and
+must never be relied on as one.
+
+⚠️ **`disable_signup` WAS FALSE**, found while checking this. The publishable key
+ships in `portal.js` by design, so the API would accept a signup from anyone
+holding it. The damage is bounded — an auth user with no `profiles` row reads as
+no role and sees nothing, the D120 safe direction — but it fills `auth.users`
+with strangers, and the Users page flags them as orphans. Turning it off is a
+dashboard setting and there is no Management API token in `.env`, so it is the
+operator's to do.
+
