@@ -367,3 +367,16 @@
   height: 1px;
   background: rgba(255,255,255,0.12);
 }
+
+/* Install app — in the rail's footer, above Sign out. Hidden until there is
+   actually something to do, so it never sits there inert on a browser that
+   cannot install or on a device where it already is installed. */
+#install-app { color: var(--gold); }
+#install-app[disabled] { opacity: 0.5; cursor: default; }
+.side-install-help {
+  margin: 0.4rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--muted, #8a8f98);
+}
+.side-install-help strong { color: var(--gold); font-weight: 600; }
