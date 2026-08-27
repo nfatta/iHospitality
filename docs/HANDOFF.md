@@ -40,9 +40,20 @@ You reliably get a **first name and a job title** on 88% of venues — "ask for
 Brittany, GM". You rarely get a way to reach them: email 7%, phone 9%, and
 HubSpot has **no street address at all** (0% of 330).
 
-**Nothing surfaces it in the portal yet.** The tables and `v_venue_contact`
-exist and are verified internal-only; putting them on `venue.html` is the next
-piece of work and has not been started.
+**It is on `venue.html`** — "Ask for" and "The place" in the cards at the top,
+and the HubSpot notes in a panel above the activity list. Each contact renders
+from its own row and is never grouped by name.
+
+**The import cannot duplicate or overwrite**, and both halves were proved rather
+than asserted: three consecutive `--apply` runs leave the counts identical
+(unique constraints on the HubSpot ids make duplication structurally
+impossible), and a contact edited by a person survives the next import intact
+(`hand_edited_at`, the same rule as a hand-edited venue, D84).
+
+**And a contractor can now open an activity** (D153) — the detail, the photos,
+the internal note, who did it, and what they earned. Two policies had to agree:
+`photos_storage_select` on `storage.objects` was still `is_staff()`, so the
+gallery rendered empty rather than erroring.
 
 ### Open, and none of it blocking
 

@@ -6539,3 +6539,39 @@ Verified by impersonation with the control (D125/D114): a contractor reads all
 344 contacts, 914 note bodies and 343 names; **a brand user reads ZERO** from
 every table and from the view.
 
+---
+
+**D153 — A CONTRACTOR CAN OPEN AN ACTIVITY. TWO POLICIES HAD TO AGREE AND ONLY
+ONE HAD BEEN MOVED.**
+⚠️ found by the operator, 27 Aug 2026: *"Eric cannot click the individual
+activity and see the details and photos for his stuff."*
+
+`activity-detail.html` was in `STAFF_ONLY_PAGES` because it shows charge, cost
+and margin — so **the whole page was blocked to protect three numbers on it**.
+It now shows the DETAIL to anyone internal and the MONEY only to staff, which is
+the split every other page already uses.
+
+**THE MONEY PANEL IS GATED ON `staff`, NOT ON WHETHER THE COLUMNS ARRIVED.** It
+tested `m.charge != null || m.cost != null || m.unpriced`, which was correct
+while only brands and staff existed. A contractor breaks it: `unpriced` means
+"no rate-card line matched", `rate_card` is invisible to them, so the join
+misses and **the flag reads TRUE on every activity**. They would have been shown
+a panel of warnings about work that is priced perfectly well. The warnings block
+returns early for the same reason. *A null column is not the same question as
+who is asking.*
+
+⚠️ **AND THE PHOTOS RENDERED EMPTY RATHER THAN ERRORING.** `photos_select` was
+moved to `is_internal()` with everything else in D137. `photos_storage_select`
+on `storage.objects` — the policy that decides whether a signed URL can be
+issued — was left on `is_staff()`. So a contractor could read the photo ROWS and
+not sign the FILES: `createSignedUrls` returned nothing usable, `usable` was
+empty, and the grid drew zero tiles with no error anywhere.
+
+**IF A PAGE READS ROWS FROM ONE PLACE AND BYTES FROM ANOTHER, BOTH HAVE TO KNOW
+ABOUT THE ROLE.** The photos are the only thing in this portal split that way,
+and the split is invisible from the page — which is exactly why it survived the
+D137 sweep and the impersonation probe, both of which counted rows.
+
+Verified as a contractor rather than as staff: two photos load, the internal
+note and "Done by" render, "You earned" shows, and no money panel appears.
+

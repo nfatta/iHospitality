@@ -155,6 +155,16 @@ reproduces it; keep it that way.
   `is_active`, so a deactivated profile sees nothing while the row survives.
   `create_portal_user.py` holds the implementation and the admin page is a second
   caller — the `promote.py` arrangement.
+- **⚠️ PHOTOS ARE GATED TWICE, AND BOTH GATES MUST KNOW THE ROLE** (D153).
+  `photos_select` decides who reads the ROWS; `photos_storage_select` on
+  `storage.objects` decides who can SIGN THE FILES. D137 moved the first to
+  `is_internal()` and left the second on `is_staff()`, so a contractor saw an
+  EMPTY gallery with no error — the signing call simply returned nothing. Row
+  counts cannot catch this; only opening the page can.
+- **A MONEY PANEL IS GATED ON THE ROLE, NEVER ON WHETHER THE COLUMNS ARRIVED**
+  (D153). `unpriced` means "no rate-card line matched", and `rate_card` is
+  invisible to a contractor — so the flag reads TRUE on every activity and a
+  "has money?" test shows them warnings about work priced perfectly well.
 - **VENUE CONTACTS AND NOTES ARE INTERNAL, AND KEYED ON THE HUBSPOT ID** (D152).
   `venue_contact`, `venue_contact_link`, `venue_note` and `venue_profile` are
   `is_internal()` — staff and contractor, never a brand — and **none of it is a
