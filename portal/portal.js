@@ -35,6 +35,73 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   });
 }
 
+/* ---------- "Install" ----------
+   Chrome fires `beforeinstallprompt` ONCE, and EARLY -- before a page that
+   waits for its data has finished rendering. A listener registered inside
+   renderShell() would miss it on a slow connection and the button would simply
+   never appear, on a portal that was perfectly installable. So it is captured
+   here, at module scope, and the button asks for it later.
+
+   iOS fires nothing at all: Safari has no install API, only Share -> Add to
+   Home Screen. That is why the button below shows INSTRUCTIONS there rather
+   than hiding, which would leave the people most likely to want this -- reps
+   on iPhones -- with no idea it was possible. */
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();          // stop Chrome's own mini-infobar
+  installPrompt = e;
+  window.dispatchEvent(new Event('ih-installable'));
+});
+window.addEventListener('appinstalled', () => { installPrompt = null; });
+
+/** Already running as an installed app? Then there is nothing to offer. */
+export const isInstalled = () =>
+  window.matchMedia('(display-mode: standalone)').matches
+  || window.navigator.standalone === true;
+
+/** iOS Safari: no install API, so the only route is Share -> Add to Home Screen. */
+const isIOS = () =>
+  /iphone|ipad|ipod/i.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+/**
+ * Wire up the rail's install control. Shows itself only when there is
+ * something to do: Chrome has offered a prompt, or this is iOS and the app is
+ * not already installed.
+ */
+export function initInstall() {
+  const btn = document.getElementById('install-app');
+  if (!btn || isInstalled()) return;
+
+  const show = () => { btn.hidden = false; };
+  if (installPrompt) show();
+  window.addEventListener('ih-installable', show);
+
+  if (isIOS()) {
+    show();
+    btn.onclick = () => {
+      // No API to call. Say what to press, in the words iOS actually uses.
+      btn.insertAdjacentHTML('afterend', `<p class="side-install-help">
+        Tap <strong>Share</strong> at the bottom of Safari, then
+        <strong>Add to Home Screen</strong>.</p>`);
+      btn.hidden = true;
+    };
+    return;
+  }
+
+  btn.onclick = async () => {
+    if (!installPrompt) return;
+    btn.disabled = true;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    // The prompt is single-use whatever the answer. Dropping the reference
+    // stops a second click doing nothing while looking like it should work.
+    installPrompt = null;
+    if (outcome === 'accepted') btn.hidden = true;
+    else btn.disabled = false;
+  };
+}
+
 /* ---------- auth ---------- */
 
 /** Redirect to the login page unless signed in. Returns {session, profile}. */
@@ -233,6 +300,7 @@ export function renderShell(active, profile) {
     <div class="side-foot">
       <span class="side-who">${esc(who)}</span>
       ${profile.full_name ? `<span class="side-name">${esc(profile.full_name)}</span>` : ''}
+      <button class="link-btn" id="install-app" hidden>Install app</button>
       <button class="link-btn" id="signout">Sign out</button>
     </div>`;
 
@@ -275,6 +343,7 @@ export function renderShell(active, profile) {
   };
 
   document.getElementById('signout').onclick = signOut;
+  initInstall();
   burger.onclick = () => setOpen(!rail.classList.contains('open'));
   scrim.onclick = () => setOpen(false);
   rail.querySelectorAll('.side-links a').forEach(a => a.addEventListener('click', () => setOpen(false)));

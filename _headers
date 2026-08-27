@@ -1,0 +1,36 @@
+# Netlify response headers. No build step — Netlify reads this file directly,
+# the same way it reads `_redirects`.
+
+# ---------------------------------------------------------------------------
+# THE WEB APP MANIFEST MUST NOT BE application/octet-stream.
+#
+# Netlify has no mapping for the `.webmanifest` extension, so it fell back to
+# octet-stream. Chrome is forgiving and installed the portal anyway, which is
+# exactly why this is worth a rule: it worked, so nothing complained, and the
+# first browser or audit tool that is stricter would have rejected the manifest
+# with no obvious cause.
+#
+# `application/manifest+json` is the registered type.
+# ---------------------------------------------------------------------------
+/portal/manifest.webmanifest
+  Content-Type: application/manifest+json
+
+# ---------------------------------------------------------------------------
+# THE SERVICE WORKER MUST NOT BE CACHED FOR LONG.
+#
+# It is the file that decides what every other file does, so a stale copy is
+# the one thing that cannot be fixed by shipping a new version — the browser
+# keeps using the old worker, which keeps serving the old shell. Browsers
+# already bypass the HTTP cache for worker updates, but being explicit costs
+# nothing and removes a whole class of "why is the deploy not showing".
+# ---------------------------------------------------------------------------
+/portal/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+# ---------------------------------------------------------------------------
+# THE PORTAL IS PRIVATE. It is already `noindex, nofollow` in every page's
+# markup; this says the same thing in a header, which is what a crawler that
+# never renders the HTML actually reads.
+# ---------------------------------------------------------------------------
+/portal/*
+  X-Robots-Tag: noindex, nofollow
