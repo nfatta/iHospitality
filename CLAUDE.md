@@ -155,6 +155,16 @@ reproduces it; keep it that way.
   `is_active`, so a deactivated profile sees nothing while the row survives.
   `create_portal_user.py` holds the implementation and the admin page is a second
   caller — the `promote.py` arrangement.
+- **VENUE CONTACTS AND NOTES ARE INTERNAL, AND KEYED ON THE HUBSPOT ID** (D152).
+  `venue_contact`, `venue_contact_link`, `venue_note` and `venue_profile` are
+  `is_internal()` — staff and contractor, never a brand — and **none of it is a
+  column on `venues`**, for D88's reason: the grant there is table-wide, so a
+  contact column would be a contact list a brand could `select *`. **Never match
+  a contact by NAME**: 234 of 344 have only a first name and 32 of those repeat,
+  including four different people called Dan. The venue link is **many-to-many**
+  (10 contacts sit on more than one venue). Refresh with
+  `python sync_venue_contacts.py` — dry run by default, and it leaves a
+  hand-edited contact alone (D84).
 - **⚠️ THE SITE IS LIVE, AND `main` DEPLOYS TO ihospitality.vip ON MERGE.**
   Work on a branch, open a PR, and check the **deploy preview** before merging —
   the public homepage is the only thing that can regress and it is the thing

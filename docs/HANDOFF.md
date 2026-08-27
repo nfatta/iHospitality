@@ -33,6 +33,17 @@ thing to look at, not the portal.
 - **Eric signed in and his data is there.**
 - **The PWA installs**, and the icon reads as a solid blue squircle with "iH".
 
+### Also pulled today: the venue contacts (D152)
+
+344 contacts, 355 venue links, 914 notes and 273 blurbs, all **internal only**.
+You reliably get a **first name and a job title** on 88% of venues — "ask for
+Brittany, GM". You rarely get a way to reach them: email 7%, phone 9%, and
+HubSpot has **no street address at all** (0% of 330).
+
+**Nothing surfaces it in the portal yet.** The tables and `v_venue_contact`
+exist and are verified internal-only; putting them on `venue.html` is the next
+piece of work and has not been started.
+
 ### Open, and none of it blocking
 
 1. **SMTP is still Supabase's built-in mailer**, rate-limited per address. Fine

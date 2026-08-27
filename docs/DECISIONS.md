@@ -6488,3 +6488,54 @@ start.
 A checker that cannot be wrong is worth more than a checker that is usually
 right, because the operator cannot tell the difference from the output.
 
+---
+
+**D152 — WHO TO ASK FOR AT A VENUE. INTERNAL ONLY, AND KEYED ON THE HUBSPOT ID
+BECAUSE THE NAMES COLLIDE.**
+✅ 27 Aug 2026. 344 contacts, 355 venue links, 914 notes, 273 venue blurbs.
+
+Operator: *"Some of the venues have contacts attached along with notes about
+when best to reach them... I want us to be wary since it's a lot of first names
+there might be two of the same names for two different accounts."*
+
+**HE WAS RIGHT, AND IT WAS MEASURED BEFORE ANYTHING WAS BUILT.** 234 of 344
+contacts have only a FIRST name, and **32 of those first names repeat** — there
+are four separate people called **Dan**, at Clermont Brewing, Christner's,
+Tuffy's and Permanent Vacation. Matching on the name would have merged four
+people into one and put one person's job title on three premises that never
+employed them. Every contact is keyed on `hubspot_contact_id`. Same rule as
+D129 for venues, arrived at from the other direction — by the operator, before
+the code existed.
+
+**THE LINK IS MANY-TO-MANY**, also measured: 10 contacts are attached to more
+than one venue and one is on three. A foreign key on the contact would have
+silently dropped the rest.
+
+⚠️ **NONE OF IT IS A COLUMN ON `venues`** — D88's rule, and the whole reason
+these are separate tables. `venues_select` lets a BRAND read any venue row it
+relates to and the grant is table-wide, so a `contact_name` column there would
+be a contact list a brand could `select *`. Do not move it, however convenient
+a join looks.
+
+**The notes live on the COMPANY, not the contact**, and that was checked rather
+than assumed: 968 hang off venues and **5** off contacts across 300 sampled. So
+there is one place to look, not two. Their HTML is stripped on the way IN, so
+nothing downstream has to decide whether to trust it.
+
+**WHAT HUBSPOT DOES NOT HAVE, so nothing was built expecting it:** street
+address **0%** of 330 venues, zip 12%, company phone **0%**. Contact email
+(**7%**) and phone (**9%**) are pulled and are mostly empty — `v_venue_contact`
+carries a `reachable_remotely` flag that is usually false, which is the honest
+answer rather than a gap to chase. What you reliably get is a **first name and
+a job title** — "ask for Brittany, GM" — on 88% of venues.
+
+**And the timing notes are real but rare.** The operator asked about "when best
+to reach them"; the notes are short (median 61 characters) and only **5%**
+mention timing — *"Off on Tues/Sunday"*, *"AM session at Tampa GSM"*. A feature
+built specifically around that would render blank most of the time; surfacing
+the notes generally carries those along with everything else.
+
+Verified by impersonation with the control (D125/D114): a contractor reads all
+344 contacts, 914 note bodies and 343 names; **a brand user reads ZERO** from
+every table and from the view.
+
