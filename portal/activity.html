@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Activity | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">Brand Portal</span>
+        <h1>Activity</h1>
+        <p class="portal-sub" id="count"></p>
+      </div>
+      <div class="filters">
+        <select id="f-brand"><option value="">All brands</option></select>
+        <select id="f-market"><option value="">All markets</option></select>
+        <select id="f-type"><option value="">All activity types</option></select>
+        <select id="f-year"><option value="">All time</option></select>
+      </div>
+    </div>
+
+    <div id="month-note"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Every activity, newest first</h2>
+        <span class="hint" id="shown"></span>
+      </div>
+      <div id="log"></div>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtMonth, fmtNum,
+             MARKET_LABEL, sortableTable, fillSelect } from './portal.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('activity.html', auth.profile);
+
+      // Drill-down from the dashboard: ?month=YYYY-MM. Validated rather than
+      // trusted — it is compared against activity_date as a string prefix, and
+      // anything that is not exactly a year-month is ignored.
+      const wanted = new URLSearchParams(location.search).get('month');
+      const month = /^\d{4}-\d{2}$/.test(wanted || '') ? wanted : null;
+
+      // MONTH-LEVEL COMMISSION ROLL-UPS ARE NOT LISTED. Operator's call,
+      // 26 Aug 2026: they are a billing total, not something that happened.
+      //
+      // Dame Mas was billed Jul 2025 - Mar 2026 off the distributor's whole
+      // monthly depletion report, and no per-venue breakdown exists for those
+      // months (D93). So one row carries the month's money and the individual
+      // sales are priced at an explicit 0.00 to stop the same money being
+      // counted twice. In the log that reads as though a case sale earned
+      // nothing, which is the opposite of true: $33,072.75 of gross sits behind
+      // 84 logged bottles, so the roll-up covers roughly twice the product the
+      // log knows about.
+      //
+      // FILTERED IN POSTGRES, NOT AFTER THE FETCH. The dashboard takes
+      // `.limit(10)`, so dropping rows client-side would quietly return fewer
+      // than ten -- the same fault D122 describes for the gallery.
+      //
+      // THE MONEY IS UNAFFECTED. Revenue and margin come from v_activity_money
+      // and v_brand_month_revenue, which still include it. This hides an entry
+      // from a list; it does not remove a charge.
+      const { data, error } = await db.from('v_brand_activity_log')
+        .select('*').neq('activity_type_code', 'monthly_commission');
+      if (error) {
+        render(document.getElementById('log'), { error });
+      } else if (!data.length) {
+        render(document.getElementById('log'), { empty: {
+          title: 'No activity yet',
+          body: 'Activity logged for your brand will appear here.' } });
+      } else {
+        if (month) {
+          document.getElementById('month-note').innerHTML =
+            `<span class="filter-note">Showing ${esc(fmtMonth(month + '-01'))}` +
+            `<a href="activity.html" title="Show all months">&times;</a></span>`;
+        }
+        buildFilters(data);
+        ['f-brand', 'f-market', 'f-type', 'f-year'].forEach(id =>
+          document.getElementById(id).addEventListener('change', () => draw(data, month)));
+        document.getElementById('count').textContent =
+          `${fmtNum(data.length)} activities on record`;
+        draw(data, month);
+      }
+    }
+
+    function buildFilters(rows) {
+      const uniq = (fn) => [...new Set(rows.map(fn).filter(Boolean))].sort();
+      // fillSelect hides a filter with fewer than two choices, so the brand
+      // picker simply does not appear for a brand user — they only ever have one.
+      fillSelect('f-brand', uniq(r => r.brand_name).map(b => [b, b]));
+      fillSelect('f-market', uniq(r => r.market).map(m => [m, MARKET_LABEL[m] || m]));
+      fillSelect('f-type', uniq(r => r.activity_type).map(t => [t, t]));
+      fillSelect('f-year', uniq(r => r.activity_date?.slice(0, 4)).reverse().map(y => [y, y]));
+    }
+
+    function draw(rows, month) {
+      const brand = document.getElementById('f-brand').value;
+      const market = document.getElementById('f-market').value;
+      const type = document.getElementById('f-type').value;
+      const year = document.getElementById('f-year').value;
+
+      const filtered = rows.filter(r =>
+        (!month || r.activity_date?.startsWith(month)) &&
+        (!brand || r.brand_name === brand) &&
+        (!market || r.market === market) &&
+        (!type || r.activity_type === type) &&
+        (!year || r.activity_date?.startsWith(year)));
+
+      document.getElementById('shown').textContent =
+        filtered.length === rows.length
+          ? `${fmtNum(rows.length)} shown`
+          : `${fmtNum(filtered.length)} of ${fmtNum(rows.length)} shown`;
+
+      const el = document.getElementById('log');
+      if (!filtered.length) {
+        return render(el, { empty: {
+          title: 'Nothing matches those filters',
+          body: 'Try widening the month, brand, market or type.' } });
+      }
+
+      // Columns with nothing in them anywhere are dropped — see sortableTable()
+      // in portal.js. Date, venue and activity always show. The Brand column
+      // therefore appears for staff and disappears for a brand user, without
+      // either page needing to know which it is looking at.
+      const multiBrand = new Set(filtered.map(r => r.brand_name)).size > 1;
+
+      sortableTable(el, filtered, [
+        { head: 'Date', always: true, nowrap: true,
+          sortValue: r => r.activity_date, get: r => esc(fmtDate(r.activity_date)) },
+        ...(multiBrand ? [{ head: 'Brand', value: r => r.brand_name,
+          get: r => esc(r.brand_name || '—') }] : []),
+        { head: 'Venue', always: true, cls: 'venue', value: r => r.venue_name,
+          get: r => esc(r.venue_name || '—') },
+        { head: 'Market', value: r => r.market,
+          get: r => r.market ? esc(MARKET_LABEL[r.market] || r.market) : '<span class="muted">—</span>' },
+        { head: 'Activity', always: true, value: r => r.activity_type,
+          get: r => esc(r.activity_type) },
+        { head: 'Qty', cls: 'num', value: r => r.quantity,
+          get: r => r.quantity ? fmtNum(r.quantity) : '<span class="muted">—</span>' },
+        // Pods is deliberately NOT a column here. Dame Mas is the only brand
+        // whose pods are tracked, so on a shared activity table it is a column
+        // that is blank for everyone else — and the auto-hide cannot help,
+        // because staff see all brands at once and would get it permanently.
+        // The data stays in `activities.pods` and in the aggregate views; it
+        // wants a Dame Mas-shaped home, not a general one.
+        { head: 'What happened', value: r => r.summary, get: r => esc(r.summary || '') },
+        { head: 'Photos', cls: 'num', value: r => Number(r.photo_count),
+          get: r => fmtNum(r.photo_count) },
+      ], {
+        sort: 'Date', dir: 'desc',
+        // A row opens the activity in full, with its photos. This is the only
+        // route to that page for a brand user — staff reach it through a brand.
+        onRowClick: (r) => { location.href = `activity-detail.html?id=${encodeURIComponent(r.id)}`; },
+      });
+    }
+  </script>
+</body>
+</html>

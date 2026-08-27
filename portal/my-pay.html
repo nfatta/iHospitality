@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>My pay | iHospitality Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">My work</span>
+        <h1>My pay</h1>
+        <p class="portal-sub">Your base pay and what you have earned per activity. Nobody else's.</p>
+      </div>
+      <div class="filters">
+        <select id="f-from"></select>
+        <select id="f-to"></select>
+      </div>
+    </div>
+
+    <div id="stats"></div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Base pay</h2></div>
+      <div id="base"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Earned per activity</h2>
+        <span class="hint" id="earned-count"></span>
+      </div>
+      <div id="earned"></div>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, money, fmtDate, fmtNum,
+             fmtMonth, sortableTable, monthRange, isContractor } from './portal.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('my-pay.html', auth.profile);
+
+      // Both sources are SECURITY DEFINER functions scoped by
+      // auth_contractor_id(), which reads the caller's own contractor_id
+      // whatever their role. An ADMIN who is also a person in the field sees
+      // their own pay here; an admin who is not sees nothing, which is correct
+      // rather than broken. There is deliberately no "pick a person" control:
+      // reading someone else's pay is the Contractors page in the Streamlit
+      // admin, where the operator already is.
+      if (!auth.profile.contractor_id) {
+        render(document.getElementById('base'), { empty: {
+          title: 'This login is not linked to a person in the field',
+          body: 'My pay shows your own base and per-activity earnings. Everyone\u2019s pay is on the Contractors page in the admin.' } });
+        document.getElementById('earned').innerHTML = '';
+        document.querySelector('.filters').style.display = 'none';
+      } else {
+        const [{ data: pay, error: e1 }, { data: earned, error: e2 }] = await Promise.all([
+          db.from('v_my_pay').select('*').order('month'),
+          db.from('v_my_activity_pay').select('*').order('activity_date', { ascending: false }),
+        ]);
+
+        if (e1 || e2) {
+          render(document.getElementById('base'), { error: e1 || e2 });
+        } else {
+          const months = [...new Set([
+            ...(pay || []).map(r => r.month),
+            ...(earned || []).map(r => r.month),
+          ])].filter(Boolean).sort().reverse();
+
+          monthRange('f-from', 'f-to', months, (from, to) => {
+            const inRange = (m) => !from || !to || (m >= from && m <= to);
+            draw((pay || []).filter(r => inRange(r.month)),
+                 (earned || []).filter(r => inRange(r.month)));
+          });
+        }
+      }
+
+      function draw(pay, earned) {
+        const basePay = pay.reduce((a, r) => a + Number(r.monthly_equivalent || 0), 0);
+        const activityPay = earned.reduce((a, r) => a + Number(r.earned || 0), 0);
+
+        const el = document.getElementById('stats');
+        el.className = 'stat-grid';
+        // BASE PAY AND ACTIVITY PAY ARE ADDITIVE -- operator ruling, 27 Aug
+        // 2026. Both are owed: the base is a floor and the activity rates are
+        // earned on top of it, so a total is a real number rather than a
+        // double count.
+        el.innerHTML = `
+          <div class="stat-card"><span class="num">${money(basePay)}</span>
+            <span class="lbl">Base pay</span>
+            <div class="meta">annualised spread, see below</div></div>
+          <div class="stat-card"><span class="num">${money(activityPay)}</span>
+            <span class="lbl">Earned per activity</span>
+            <div class="meta">${fmtNum(earned.length)} recorded activities</div></div>
+          <div class="stat-card"><span class="num">${money(basePay + activityPay)}</span>
+            <span class="lbl">Total</span>
+            <div class="meta">base and activity are additive</div></div>`;
+
+        const baseEl = document.getElementById('base');
+        if (!pay.length) {
+          render(baseEl, { empty: {
+            title: 'No base pay on record for this range',
+            body: 'Pay periods are set by iHospitality in the admin.' } });
+        } else {
+          sortableTable(baseEl, pay, [
+            { head: 'Month', always: true, nowrap: true, value: r => r.month,
+              get: r => esc(fmtMonth(r.month + '-01')) },
+            { head: 'Base', always: true, cls: 'num', value: r => Number(r.base_pay),
+              get: r => money(r.base_pay) },
+            { head: 'Paid', always: true, value: r => r.pay_frequency,
+              get: r => esc(r.pay_frequency) },
+            { head: 'Monthly equivalent', always: true, cls: 'num',
+              value: r => Number(r.monthly_equivalent),
+              get: r => money(r.monthly_equivalent) },
+          ], { sort: 'Month', dir: 'desc' });
+
+          // READ THE WORD "EQUIVALENT" (D130). Weekly and fortnightly pay do
+          // not divide evenly into months -- a fortnightly contractor is paid
+          // three times in some months and twice in most -- so this spreads the
+          // annual cost evenly rather than pretending to know which months
+          // carried the extra run. It is NOT a bank statement.
+          baseEl.insertAdjacentHTML('beforeend', `<p class="hint">
+            <strong>Monthly equivalent is an annualised spread, not a payment.</strong>
+            It is your base times the number of pay periods in a year, divided by
+            twelve — exact for semimonthly and monthly pay, an average for weekly
+            and fortnightly. It is not what landed in the bank in any one month.
+          </p>`);
+        }
+
+        const earnedEl = document.getElementById('earned');
+        document.getElementById('earned-count').textContent =
+          earned.length ? `${fmtNum(earned.length)} activities` : '';
+
+        if (!earned.length) {
+          render(earnedEl, { empty: {
+            title: 'No activities recorded against you in this range',
+            body: 'Per-activity earnings only appear for work recorded as yours. Work with nobody recorded against it is blank rather than unpaid — ask iHospitality to assign it.' } });
+        } else {
+          sortableTable(earnedEl, earned, [
+            { head: 'Date', always: true, nowrap: true, value: r => r.activity_date,
+              get: r => esc(fmtDate(r.activity_date)) },
+            { head: 'Account', always: true, cls: 'venue', value: r => r.venue_name,
+              get: r => r.venue_name ? esc(r.venue_name) : '<span class="muted">—</span>' },
+            { head: 'Brand', value: r => r.brand_name, get: r => esc(r.brand_name || '—') },
+            { head: 'Work', always: true, value: r => r.activity_type,
+              get: r => esc(r.activity_type || '—') },
+            { head: 'Qty', cls: 'num', value: r => Number(r.quantity),
+              get: r => fmtNum(r.quantity) },
+            // THE PAY SIDE ONLY. There is no charge column here and there must
+            // never be one: charge alongside your own pay is the margin.
+            { head: 'Earned', always: true, cls: 'num', value: r => Number(r.earned),
+              get: r => r.earned === null ? '<span class="muted">—</span>' : money(r.earned) },
+          ], { sort: 'Date', dir: 'desc' });
+
+          const unpriced = earned.filter(r => r.earned === null || Number(r.earned) === 0).length;
+          if (unpriced) {
+            earnedEl.insertAdjacentHTML('beforeend', `<p class="hint">
+              ${fmtNum(unpriced)} of these carry no pay rate, so they show nothing
+              earned. Some work is deliberately unpaid and some is simply not
+              rate-carded yet — a blank here is not a decision, it is a gap worth
+              raising.
+            </p>`);
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Venues | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">Brand Portal</span>
+        <h1>Venues</h1>
+        <p class="portal-sub" id="count"></p>
+      </div>
+      <div class="filters">
+        <input type="search" id="f-search" placeholder="Search venues…" style="min-width:200px">
+        <select id="f-status"><option value="">All statuses</option></select>
+        <select id="f-city"><option value="">All cities</option></select>
+        <select id="f-brand"><option value="">All brands</option></select>
+      </div>
+    </div>
+
+    <div id="stats"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Your accounts</h2>
+        <span class="hint" id="shown"></span>
+      </div>
+      <div id="list"></div>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum,
+             sortableTable, fillSelect, isContractor } from './portal.js';
+
+    const STATUS_ORDER = ['reordering', 'placed', 'pitched', 'prospect', 'dormant', 'lost'];
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('venues.html', auth.profile);
+
+      // TWO SURFACES, AND THE SPLIT IS THE DESIGN (D137).
+      //
+      // For a contractor this page is the LOOKUP -- every account in the
+      // business, for walking into one you do not own. `my-venues.html` is the
+      // other half: the accounts you DO own, with the days, the volume and your
+      // own earnings on them.
+      //
+      // What is withheld here is the quiet-day count: the column, the dormant
+      // ranking and the "quiet 90+" card. Not because it is secret -- THE
+      // ACTIVITY DATES ARE ON THE VENUE PAGE AND ANYONE CAN SUBTRACT -- but
+      // because a page that ranks a colleague's accounts by how long they have
+      // been neglected is passing judgement on that colleague, and this page is
+      // for looking up an account, not for grading a workmate.
+      //
+      // Do not "fix the leak" by hiding the dates. That would gut the one thing
+      // the page is for, to conceal a number that was never concealed.
+      const contractor = isContractor(auth.profile);
+      if (contractor) {
+        document.querySelector('.portal-eyebrow').textContent = 'Look up';
+        document.querySelector('.portal-head h1').textContent = 'All accounts';
+        document.querySelector('.panel-head h2').textContent = 'Every account on record';
+      }
+
+      // v_venue_performance is driven from brand_venue_status with activities
+      // LEFT JOINed, so a venue pitched but not yet visited still appears with
+      // zero activities — those are the ones worth chasing, and an inner join
+      // would hide exactly them.
+      const { data, error } = await db.from('v_venue_performance').select('*');
+      if (error) {
+        render(document.getElementById('list'), { error });
+      } else if (!data.length) {
+        render(document.getElementById('list'), { empty: {
+          title: 'No venues yet',
+          body: 'Venues we place your brand into will appear here.' } });
+      } else {
+        buildFilters(data);
+        renderStats(data);
+        ['f-search', 'f-status', 'f-city', 'f-brand'].forEach(id =>
+          document.getElementById(id).addEventListener('input', () => draw(data)));
+        document.getElementById('count').textContent = `${fmtNum(data.length)} accounts on record`;
+        draw(data);
+      }
+    }
+
+    function buildFilters(rows) {
+      const statuses = [...new Set(rows.map(r => r.status).filter(Boolean))]
+        .sort((a, b) => STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b));
+      fillSelect('f-status', statuses.map(s => [s, s[0].toUpperCase() + s.slice(1)]));
+
+      // City replaces the old Market filter. Market is NULL on every venue by
+      // decision (D33) — the business is expanding and is not capped to two
+      // markets — so a market picker filtered on nothing at all.
+      const cities = [...new Set(rows.map(r => r.city).filter(Boolean))].sort();
+      fillSelect('f-city', cities.map(c => [c, c]));
+
+      // Hidden automatically for a brand user, who only ever has one brand.
+      const brands = [...new Set(rows.map(r => r.brand_name).filter(Boolean))].sort();
+      fillSelect('f-brand', brands.map(b => [b, b]));
+    }
+
+    function renderStats(rows) {
+      // THESE CARDS COUNT `status_stored`, AND THE TABLE BELOW DISPLAYS
+      // `status`. That split is deliberate and it is the whole reason
+      // status_stored is on the view (D86).
+      //
+      // Dormancy is layered over the stored status at read time, so a stocking
+      // account that nobody has walked into for six months reads `dormant`.
+      // Counting "stocking your brand" off the DISPLAYED status therefore drops
+      // it out of the number a brand cares about most — 102 pairs on the day
+      // this landed — and quietly re-scopes "quiet 90+ days" to mean "quiet
+      // between 91 and 180 days", because everything past 180 has become
+      // dormant and stopped matching. Both cards keep their old, correct
+      // meaning by reading what the trigger set.
+      //
+      // The dormant pill in the table is how a brand SEES the quietness. These
+      // cards are how they see the account.
+      const counts = {};
+      for (const r of rows) counts[r.status_stored] = (counts[r.status_stored] || 0) + 1;
+      const contractor = isContractor(auth.profile);
+      // "Placed" is the number that matters commercially — accounts actually
+      // stocking the brand.
+      const placed = (counts.placed || 0) + (counts.reordering || 0);
+      // Quiet counts only accounts that HAVE been visited. A venue never
+      // visited has days_since NULL, which is a different problem from one that
+      // has gone quiet, and lumping them together hides both.
+      const quiet = rows.filter(r =>
+        r.days_since !== null && Number(r.days_since) > 90 &&
+        (r.status_stored === 'placed' || r.status_stored === 'reordering')).length;
+
+      const el = document.getElementById('stats');
+      el.className = 'stat-grid';
+      el.innerHTML = `
+        <div class="stat-card"><span class="num">${fmtNum(rows.length)}</span>
+          <span class="lbl">Total accounts</span></div>
+        <div class="stat-card"><span class="num">${fmtNum(placed)}</span>
+          <span class="lbl">${contractor ? 'Stocking' : 'Stocking your brand'}</span>
+          <div class="meta">placed or reordering</div></div>
+        <div class="stat-card"><span class="num">${fmtNum(counts.pitched || 0)}</span>
+          <span class="lbl">Pitched</span>
+          <div class="meta">visited, not yet placed</div></div>
+        ${contractor ? '' : `
+        <div class="stat-card"><span class="num">${fmtNum(quiet)}</span>
+          <span class="lbl">Quiet 90+ days</span>
+          <div class="meta">stocking, but not seen lately</div></div>`}`;
+    }
+
+    function draw(rows) {
+      const q = document.getElementById('f-search').value.trim().toLowerCase();
+      const status = document.getElementById('f-status').value;
+      const city = document.getElementById('f-city').value;
+      const brand = document.getElementById('f-brand').value;
+
+      const filtered = rows.filter(r =>
+        (!status || r.status === status) &&
+        (!city || r.city === city) &&
+        (!brand || r.brand_name === brand) &&
+        (!q || (r.venue_name || '').toLowerCase().includes(q) ||
+               (r.city || '').toLowerCase().includes(q)));
+
+      document.getElementById('shown').textContent =
+        filtered.length === rows.length
+          ? `${fmtNum(rows.length)} shown`
+          : `${fmtNum(filtered.length)} of ${fmtNum(rows.length)} shown`;
+
+      const el = document.getElementById('list');
+      if (!filtered.length) {
+        return render(el, { empty: {
+          title: 'No venues match',
+          body: 'Try a different search or clear the filters.' } });
+      }
+
+      const multiBrand = new Set(filtered.map(r => r.brand_name)).size > 1;
+
+      // Columns with nothing in them anywhere are dropped — see sortableTable()
+      // in portal.js. That is doing real work on the Reorders column: reorders
+      // are only logged for brands that pay for reorder tracking, so 67 of the
+      // 68 on record are Wodka's. For every other brand the column vanishes
+      // rather than showing a wall of zeroes that would read as "no repeat
+      // business" when it means "not measured this way" (D35).
+      sortableTable(el, filtered, [
+        { head: 'Venue', always: true, cls: 'venue',
+          value: r => r.venue_name, get: r => esc(r.venue_name) },
+        ...(multiBrand ? [{ head: 'Brand', value: r => r.brand_name,
+          get: r => esc(r.brand_name || '—') }] : []),
+        { head: 'City', value: r => r.city,
+          get: r => r.city ? esc(r.city) : '<span class="muted">—</span>' },
+        { head: 'Status', always: true, value: r => r.status,
+          sortValue: r => STATUS_ORDER.indexOf(r.status),
+          get: r => `<span class="pill pill-${esc(r.status)}">${esc(r.status)}</span>` },
+        { head: 'Activities', always: true, cls: 'num',
+          value: r => Number(r.activities), get: r => fmtNum(r.activities) },
+        { head: 'Sales', cls: 'num', value: r => Number(r.initial_sales),
+          get: r => Number(r.initial_sales) ? fmtNum(r.initial_sales) : '<span class="muted">—</span>' },
+        { head: 'Reorders', cls: 'num', value: r => Number(r.reorders),
+          get: r => Number(r.reorders) ? `<strong>${fmtNum(r.reorders)}</strong>` : '<span class="muted">—</span>' },
+        { head: 'Units', cls: 'num', value: r => Number(r.units_moved),
+          get: r => Number(r.units_moved) ? fmtNum(r.units_moved) : '<span class="muted">—</span>' },
+        { head: 'Last visit', always: true, nowrap: true,
+          sortValue: r => r.last_touched || '',
+          get: r => r.last_touched ? esc(fmtDate(r.last_touched)) : '<span class="muted">never</span>' },
+        // Withheld from a contractor -- see the long note at the top of the
+        // script. Spread into the list rather than rendered blank, so the
+        // column and its sort disappear together.
+        ...(isContractor(auth.profile) ? [] : [{ head: 'Quiet', cls: 'num', nowrap: true,
+          // Sorts on the raw day count so "412 days" ranks above "90 days"
+          // rather than sorting as text. Never-visited rows have no number and
+          // sink to the bottom, which is what sortableTable does with blanks.
+          value: r => r.days_since === null ? null : Number(r.days_since),
+          sortValue: r => r.days_since === null ? null : Number(r.days_since),
+          get: r => {
+            if (r.days_since === null) return '<span class="muted">—</span>';
+            const d = Number(r.days_since);
+            const cls = d > 180 ? 'pill pill-lost' : d > 90 ? 'pill pill-dormant' : 'muted';
+            return `<span class="${cls}">${fmtNum(d)}d</span>`;
+          } }]),
+      ], {
+        // A contractor's copy has no Quiet column, so it cannot open sorted by
+        // it. Falling back to Last visit keeps the most recent work at the top
+        // without ranking anyone's neglect.
+        sort: isContractor(auth.profile) ? 'Last visit' : 'Quiet', dir: 'desc',
+        // Keyed on venue_id, never the name. `v_venue_performance` is one row
+        // per BRAND per venue, so a staff user sees the same venue several
+        // times over -- every one of those rows carries the same venue_id and
+        // opens the same account. A name would have been ambiguous the moment
+        // a chain arrived.
+        onRowClick: (r) => {
+          location.href = `venue.html?id=${encodeURIComponent(r.venue_id)}`;
+        },
+      });
+    }
+  </script>
+</body>
+</html>

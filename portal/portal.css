@@ -1,0 +1,369 @@
+/* ============================================================
+   Brand portal — page styles
+   Layers on css/site.css, which supplies the tokens, nav shell,
+   footer and mobile nav. Nothing here redefines a brand colour.
+   ============================================================ */
+
+/* ---------- the left rail ----------
+   The portal navigates from a sidebar, not the public site's top bar: the admin
+   nav is eight items and a horizontal bar stops working around six.
+
+   EVERY CLASS BELOW IS PORTAL-ONLY. `css/site.css` still owns `nav`,
+   `.nav-links`, `.hamburger` and `.mobile-nav` for index.html and gallery.html,
+   and none of it is touched here. renderShell() sets `.portal-sidebar` on the
+   <nav> element itself, which outranks site.css's bare `nav` selector. */
+
+:root { --rail: 232px; }
+
+.portal-sidebar {
+  position: fixed; top: 0; left: 0; z-index: 150;
+  width: var(--rail); height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--black-rich);
+  border-right: 1px solid var(--divider-dark);
+  border-bottom: none;                    /* site.css's `nav` sets one */
+  padding: 1.75rem 0 1.25rem;
+  transition: transform 0.25s ease;
+}
+
+.side-logo { display:flex; align-items:center; gap:0.7rem; text-decoration:none; padding:0 1.4rem 1.75rem; }
+.side-logo img { height:34px; width:34px; border-radius:50%; object-fit:cover; }
+.side-logo-text { font-family:'Cormorant Garamond',serif; font-size:1.3rem; font-weight:600; color:var(--white); letter-spacing:0.5px; }
+.side-logo-text span { color:var(--gold); }
+
+.side-scroll { flex:1; overflow-y:auto; padding-bottom:1rem; }
+.side-group-label {
+  font-size:0.62rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+  color:rgba(232,224,213,0.28); padding:1.1rem 1.4rem 0.5rem;
+}
+.side-group-label:first-child { padding-top:0; }
+.side-links { list-style:none; }
+.side-links a {
+  display:block; padding:0.62rem 1.4rem; text-decoration:none;
+  color:rgba(232,224,213,0.62); font-size:0.82rem; font-weight:500; letter-spacing:0.6px;
+  border-left:2px solid transparent; transition:color 0.2s, background 0.2s, border-color 0.2s;
+}
+.side-links a:hover { color:var(--white); background:rgba(255,255,255,0.03); }
+.side-links a.current { color:var(--gold); border-left-color:var(--gold); background:var(--gold-dim); }
+
+.side-foot { padding:1.1rem 1.4rem 0; border-top:1px solid var(--divider-dark); display:flex; flex-direction:column; align-items:flex-start; gap:0.35rem; }
+.side-who { font-size:0.68rem; color:var(--gold); letter-spacing:1.5px; text-transform:uppercase; font-weight:600; }
+.side-name { font-size:0.75rem; color:rgba(232,224,213,0.4); }
+.side-foot .link-btn { margin-top:0.4rem; }
+
+/* The mobile top bar. Hidden on desktop, where the rail is always out. */
+.portal-topbar {
+  display: none;
+  position: fixed; top:0; left:0; right:0; z-index:120; height:60px;
+  align-items: center; gap:0.9rem; padding:0 5%;
+  background: rgba(10,10,10,0.95); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--divider-dark);
+}
+.top-logo { display:flex; align-items:center; gap:0.6rem; text-decoration:none; }
+.top-logo img { height:30px; width:30px; border-radius:50%; object-fit:cover; }
+.side-toggle { display:flex; flex-direction:column; gap:5px; cursor:pointer; background:none; border:none; padding:6px 2px; }
+.side-toggle span { display:block; width:22px; height:1.5px; background:var(--white); }
+
+.portal-scrim { display:none; position:fixed; inset:0; z-index:140; background:rgba(8,8,8,0.6); }
+.portal-scrim.open { display:block; }
+
+.portal-main { margin-left: var(--rail); padding: 3.5rem 4% 5rem; min-height: 70vh; }
+.portal-footer { margin-left: var(--rail); }
+
+/* Page header */
+.portal-head { display:flex; align-items:flex-end; justify-content:space-between; gap:2rem; flex-wrap:wrap; margin-bottom:3rem; }
+.portal-head h1 { font-size:clamp(2rem,3.5vw,3rem); color:var(--white); font-weight:600; }
+.portal-eyebrow { font-size:0.7rem; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:var(--gold); display:block; margin-bottom:0.75rem; }
+.portal-sub { font-size:0.9rem; color:rgba(232,224,213,0.5); margin-top:0.6rem; }
+
+/* Stat cards */
+.stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--divider-dark); border:1px solid var(--divider-dark); border-radius:2px; overflow:hidden; margin-bottom:3.5rem; }
+.stat-card { background:var(--black-rich); padding:2rem 1.75rem; }
+.stat-card .num { font-family:'Cormorant Garamond',serif; font-size:3rem; font-weight:700; color:var(--gold); display:block; line-height:1; margin-bottom:0.5rem; }
+.stat-card .lbl { font-size:0.7rem; color:rgba(232,224,213,0.45); text-transform:uppercase; letter-spacing:1.5px; }
+.stat-card .meta { font-size:0.75rem; color:rgba(232,224,213,0.3); margin-top:0.5rem; }
+
+/* Panels */
+.panel { border:1px solid var(--divider-dark); border-radius:2px; overflow:hidden; margin-bottom:2.5rem; }
+.panel-head { padding:1.25rem 1.5rem; border-bottom:1px solid var(--divider-dark); display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.panel-head h2 { font-size:1.25rem; color:var(--white); font-weight:600; }
+.panel-head .hint { font-size:0.75rem; color:rgba(232,224,213,0.35); }
+
+/* Tables */
+.tbl { width:100%; border-collapse:collapse; font-size:0.875rem; }
+.tbl th { text-align:left; font-size:0.65rem; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:rgba(232,224,213,0.4); padding:0.9rem 1.5rem; border-bottom:1px solid var(--divider-dark); white-space:nowrap; }
+.tbl td { padding:0.9rem 1.5rem; border-bottom:1px solid rgba(255,255,255,0.04); color:rgba(232,224,213,0.75); vertical-align:top; }
+.tbl tr:last-child td { border-bottom:none; }
+.tbl tbody tr:hover { background:rgba(255,255,255,0.02); }
+.tbl .num { text-align:right; font-variant-numeric:tabular-nums; }
+.tbl .venue { color:var(--white); font-weight:500; }
+.tbl .muted { color:rgba(232,224,213,0.35); }
+.tbl-wrap { overflow-x:auto; }
+
+/* Pills */
+.pill { display:inline-block; font-size:0.65rem; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding:0.25rem 0.6rem; border-radius:2px; border:1px solid; white-space:nowrap; }
+.pill-placed     { color:#7BC98A; border-color:rgba(123,201,138,0.35); background:rgba(123,201,138,0.08); }
+.pill-reordering { color:#7BC98A; border-color:rgba(123,201,138,0.35); background:rgba(123,201,138,0.08); }
+.pill-pitched    { color:var(--gold); border-color:var(--gold-border); background:var(--gold-dim); }
+.pill-prospect   { color:rgba(232,224,213,0.5); border-color:var(--divider-dark); }
+.pill-dormant    { color:#C98A5A; border-color:rgba(201,138,90,0.35); background:rgba(201,138,90,0.08); }
+.pill-lost       { color:#B87070; border-color:rgba(184,112,112,0.3); }
+/* A negative figure on a stat card. Same red as `pill-lost`, so a loss reads
+   the same wherever it appears. */
+.neg             { color:#B87070; }
+
+/* Filters */
+.filters { display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center; }
+.filters select, .filters input {
+  background:rgba(255,255,255,0.05); border:1px solid var(--divider-dark); border-radius:2px;
+  padding:0.5rem 0.75rem; color:var(--white); font-family:'Inter',sans-serif; font-size:0.8rem; outline:none;
+}
+.filters select:focus, .filters input:focus { border-color:var(--gold); }
+.filters select option { background:var(--black-soft); }
+
+/* States */
+.state { padding:4rem 2rem; text-align:center; color:rgba(232,224,213,0.4); font-size:0.9rem; }
+.state strong { display:block; color:rgba(232,224,213,0.7); font-size:1.05rem; margin-bottom:0.5rem; font-family:'Cormorant Garamond',serif; }
+/* The affirmative counterpart of .err, same shape in the other direction.
+   Used by the reset flow, which needs to say "that worked" as clearly as the
+   rest of the portal says "that did not". */
+.ok { border:1px solid rgba(122,160,122,0.4); background:rgba(122,160,122,0.08); color:#9FC49F; padding:1rem 1.25rem; border-radius:2px; font-size:0.85rem; margin-bottom:1.5rem; }
+.err { border:1px solid rgba(184,112,112,0.4); background:rgba(184,112,112,0.08); color:#D89A9A; padding:1rem 1.25rem; border-radius:2px; font-size:0.85rem; margin-bottom:1.5rem; }
+
+/* Login */
+.login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:2rem; }
+.login-card { width:100%; max-width:400px; }
+.login-brand { text-align:center; margin-bottom:2.5rem; }
+.login-brand img { width:56px; height:56px; border-radius:50%; margin-bottom:1rem; }
+.login-brand .t { font-family:'Cormorant Garamond',serif; font-size:1.75rem; font-weight:600; color:var(--white); }
+.login-brand .t span { color:var(--gold); }
+.login-brand p { font-size:0.72rem; letter-spacing:2px; text-transform:uppercase; color:rgba(232,224,213,0.35); margin-top:0.5rem; }
+.login-form { background:var(--black-rich); border:1px solid var(--divider-dark); border-radius:2px; padding:2rem; }
+.fld { margin-bottom:1.25rem; display:flex; flex-direction:column; }
+.fld label { font-size:0.68rem; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:rgba(232,224,213,0.5); margin-bottom:0.5rem; }
+.fld input { background:rgba(255,255,255,0.05); border:1px solid var(--divider-dark); border-radius:2px; padding:0.85rem 1rem; color:var(--white); font-family:'Inter',sans-serif; font-size:0.9rem; outline:none; transition:border-color 0.2s; }
+.fld input:focus { border-color:var(--gold); }
+.btn-full { width:100%; background:var(--gold); color:var(--black); padding:0.9rem; border:none; border-radius:2px; font-weight:700; font-size:0.78rem; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:background 0.2s; font-family:'Inter',sans-serif; }
+.btn-full:hover:not(:disabled) { background:var(--gold-light); }
+.btn-full:disabled { opacity:0.5; cursor:not-allowed; }
+.login-note { text-align:center; font-size:0.75rem; color:rgba(232,224,213,0.3); margin-top:1.5rem; line-height:1.7; }
+
+/* Photos */
+.photo-group { margin-bottom:3rem; }
+.photo-group h3 { font-size:1.1rem; color:var(--white); margin-bottom:0.35rem; font-weight:600; }
+.photo-group .when { font-size:0.75rem; color:rgba(232,224,213,0.35); margin-bottom:1.25rem; }
+.photo-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; }
+.photo-item { position:relative; aspect-ratio:1/1; border-radius:4px; overflow:hidden; cursor:pointer; border:1px solid var(--divider-dark); transition:border-color 0.3s, transform 0.3s; }
+.photo-item:hover { border-color:var(--gold-border); transform:translateY(-3px); }
+.photo-item img { width:100%; height:100%; object-fit:cover; display:block; }
+
+/* Lightbox — same behaviour as the public gallery */
+.lightbox { display:none; position:fixed; inset:0; z-index:200; background:rgba(8,8,8,0.97); align-items:center; justify-content:center; padding:2rem; }
+.lightbox.open { display:flex; }
+.lightbox-content { max-width:1150px; width:100%; display:flex; flex-direction:column; align-items:center; }
+.lightbox-content img { max-width:100%; max-height:84vh; object-fit:contain; border-radius:2px; display:block; }
+.lightbox-cap { color:rgba(232,224,213,0.6); font-size:0.85rem; margin-top:1rem; text-align:center; }
+.lightbox-close, .lightbox-prev, .lightbox-next {
+  position:absolute; background:rgba(10,10,10,0.4); border:1px solid var(--divider-dark); color:var(--white);
+  border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:border-color 0.2s,color 0.2s; line-height:1;
+}
+.lightbox-close:hover, .lightbox-prev:hover, .lightbox-next:hover { border-color:var(--gold); color:var(--gold); }
+.lightbox-close { top:1.5rem; right:1.5rem; width:44px; height:44px; font-size:1.4rem; }
+.lightbox-prev, .lightbox-next { top:50%; transform:translateY(-50%); width:52px; height:52px; font-size:1.75rem; }
+.lightbox-prev { left:1.5rem; }
+.lightbox-next { right:1.5rem; }
+
+/* Nav extras */
+.nav-user { display:flex; align-items:center; gap:1rem; }
+.nav-user .who { font-size:0.72rem; color:rgba(232,224,213,0.4); letter-spacing:1px; text-transform:uppercase; }
+.link-btn { background:none; border:none; color:rgba(232,224,213,0.6); font-size:0.72rem; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; font-family:'Inter',sans-serif; padding:0; transition:color 0.2s; }
+.link-btn:hover { color:var(--gold); }
+
+@media (max-width:1100px) {
+  .stat-grid { grid-template-columns:repeat(2,1fr); }
+  .photo-grid { grid-template-columns:repeat(3,1fr); }
+
+  /* The rail becomes a drawer: same element, same links, slid off to the left
+     until the top bar's button pulls it out. */
+  .portal-sidebar { width:264px; transform:translateX(-100%); box-shadow:0 0 40px rgba(0,0,0,0.5); }
+  .portal-sidebar.open { transform:translateX(0); }
+  .portal-topbar { display:flex; }
+  .portal-main { margin-left:0; padding-top:calc(60px + 2.5rem); }
+  .portal-footer { margin-left:0; }
+}
+@media (max-width:768px) {
+  .portal-main { padding:calc(60px + 2rem) 5% 3rem; }
+  .stat-grid { grid-template-columns:1fr; }
+  .photo-grid { grid-template-columns:repeat(2,1fr); gap:0.75rem; }
+  .lightbox-prev { left:0.5rem; width:42px; height:42px; font-size:1.4rem; }
+  .lightbox-next { right:0.5rem; width:42px; height:42px; font-size:1.4rem; }
+  .lightbox-close { top:1rem; right:1rem; width:38px; height:38px; }
+}
+
+.tbl td.nowrap, .tbl th.nowrap { white-space: nowrap; }
+
+/* ---------- sortable / clickable tables ---------- */
+/* Added with the staff dashboard rebuild: months roll up across brands and
+   drill down into the activity log, so headers sort and rows navigate. */
+
+.tbl th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.tbl th.sortable:hover,
+.tbl th.sortable:focus-visible {
+  color: var(--gold);
+}
+.tbl th.sorted {
+  color: var(--gold);
+}
+.tbl tr.clickable {
+  cursor: pointer;
+}
+.tbl tr.clickable:hover {
+  background: rgba(197, 164, 106, 0.07);
+}
+/* Keyboard users must be able to see which header is focused. */
+.tbl th.sortable:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+/* A filter chip showing the drill-down currently applied, with a way out. */
+.filter-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.9rem;
+  border: 1px solid rgba(197, 164, 106, 0.4);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--gold);
+}
+.filter-note a {
+  color: inherit;
+  text-decoration: none;
+  border: 0;
+  padding: 0 0.45rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  opacity: 0.75;
+}
+.filter-note a:hover { opacity: 1; }
+
+/* ---------- per-photo caption ----------
+   The description used to live on the group heading only, so a tile said
+   nothing about itself. It is `v_brand_photos.summary` — NOT `photos.caption`,
+   which is deliberately left NULL because filling it from the HubSpot note body
+   would publish internal writing (D17/D24). */
+
+.photo-item .cap {
+  position:absolute; left:0; right:0; bottom:0; padding:1.75rem 0.7rem 0.55rem;
+  background:linear-gradient(to top, rgba(8,8,8,0.92), rgba(8,8,8,0));
+  font-size:0.68rem; line-height:1.35; color:rgba(232,224,213,0.9);
+  opacity:0; transition:opacity 0.25s; pointer-events:none;
+}
+.photo-item .cap b { display:block; color:var(--gold); font-weight:600; font-size:0.64rem; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:0.15rem; }
+.photo-item:hover .cap, .photo-item:focus-within .cap { opacity:1; }
+/* Touch has no hover, so the caption would never appear. Show it always. */
+@media (hover: none) { .photo-item .cap { opacity:1; } }
+
+.lightbox-cap a { color:var(--gold); text-decoration:none; border-bottom:1px solid var(--gold-border); }
+.lightbox-cap a:hover { border-bottom-color:var(--gold); }
+
+/* ---------- a "show more" foot under a bounded list ---------- */
+.more-wrap { text-align:center; padding:1rem 0 0; }
+.btn-more {
+  background:none; border:1px solid var(--gold-border); color:var(--gold);
+  padding:0.7rem 2rem; border-radius:2px; cursor:pointer;
+  font-family:'Inter',sans-serif; font-size:0.72rem; font-weight:700;
+  letter-spacing:1.5px; text-transform:uppercase; transition:background 0.2s,color 0.2s;
+}
+.btn-more:hover:not(:disabled) { background:var(--gold); color:var(--black); }
+.btn-more:disabled { opacity:0.45; cursor:default; }
+.more-count { display:block; font-size:0.72rem; color:rgba(232,224,213,0.3); margin-top:0.75rem; }
+
+/* ---------- detail page ---------- */
+.detail-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:1px; background:var(--divider-dark); border:1px solid var(--divider-dark); border-radius:2px; overflow:hidden; }
+.detail-grid .fact { background:var(--black-rich); padding:1.15rem 1.35rem; }
+.detail-grid .fact .k { display:block; font-size:0.62rem; letter-spacing:1.5px; text-transform:uppercase; color:rgba(232,224,213,0.35); margin-bottom:0.4rem; }
+.detail-grid .fact .v { font-size:1rem; color:var(--white); font-weight:500; overflow-wrap:anywhere; }
+
+.summary-box { padding:1.4rem 1.5rem; font-size:0.95rem; line-height:1.75; color:rgba(232,224,213,0.8); }
+
+/* A flag from v_activity_money, said in words. The three lie in different
+   directions and the direction is the useful part (D78/D90). */
+.note-flag { display:flex; gap:0.85rem; padding:1rem 1.35rem; border-bottom:1px solid var(--divider-dark); font-size:0.85rem; line-height:1.6; color:rgba(232,224,213,0.7); }
+.note-flag:last-child { border-bottom:none; }
+.note-flag b { color:var(--gold); font-weight:600; white-space:nowrap; }
+.note-flag.warn b { color:#C98A5A; }
+
+.crumb { font-size:0.78rem; color:rgba(232,224,213,0.4); margin-bottom:0.9rem; }
+.crumb a { color:var(--gold); text-decoration:none; }
+.crumb a:hover { text-decoration:underline; }
+
+.caveat { font-size:0.78rem; color:rgba(232,224,213,0.35); line-height:1.65; margin-top:0.9rem; }
+
+/* The reset link under the sign-in button. Portal-only, like every class in
+   this file -- css/site.css is shared with the public marketing site (D121). */
+.login-forgot {
+  margin: 0.9rem 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+}
+.login-forgot a {
+  color: var(--muted, #8a8f98);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.login-forgot a:hover,
+.login-forgot a:focus-visible {
+  color: var(--gold);
+  border-bottom-color: currentColor;
+}
+
+/* Continue with Google. Portal-only chrome, like every class in this file --
+   css/site.css is shared with the public marketing site (D121).
+   White with a dark label, because Google's brand guidance for the button is
+   specific and a gold-on-black version of it is not one of the options. */
+.btn-oauth {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  background: #fff;
+  color: #1f1f1f;
+  border: 1px solid #dadce0;
+  border-radius: 2px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-oauth:hover { background: #f7f8f8; }
+.btn-oauth:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.btn-oauth svg { flex: 0 0 auto; }
+
+.login-or {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+  color: var(--muted, #8a8f98);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.login-or::before,
+.login-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.12);
+}

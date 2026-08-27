@@ -1,2 +1,13 @@
 Photos/
 .claude/
+
+# Never let scripts or secrets reach the Netlify deploy from this repo.
+*.py
+.env
+.env.*
+credentials.json
+
+# Client invoices, contracts, anything scanned. The repo root IS the Netlify
+# publish directory, so a PDF dropped here is served at ihospitality.vip/<name>
+# the moment it is committed. `_redirects` cannot hide it (D12).
+*.pdf

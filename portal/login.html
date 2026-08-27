@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Sign In | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        <img src="../images/ih_logo.png" alt="iHospitality" width="444" height="394">
+        <div class="t">i<span>Hospitality</span></div>
+        <p>Brand Portal</p>
+      </div>
+
+      <div id="oauth" hidden>
+        <button type="button" class="btn-oauth" id="google">
+          <svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true">
+            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"/>
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
+          </svg>
+          <span>Continue with Google</span>
+        </button>
+        <div class="login-or"><span>or</span></div>
+      </div>
+
+      <form class="login-form" id="form">
+        <div id="msg"></div>
+        <div class="fld">
+          <label for="email">Email</label>
+          <input type="email" id="email" autocomplete="username" required>
+        </div>
+        <div class="fld">
+          <label for="password">Password</label>
+          <input type="password" id="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-full" id="submit">Sign In</button>
+        <p class="login-forgot">
+          <a href="#" id="forgot">Forgot your password?</a>
+        </p>
+      </form>
+
+      <p class="login-note">
+        Accounts are created by iHospitality — there is no self-signup.<br>
+        Need access? Email <a href="mailto:nick@ihospitality.vip" style="color:var(--gold)">nick@ihospitality.vip</a>
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { db, esc, AUTH_BASE, AUTH_KEY } from './portal.js';
+
+    const form = document.getElementById('form');
+    const submit = document.getElementById('submit');
+    const msg = document.getElementById('msg');
+
+    // Where to go after login — only ever a bare filename from our own nav, so
+    // a crafted ?next= cannot bounce someone to another site.
+    //
+    // EVERY PORTAL PAGE MUST BE LISTED HERE. A page left out is not blocked, it
+    // is silently redirected to the dashboard after signing in — which is how
+    // business.html behaved from the day it was written until 25 Aug 2026.
+    const ALLOWED = [
+      'index.html', 'activity.html', 'venues.html', 'venue.html', 'photos.html',
+      'brands.html', 'brand.html', 'activity-detail.html', 'business.html',
+      'rate-card.html', 'pay.html',
+      // The contractor portal (D137). A page left out of this list is NOT
+      // blocked -- it is silently redirected to the dashboard after a
+      // successful sign-in, with no error anywhere (D124).
+      'my-venues.html', 'my-pay.html', 'brands-info.html', 'training.html',
+    ];
+
+    // `next` may carry a query string (?slug=…, ?id=…) so a deep link survives
+    // the login. Only the FILENAME is matched against the allowlist; the rest is
+    // handed back untouched. It never leaves this origin — the value is used as
+    // a relative path, and a value containing '/' or ':' fails the match, so
+    // '//evil.com' and 'https://evil.com' both fall through to the dashboard.
+    const wanted = new URLSearchParams(location.search).get('next') || '';
+    const next = ALLOWED.includes(wanted.split('?')[0]) ? wanted : 'index.html';
+
+    // Already signed in? Skip the form. This is ALSO where a Google sign-in
+    // lands: the OAuth round trip comes back here with a session, and this line
+    // forwards it on to wherever the person was originally headed.
+    const { data: { session } } = await db.auth.getSession();
+    if (session) location.replace(next);
+
+    /* ---------- Continue with Google ----------
+       THE BUTTON IS NOT SHOWN UNLESS THE PROVIDER IS ACTUALLY ENABLED. GoTrue
+       publishes that at /auth/v1/settings, readable with the publishable key,
+       so this asks rather than assuming -- no provider list is written into
+       this page (D60). Enable Google in the Supabase dashboard and the button
+       appears on its own; a dead button that errors on click never exists.
+
+       WHAT STOPS A STRANGER. Not this page. Accounts are pre-created and
+       signups are disabled at the project level, so a Google account nobody has
+       created is REFUSED by GoTrue -- it never becomes a row. `hd` below only
+       narrows Google's own account chooser to the workspace; it is a hint to
+       Google, not a control, and must never be relied on as one.
+
+       Signing in with Google attaches that identity to the EXISTING account
+       with the same address, because Google's emails are verified. So the
+       account is still made once, in the admin, with its role and its mapping
+       -- exactly as before. */
+    try {
+      const res = await fetch(`${AUTH_BASE}/settings`, { headers: { apikey: AUTH_KEY } });
+      const settings = await res.json();
+      if (settings?.external?.google) document.getElementById('oauth').hidden = false;
+    } catch {
+      // Offline, or GoTrue unreachable. Leave the button hidden and let the
+      // password form carry the page; it is the one that works without a
+      // round trip anyway.
+    }
+
+    document.getElementById('google').addEventListener('click', async () => {
+      // Carry `next` through the OAuth round trip, so a deep link survives it
+      // the same way it survives a password sign-in.
+      const back = new URL('login.html', location.href);
+      if (wanted) back.searchParams.set('next', wanted);
+
+      const { error } = await db.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: back.href,
+          queryParams: { hd: 'ihospitality.vip', prompt: 'select_account' },
+        },
+      });
+      if (error) {
+        msg.innerHTML = `<div class="err">Google sign-in is not available right now. ${esc(error.message || '')}</div>`;
+      }
+    });
+
+    /* ---------- forgot password ----------
+       Sends a recovery link to the address in the Email field.
+
+       ⚠️ THE ANSWER IS THE SAME WHETHER OR NOT THE ACCOUNT EXISTS, on purpose.
+       Saying "no such account" turns this box into a way to test which client
+       email addresses are real -- the same reason the sign-in error above is
+       deliberately generic. Supabase does not distinguish either, and neither
+       does this.
+
+       `redirectTo` MUST be in Supabase's Redirect URLs allow-list, or the link
+       silently falls back to the Site URL and lands somewhere that cannot
+       handle it. Built from the current origin so the same page works on
+       localhost and on ihospitality.vip without a second build. */
+    document.getElementById('forgot').addEventListener('click', async (e) => {
+      e.preventDefault();
+      msg.innerHTML = '';
+      const email = document.getElementById('email').value.trim();
+      if (!email) {
+        msg.innerHTML = '<div class="err">Type your email address above first, then click again.</div>';
+        document.getElementById('email').focus();
+        return;
+      }
+
+      const redirectTo = new URL('reset.html', location.href).href;
+      await db.auth.resetPasswordForEmail(email, { redirectTo });
+
+      msg.innerHTML = `<div class="ok">If <strong>${esc(email)}</strong> has an
+        account, a reset link is on its way. It is single-use and expires, so
+        open it soon — and check the spam folder.</div>`;
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.innerHTML = '';
+      submit.disabled = true;
+      submit.textContent = 'Signing in…';
+
+      const { error } = await db.auth.signInWithPassword({
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value,
+      });
+
+      if (error) {
+        // Deliberately generic: distinguishing "no such account" from "wrong
+        // password" tells an attacker which client emails are real.
+        msg.innerHTML = `<div class="err">That email and password did not match. Please try again.</div>`;
+        submit.disabled = false;
+        submit.textContent = 'Sign In';
+        return;
+      }
+      location.replace(next);
+    });
+  </script>
+</body>
+</html>
