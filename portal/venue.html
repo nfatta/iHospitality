@@ -429,13 +429,10 @@
 
       sortableTable(document.getElementById('log'), log, cols, {
         sort: 'Date', dir: 'desc',
-        // activity-detail.html is the admin surface and shows charge, cost and
-        // margin, so a contractor is redirected off it (see STAFF_ONLY_PAGES).
-        // Rather than send them to a page that bounces them back to the
-        // dashboard, the rows simply do not open. Everything a contractor needs
-        // about an activity -- the note, who did it, what it earned -- is
-        // already on the row.
-        onRowClick: (contractor && !staff) ? null : (r) => {
+        // Everyone internal can open an activity now. The detail page shows
+        // the photos and the note to anyone internal and the money only to
+        // staff, so there is nothing left to redirect a contractor away from.
+        onRowClick: (r) => {
           location.href = `activity-detail.html?id=${encodeURIComponent(r.id)}`;
         },
       });
