@@ -144,6 +144,21 @@
 .filters select:focus, .filters input:focus { border-color:var(--gold); }
 .filters select option { background:var(--black-soft); }
 
+/* THE MONTH RANGE IS THE ONE FILTER WHOSE OPTIONS DO NOT SAY WHAT THEY ARE.
+   Every other control here names itself -- "All brands", "All markets",
+   "Search accounts…" -- but a month select reads "January", and two of them
+   side by side do not announce themselves as a range. Asked for on 28 Aug 2026.
+   The visible <span> is the accessible name too, so the `aria-label` that used
+   to sit on these selects is gone: it would override the label a sighted reader
+   sees, which is the one thing a label must never do. */
+.filters .filter-field { display:flex; flex-direction:column; gap:0.3rem; }
+/* 0.68rem matches `.fld label` on the login form -- the portal already has a
+   field-label size, and a second one two pixels smaller is just drift. */
+.filters .filter-field > span {
+  font-size:0.68rem; font-weight:600; letter-spacing:1.5px; text-transform:uppercase;
+  color:rgba(232,224,213,0.45);
+}
+
 /* States */
 .state { padding:4rem 2rem; text-align:center; color:rgba(232,224,213,0.4); font-size:0.9rem; }
 .state strong { display:block; color:rgba(232,224,213,0.7); font-size:1.05rem; margin-bottom:0.5rem; font-family:'Cormorant Garamond',serif; }
