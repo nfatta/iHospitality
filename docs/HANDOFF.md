@@ -1,6 +1,6 @@
 # HANDOFF — start here
 
-Written at the close of **27 Aug 2026**.
+Written at the close of **28 Aug 2026**.
 
 ## IT IS LIVE. THE PORTAL IS ON ihospitality.vip AND PEOPLE ARE SIGNING IN.
 
@@ -57,31 +57,21 @@ gallery rendered empty rather than erroring.
 
 ### Open, and none of it blocking
 
-0. ⚠️ **FIRST THING: TWO PRs ARE OPEN AND UNVERIFIED, AND D154's BUG IS LIVE
-   UNTIL THE FIRST ONE MERGES.**
+0. ✅ **NOTHING FROM 28 AUG IS OUTSTANDING.** D154, D155 and D156 are merged and
+   live on ihospitality.vip, and the operator verified each one on his own
+   screen before it shipped. Read them before touching the portal's pages —
+   all three were the WRONG SLICE of right data, which is the failure mode this
+   codebase actually has, and none of them would have been caught by a row count
+   or by the impersonation probe.
 
-   **#9 — the D154 fix.** `activity-detail.html` threw `ReferenceError: staff is
-   not defined` for ADMINS ONLY — the page rendered its heading and date and then
-   nothing, no facts, no money, no photos. Found on a phone at 1:47 am on 28 Aug.
-   Branch `claude/streamlit-dashboard-alternatives-r1i4x6`. The failure
-   reproduces in node before the change and not after. ⚠️ **`node --check` is NOT
-   evidence** — it passes on both versions, because a `ReferenceError` is a
-   runtime fault. Nothing proves it RENDERS.
+   ⚠️ **BUILD CREDITS ARE FINITE AND THE OPERATOR IS RATIONING THEM.** He hit 96%
+   of his weekly allowance on 28 Aug. Batch changes and spend ONE build: prove
+   what you can in node, verify against production data on `localhost:8123`
+   (the portal talks to the real Supabase from there, so it is not a lesser
+   test for a display change), and merge straight to `main` when the change
+   touches only `portal/` and `docs/`. Keep PR bases on `main` — retargeting one
+   onto a non-production branch stops Netlify building it at all.
 
-   **#10 — My pay and the month range (D155).** Branch `my-pay-base-line`,
-   **stacked on top of #9** so one deploy preview carries both; its base is #9's
-   branch and GitHub retargets it to `main` automatically once #9 merges. Merge
-   #9 first.
-
-   ⚠️ **BUILD CREDITS ARE FINITE, AND THE OPERATOR IS RATIONING THEM.** That is
-   why these are stacked on one preview rather than sitting on two, and why the
-   28 Aug work was proved in node and against a local server instead of by
-   pushing. Batch changes and spend one build, rather than pushing each fix.
-
-   **The whole outstanding task**: load the preview, sign in **as yourself**
-   (email and password — Google is not offered on a preview origin), click one
-   activity, and check My pay's one-line base, its clickable rows, and that the
-   range opens on January. Then merge #9, then #10.
 1. **SMTP is still Supabase's built-in mailer**, rate-limited per address. Fine
    for three people; needs a real provider before brands rely on password reset.
 2. **The test logins are still active** — `test-bluerun@example.com` and
@@ -128,10 +118,13 @@ endpoint the APPLICATION calls, not a convenient admin equivalent.
 
 ## THE NEXT PROMPT
 
-> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D137–D151** in `docs/DECISIONS.md`.
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D137–D156** in `docs/DECISIONS.md`.
 >
-> The portal is LIVE at ihospitality.vip and three people are using it. Nothing
-> below is urgent, so **ask me which I want before starting.**
+> The portal is LIVE and three people use it. Nothing below is urgent, so **ask
+> me which I want before starting.**
+>
+> ⚠️ **Build credits are rationed.** Prove what you can in node, verify against
+> production data on `localhost:8123`, and spend ONE build.
 >
 > **A — the reconciliation**, still 64 of 83 and untouched since 25 Aug. Start
 > with **Heaven's Door**: its commission ties exactly in both checked months, so
@@ -152,19 +145,23 @@ endpoint the APPLICATION calls, not a convenient admin equivalent.
 >
 > **D — V3, logging.** The big one. Contractors enter their own work and HubSpot
 > stops being the input — the direction D84 already points. **It reopens D61**,
-> which is the portal's read-only-by-construction guarantee, and that has to be
-> a deliberate decision rather than a side effect. Do not start it casually.
+> the read-only-by-construction guarantee, and that has to be a deliberate
+> decision rather than a side effect. **Read `docs/DATA_ACCESS_TIERS.md` first**;
+> nothing in it is decided, and the gate pattern should be settled before V3
+> rather than improvised during it.
 >
 > Whichever: the billing is the truth (D56), no hardcoded business data (D60),
 > base pay is never allocated to a brand in a view (D67), a reimbursement never
 > earns (D78), and reclassifying must not move money unless moving it is the
 > point (D93/D112).
 >
-> Before calling it done: **open every page AND every tab in a browser, and type
-> into anything that takes input** (D79/D89/D92). And if the report came from a
-> phone, **check the phone has the deploy before debugging it** (D150).
-
----
+> **Before calling it done — and this is the part that keeps failing:**
+> open every page AND every tab, and type into anything that takes input
+> (D79/D89/D92). **Open it as the role the change was NOT about** (D154) — a
+> guard that says "not you" can only be exercised by the role it lets through.
+> **`node --check` is not evidence** for a runtime fault; run the page module per
+> role with a control that fails on the old code. And **check the phone has the
+> deploy before debugging anything reported from one** (D150).
 
 ## ⚠️ SUPERSEDED — the 25 Aug opening. The five pages were committed on 26 Aug.
 

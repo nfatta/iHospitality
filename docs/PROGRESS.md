@@ -1671,3 +1671,67 @@ A phone reported the rail unscrollable and the icon stale. The rail was a real
 bug — `100vh` plus a flex item without `min-height: 0` — but the second report,
 and the persistence of the first, were **a stale service-worker cache** (D150).
 
+
+---
+
+## 28 Aug 2026 — three shipped to production, all of them display faults
+
+Nothing in the database changed. **The reconciliation still stands at 64 of 83.**
+Every one of the day's faults was the portal misrepresenting data that was
+correct underneath, and two of the three were reported by the operator rather
+than found by a check.
+
+| | |
+|---|---|
+| **D154** | `activity-detail.html` threw `ReferenceError: staff is not defined` **for admins only**. Heading and date rendered, then nothing. |
+| **D155** | My pay's base was a table saying one thing fifteen times; the range opened on a rolling year; the two month boxes were unlabelled. |
+| **D156** | The internal account list was one row per BRAND per venue. Big C Liquors listed five times, four rows dormant, on a bar visited 121 days ago. |
+
+### The pattern, and it is worth naming
+
+**All three were the wrong SLICE of right data.** D154 gated a money panel on a
+variable it could not see; D155 showed a per-month row for a figure that only
+changes on a raise; D156 showed a per-brand row for a question about a venue.
+None of them was a data error, none would have been caught by a row count, and
+the impersonation probe (D125) would have passed all three — it proves isolation
+and nothing about rendering.
+
+### What actually caught them
+
+**The operator, twice, on his own screen.** D154 came in from a phone at 1:47 am;
+D156 came from noticing Big C read dormant when he knew we had been there. That
+is the third and fourth time D79's rule — open the page — has been the only thing
+that worked.
+
+**And D154 sharpened it**: a guard that says "not you" can only be exercised by
+the role it lets through, which is the role nobody re-checks because the feature
+was not built for them. D153 was verified as a contractor, correctly and as a
+virtue, and that is exactly the branch that skipped the broken line.
+
+⚠️ **`node --check` is not evidence for this class of fault.** It passed on both
+the broken and the fixed `activity-detail.html`. What worked was running the page
+module against each role with a control that FAILS on the old code — the same
+shape as D114's rule for SQL, applied to a page.
+
+### Verified before shipping, not after
+
+D156 was proved against all **693 live rows**: folds to 340 matching the distinct
+venue count, activities, sales, reorders and units all conserved, every last-visit
+date equal to the venue-wide maximum, and **zero venues left falsely dormant**
+against 125 rows before. The status ruling was put to the operator with the number
+attached — 23 venues understated, every one of them — and he chose furthest-along.
+
+### One number changed meaning
+
+**"Stocking" went from 220 to 163.** It counted brand-venue relationships and now
+counts venues. Both are true; the internal page is asking "how many bars stock
+us", and a brand's copy of the page is untouched.
+
+### Process
+
+Netlify build credits are finite and the operator is rationing them. D155 was
+proved in node and against a local server rather than by pushing; D156 was
+verified by the operator **against production data on `localhost:8123`** and then
+merged straight to `main`, one build instead of three. ⚠️ **Retargeting a PR's
+base onto a non-production branch stops Netlify building it at all** — that cost
+a wasted push and a stale preview. Keep PR bases on `main`.
