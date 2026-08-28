@@ -57,16 +57,31 @@ gallery rendered empty rather than erroring.
 
 ### Open, and none of it blocking
 
-0. ⚠️ **FIRST THING: A FIX IS PUSHED AND UNVERIFIED, AND THE BUG IS LIVE**
-   (D154). `activity-detail.html` threw `ReferenceError: staff is not defined`
-   for ADMINS ONLY — the page rendered its heading and date and then nothing, no
-   facts, no money, no photos. Found on a phone at 1:47 am on 28 Aug. The fix is
-   on `claude/streamlit-dashboard-alternatives-r1i4x6`; it reproduces in node
-   before and not after, and every page module passes `node --check`. **Nothing
-   proves it RENDERS.** Open a PR, load the deploy preview, **click one activity
-   signed in as yourself**, and merge if the facts grid, the money panel and the
-   photos all come back. That is the whole outstanding task and it takes a
-   minute.
+0. ⚠️ **FIRST THING: TWO PRs ARE OPEN AND UNVERIFIED, AND D154's BUG IS LIVE
+   UNTIL THE FIRST ONE MERGES.**
+
+   **#9 — the D154 fix.** `activity-detail.html` threw `ReferenceError: staff is
+   not defined` for ADMINS ONLY — the page rendered its heading and date and then
+   nothing, no facts, no money, no photos. Found on a phone at 1:47 am on 28 Aug.
+   Branch `claude/streamlit-dashboard-alternatives-r1i4x6`. The failure
+   reproduces in node before the change and not after. ⚠️ **`node --check` is NOT
+   evidence** — it passes on both versions, because a `ReferenceError` is a
+   runtime fault. Nothing proves it RENDERS.
+
+   **#10 — My pay and the month range (D155).** Branch `my-pay-base-line`,
+   **stacked on top of #9** so one deploy preview carries both; its base is #9's
+   branch and GitHub retargets it to `main` automatically once #9 merges. Merge
+   #9 first.
+
+   ⚠️ **BUILD CREDITS ARE FINITE, AND THE OPERATOR IS RATIONING THEM.** That is
+   why these are stacked on one preview rather than sitting on two, and why the
+   28 Aug work was proved in node and against a local server instead of by
+   pushing. Batch changes and spend one build, rather than pushing each fix.
+
+   **The whole outstanding task**: load the preview, sign in **as yourself**
+   (email and password — Google is not offered on a preview origin), click one
+   activity, and check My pay's one-line base, its clickable rows, and that the
+   range opens on January. Then merge #9, then #10.
 1. **SMTP is still Supabase's built-in mailer**, rate-limited per address. Fine
    for three people; needs a real provider before brands rely on password reset.
 2. **The test logins are still active** — `test-bluerun@example.com` and

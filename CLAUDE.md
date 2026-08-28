@@ -278,6 +278,17 @@ reproduces it; keep it that way.
   screen to say so. A venue is SHARED — Levee Liquors holds 8 brands — so the
   query carries no brand filter and RLS scopes it; verify by impersonation, not
   by logging in (D125).
+- **THE MONTH RANGE OPENS ON YEAR TO DATE, AND ITS YEAR COMES FROM THE DATA, NOT
+  FROM `new Date()`** (D155). `monthRange()` is shared by `brand.html`,
+  `brands.html`, `business.html` and `my-pay.html`, so its default is four pages
+  at once. The year is taken from the NEWEST MONTH ON RECORD because the data
+  lags the calendar — a month is not complete until it is over and the invoices
+  land later still — so anchoring on today's date opens **every January on an
+  empty range**, and that failure arrives on a DATE rather than on a deploy.
+  Which months exist is a business fact and belongs in the query (D60). The two
+  selects are labelled **Start date / End date**, with no `aria-label`: a visible
+  label and an aria-label saying different things is the one thing a label must
+  never do.
 - **Anything saying "revenue" reads `v_brand_month_revenue` or `v_month_business`,
   NEVER `v_brand_money`.** The latter is activity charge only, and the retainer is
   about two-thirds of what iHospitality sells ($110,850 of $167,580) — sourcing

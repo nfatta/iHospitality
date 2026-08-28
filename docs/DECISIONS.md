@@ -6636,3 +6636,73 @@ someone clicks one activity as themselves, this is a fix that type-checks.
 being broken is itself proof the phone had the deploy — D150 read backwards, and
 worth remembering as the one case where the cache exonerates rather than
 accuses.
+
+
+---
+
+**D155 — MY PAY'S BASE IS A SENTENCE, THE RANGE OPENS ON YEAR TO DATE, AND THE
+TWO MONTH BOXES SAY WHICH IS WHICH.**
+Three operator asks, 28 Aug 2026, all on the same sitting.
+
+**A TABLE THAT SAYS ONE THING FIFTEEN TIMES IS NOT A TABLE.** `v_my_pay` returns
+one row per month, so My pay rendered fifteen identical rows — `$375.00`,
+`semimonthly`, `$812.50` — because **the base does not vary by month.** It varies
+only when it CHANGES, and a change is a new row with a later `effective_from`
+(D136), never an edit. So the only fact the table carried that a sentence cannot
+is a RISE, and the sentence names a rise when there is one. It sits under the
+stat cards now.
+
+**Dropping the table is not a licence to drop D130's sentence.** "Monthly
+equivalent is an annualised spread, not a payment" is what stops the figure
+reading as a bank balance, and it survives in full.
+
+**AND WHERE A RISE FALLS INSIDE THE RANGE, THE LINE SAYS WHICH MONTHS EACH RATE
+COVERS — NEVER WHEN IT STARTED.** The view is filtered to the chosen range, so
+the earliest month present is the earliest month ON SCREEN, which is not the
+`effective_from` unless the range happens to reach back that far. *"from June"*
+would be a claim about the raise; *"for June – December"* is only a claim about
+this table. The first would be wrong roughly whenever anyone narrows the range.
+
+**THE EARNED ROWS OPEN THE ACTIVITY**, the same `onRowClick` the venue page and
+the activity log already use. Anyone internal can open an activity (D153) and the
+detail page decides for itself what to show — photos and the internal note to
+anyone internal, the money to staff only — so there was nothing here to redirect
+a contractor away from. Guarded on the id, because a row with none would land on
+"Not found", which reads as a broken link rather than as a row with nowhere to go.
+
+**YEAR TO DATE, NOT A ROLLING TWELVE MONTHS** (`monthRange()`, so all four pages
+that carry the range: brand, brands, business, my-pay). A trailing year straddles
+two of them and answers neither *"how is this year going"* nor *"how did last
+year end"* — and the first is the question a page is usually opened with. This
+supersedes the opening range D131 left in place.
+
+⚠️ **THE YEAR COMES FROM THE NEWEST MONTH ON RECORD, NEVER FROM `new Date()`.**
+The data lags the calendar — a month is not complete until it is over and the
+invoices land later still — so anchoring on today's date would open **every
+January on an empty range**, on a portal with plenty in it, and the failure would
+arrive on a date rather than on a deploy. It also keeps the business fact (which
+months exist) in the query rather than compiled into the page, which is D60.
+
+**THE MONTH SELECTS WERE THE ONLY FILTER THAT DID NOT NAME ITSELF.** Every other
+control in `.filters` carries its own noun — "All brands", "All markets", "Search
+accounts…" — but a month select reads "January", and two side by side do not
+announce themselves as a range. They are "Start date" and "End date" now.
+
+**The `aria-label` came OFF rather than being left in place.** Three of these
+selects carried `aria-label="From month"`, which overrides the accessible name —
+so a screen reader would have said "From month" while the screen said "Start
+date". A visible label and an aria-label saying different things is the one thing
+a label must never do. The styling is in `portal.css`, never `site.css` (D121),
+and reuses `.fld label`'s size so the portal keeps one field-label style.
+
+**Proved without spending a deploy**, which was the constraint — Netlify build
+credits are finite and the operator asked for no new preview until everything was
+in. The real `monthRange` was run in node over seven month lists, including a
+newest-month-is-January edge that correctly opens Jan–Jan rather than empty; the
+page module was run across five cases (admin with a contractor mapping,
+contractor, admin with none, a rise in range, no base pay); every one of Eric's
+147 rows and all 80 of Nick's were checked to resolve in `v_brand_activity_log`
+by impersonation with `is_superuser = off` (D125), so no row is a dead link, and
+the two counts DIFFER, which is the control (D114). ⚠️ **Rendering is still not
+proved** — that needs the page opened, and D154 is why that sentence keeps
+appearing.
