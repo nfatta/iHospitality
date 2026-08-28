@@ -278,6 +278,18 @@ reproduces it; keep it that way.
   screen to say so. A venue is SHARED — Levee Liquors holds 8 brands — so the
   query carries no brand filter and RLS scopes it; verify by impersonation, not
   by logging in (D125).
+- **`v_venue_performance` IS ONE ROW PER BRAND PER VENUE, AND INTERNALLY THAT IS
+  THE WRONG GRAIN** (D156). It joins activities on `brand_id` as well as
+  `venue_id`, so every figure on a row is that BRAND's slice — which is right for
+  a brand and wrong for us. Big C Liquors listed five times with four rows saying
+  dormant, on a bar visited 121 days ago. `foldVenuesByVenue()` in `portal.js`
+  folds it to one row per venue for `is_internal()` callers only; a brand keeps
+  the per-brand grain. **Status is the FURTHEST any brand has reached**, never the
+  most recent one — the most-recent rule understated 23 venues and understated
+  every one. ⚠️ **Dormancy is BORROWED from the most recently visited row, never
+  recomputed**: the 180 days lives in `account_status_effective()` and a second
+  implementation in JavaScript is how the two come to disagree (D86). And note
+  "Stocking" now counts VENUES, not relationships — 220 became 163.
 - **THE MONTH RANGE OPENS ON YEAR TO DATE, AND ITS YEAR COMES FROM THE DATA, NOT
   FROM `new Date()`** (D155). `monthRange()` is shared by `brand.html`,
   `brands.html`, `business.html` and `my-pay.html`, so its default is four pages

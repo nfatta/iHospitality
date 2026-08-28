@@ -6706,3 +6706,66 @@ by impersonation with `is_superuser = off` (D125), so no row is a dead link, and
 the two counts DIFFER, which is the control (D114). ⚠️ **Rendering is still not
 proved** — that needs the page opened, and D154 is why that sentence keeps
 appearing.
+
+
+---
+
+**D156 — THE INTERNAL ACCOUNT LIST IS ONE ROW PER VENUE, NOT ONE PER BRAND, AND
+ITS STATUS IS THE FURTHEST ANY BRAND HAS REACHED.**
+⚠️ Reported by the operator, 28 Aug 2026: *"it says dormant since August of last
+year but we have had activities there since then… the dormant was with Dame Mas.
+So it seems like the brands is the initial filter then the venue. I want it the
+opposite."* He is right, and the fix is a display grain, not a data change.
+
+`v_venue_performance` joins activities on **`brand_id` AND `venue_id`**, so every
+figure on a row — activities, units, last visit, days quiet — is that brand's
+slice of that venue. **For a brand that is exactly right**: their row IS their
+relationship with that bar, and it must stay that way. Read internally it is
+wrong twice over.
+
+**BIG C LIQUORS APPEARS FIVE TIMES, AND FOUR OF THEM SAY DORMANT** — Aspen Green
+198 days, 44 North 226, Blue Run 255, Dame Mas 375 — while somebody was standing
+in that bar **121 days ago** for iHospitality. Across the estate: **693 rows for
+340 venues**, 142 venues listed more than once (Levee Liquors nine times), and
+**125 rows reading dormant for a venue visited inside the 180 days, over 49
+venues.**
+
+**STATUS IS THE FURTHEST ALONG, NOT THE MOST RECENT** (operator ruling, offered
+against the alternative). `my-venues.html` already folded to one row per venue
+and took the status from the most recently visited brand — which **understated 23
+venues and understated every single one of them**: Big C read `pitched` with two
+brands placed in it, The Office Cigar read `pitched` while it was reordering. A
+venue where we have placed product is a venue where we have placed product,
+whoever we happened to see last. 19 venues change status under the new rule, all
+upward, none down.
+
+⚠️ **DORMANCY IS BORROWED FROM POSTGRES, NEVER RECOMPUTED IN JAVASCRIPT.** The
+180 days lives in `account_status_effective()` and must stay in exactly one place
+(D86) — a second implementation in a page is precisely how the two come to
+disagree. `foldVenuesByVenue()` therefore does not know the number: it takes the
+MOST RECENTLY VISITED row, whose `days_since` already IS the venue-wide one, and
+asks whether Postgres called that row dormant. `lost` passes through for the same
+reason it does in SQL. `status_stored` stays the furthest-along STORED value so
+the counting cards still read what the trigger set (D87).
+
+**ONE DEFINITION, TWO CALLERS** — the fold moved out of `my-venues.html` into
+`portal.js`, the `promote.py` arrangement. Folding in the page rather than in a
+new view is deliberate: a venue-grain view aggregating every brand would need a
+`security definer` gate whose `where` clause is the entire boundary (D137), and
+RLS already delivers exactly the right rows to each caller. **No schema change,
+no new grant, no new way to leak one brand's activity to another.**
+
+⚠️ **"STOCKING" NOW COUNTS VENUES, NOT RELATIONSHIPS: 220 becomes 163.** Both
+numbers are true and they answer different questions. The card is on the internal
+list, where "how many bars stock us" is the question being asked; a brand's copy
+of the page is untouched and still counts their own relationships.
+
+**Proved against all 693 live rows**, not a fixture: 693 folds to 340, matching
+the distinct venue count exactly; activities (1,141), first-case sales (168),
+reorders (63) and units (442.16) are all conserved through the fold; every one of
+the 340 `last_touched` values equals the venue-wide maximum; and **zero venues
+remain dormant that were visited inside 180 days**, against 125 rows before. Both
+pages were then run across staff, contractor and brand — the brand user still
+gets 59 unfolded rows at brand grain with "Stocking your brand", and the
+contractor still has no Quiet column (D138). ⚠️ Rendering is not proved; that
+needs the page opened.

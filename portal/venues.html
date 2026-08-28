@@ -51,11 +51,20 @@
 
   <script type="module">
     import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum,
-             sortableTable, fillSelect, isContractor } from './portal.js';
+             sortableTable, fillSelect, isContractor, isStaff,
+             foldVenuesByVenue } from './portal.js';
 
     const STATUS_ORDER = ['reordering', 'placed', 'pitched', 'prospect', 'dormant', 'lost'];
 
     const auth = await requireAuth();
+
+    // ⚠️ DECLARED AT TOP LEVEL, BESIDE `auth`, AND DELIBERATELY NOT INSIDE THE
+    // `if (auth)` BLOCK. `buildFilters()`, `renderStats()` and `draw()` are
+    // function declarations OUTSIDE that block, so a `const` inside it is not on
+    // their scope chain and reading it throws `ReferenceError` at call time --
+    // which is D154, three days old, on this same family of pages.
+    const internal = !!auth && (isStaff(auth.profile) || isContractor(auth.profile));
+
     if (auth) {
       renderShell('venues.html', auth.profile);
 
@@ -94,12 +103,21 @@
           title: 'No venues yet',
           body: 'Venues we place your brand into will appear here.' } });
       } else {
-        buildFilters(data);
-        renderStats(data);
+        // ONE ROW PER VENUE FOR US, ONE ROW PER RELATIONSHIP FOR THEM.
+        // Operator ruling, 28 Aug 2026: "I don't need 1 venue showing up 4
+        // different times, one for each brand." The view's grain is brand x
+        // venue, which is exactly right for a brand -- their row IS their
+        // relationship with that bar -- and wrong for us, because every figure
+        // on it is one brand's slice. Big C Liquors listed five times, four of
+        // them dormant, on a venue visited 121 days ago. See foldVenuesByVenue.
+        const rows = internal ? foldVenuesByVenue(data) : data;
+
+        buildFilters(rows);
+        renderStats(rows);
         ['f-search', 'f-status', 'f-city', 'f-brand'].forEach(id =>
-          document.getElementById(id).addEventListener('input', () => draw(data)));
-        document.getElementById('count').textContent = `${fmtNum(data.length)} accounts on record`;
-        draw(data);
+          document.getElementById(id).addEventListener('input', () => draw(rows)));
+        document.getElementById('count').textContent = `${fmtNum(rows.length)} accounts on record`;
+        draw(rows);
       }
     }
 
@@ -115,7 +133,12 @@
       fillSelect('f-city', cities.map(c => [c, c]));
 
       // Hidden automatically for a brand user, who only ever has one brand.
-      const brands = [...new Set(rows.map(r => r.brand_name).filter(Boolean))].sort();
+      // Folded rows carry a `brands` SET instead of one name, so the picker is
+      // built from the union and the filter below tests membership: it still
+      // answers "which accounts do we carry Blue Run in", which is worth
+      // keeping, without putting the bar back on the list five times.
+      const brands = [...new Set(rows.flatMap(r =>
+        r.brands ? [...r.brands] : [r.brand_name]).filter(Boolean))].sort();
       fillSelect('f-brand', brands.map(b => [b, b]));
     }
 
@@ -154,7 +177,7 @@
         <div class="stat-card"><span class="num">${fmtNum(rows.length)}</span>
           <span class="lbl">Total accounts</span></div>
         <div class="stat-card"><span class="num">${fmtNum(placed)}</span>
-          <span class="lbl">${contractor ? 'Stocking' : 'Stocking your brand'}</span>
+          <span class="lbl">${internal ? 'Stocking' : 'Stocking your brand'}</span>
           <div class="meta">placed or reordering</div></div>
         <div class="stat-card"><span class="num">${fmtNum(counts.pitched || 0)}</span>
           <span class="lbl">Pitched</span>
@@ -174,7 +197,7 @@
       const filtered = rows.filter(r =>
         (!status || r.status === status) &&
         (!city || r.city === city) &&
-        (!brand || r.brand_name === brand) &&
+        (!brand || (r.brands ? r.brands.has(brand) : r.brand_name === brand)) &&
         (!q || (r.venue_name || '').toLowerCase().includes(q) ||
                (r.city || '').toLowerCase().includes(q)));
 
@@ -191,6 +214,14 @@
       }
 
       const multiBrand = new Set(filtered.map(r => r.brand_name)).size > 1;
+      // Folded, "Brand" is not a single name any more. The count is what is
+      // true of the row; WHICH brands is on the venue page, one line each.
+      const brandCol = internal
+        ? [{ head: 'Brands', cls: 'num', value: r => Number(r.brand_count || 0),
+             get: r => Number(r.brand_count) ? fmtNum(r.brand_count)
+                                             : '<span class="muted">—</span>' }]
+        : (multiBrand ? [{ head: 'Brand', value: r => r.brand_name,
+             get: r => esc(r.brand_name || '—') }] : []);
 
       // Columns with nothing in them anywhere are dropped — see sortableTable()
       // in portal.js. That is doing real work on the Reorders column: reorders
@@ -201,8 +232,7 @@
       sortableTable(el, filtered, [
         { head: 'Venue', always: true, cls: 'venue',
           value: r => r.venue_name, get: r => esc(r.venue_name) },
-        ...(multiBrand ? [{ head: 'Brand', value: r => r.brand_name,
-          get: r => esc(r.brand_name || '—') }] : []),
+        ...brandCol,
         { head: 'City', value: r => r.city,
           get: r => r.city ? esc(r.city) : '<span class="muted">—</span>' },
         { head: 'Status', always: true, value: r => r.status,
