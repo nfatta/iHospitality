@@ -405,6 +405,83 @@ export function param(name) {
  * `months` is a sorted-descending array of 'YYYY-MM'. Calls `onChange(from, to)`
  * once immediately and again on every change.
  */
+/**
+ * Fold `v_venue_performance` from one row per BRAND PER VENUE to one row per
+ * VENUE. For the INTERNAL surfaces only — a brand user must keep the per-brand
+ * grain, because their row is their relationship with that bar and nothing else.
+ *
+ * WHY: the view joins activities on `brand_id` as well as `venue_id`, so every
+ * figure on it — activities, units, last visit, days quiet — is that BRAND's
+ * slice of the venue. Read internally that is wrong twice over. Big C Liquors
+ * appears FIVE times, and four of those rows say "dormant" while someone was
+ * standing in the bar 121 days ago for a different brand. Across the estate:
+ * 693 rows for 340 venues, 142 venues listed more than once, and 125 rows
+ * reading dormant for a venue visited inside the 180 days, over 49 venues.
+ *
+ * ⚠️ STATUS IS THE FURTHEST ANY BRAND HAS REACHED, NOT THE MOST RECENT ONE.
+ * Operator ruling, 28 Aug 2026. Taking it from the most recently visited brand
+ * — which is what my-venues.html did — understated 23 venues and understated
+ * EVERY ONE of them: Big C read `pitched` with two brands placed there, and The
+ * Office Cigar read `pitched` while it was reordering. A venue where we have
+ * placed product is a venue where we have placed product, whoever we saw last.
+ *
+ * ⚠️ AND DORMANCY IS BORROWED, NEVER RECOMPUTED. The 180 days lives in
+ * `account_status_effective()` in Postgres and must stay in exactly one place
+ * (D86) — a second implementation here is how the two come to disagree. So this
+ * does not know the number: it takes the MOST RECENTLY VISITED row, whose
+ * `days_since` already IS the venue-wide one, and asks whether Postgres called
+ * that row dormant. If it did, the venue is dormant; otherwise the venue shows
+ * the furthest-along stored status. `lost` passes through the same way it does
+ * in SQL, because a row a person marked lost never reads as dormant there.
+ *
+ * `status_stored` stays the furthest-along STORED value, so the counting cards
+ * keep reading what the trigger set rather than the derived status (D87).
+ */
+const STATUS_RANK = { lost: 0, prospect: 1, pitched: 2, placed: 3, reordering: 4 };
+
+export function foldVenuesByVenue(rows) {
+  const byVenue = new Map();
+  for (const r of rows) {
+    let v = byVenue.get(r.venue_id);
+    if (!v) {
+      v = { ...r, brands: new Set(), activities: 0, initial_sales: 0,
+            reorders: 0, units_moved: 0, first_touched: null, last_touched: null,
+            days_since: null, _recent: null, status_stored: null };
+      byVenue.set(r.venue_id, v);
+    }
+    if (r.brand_name) v.brands.add(r.brand_name);
+    v.activities    += Number(r.activities || 0);
+    v.initial_sales += Number(r.initial_sales || 0);
+    v.reorders      += Number(r.reorders || 0);
+    v.units_moved   += Number(r.units_moved || 0);
+
+    if (r.first_touched && (!v.first_touched || r.first_touched < v.first_touched)) {
+      v.first_touched = r.first_touched;
+    }
+    // The most recently visited brand row carries the venue's own recency, and
+    // with it Postgres's own dormancy verdict for that number.
+    if (r.last_touched && (!v.last_touched || r.last_touched > v.last_touched)) {
+      v.last_touched = r.last_touched;
+      v.days_since = r.days_since;
+      v._recent = r;
+    }
+    // Furthest along wins, across every brand — visited or not.
+    if (v.status_stored === null
+        || (STATUS_RANK[r.status_stored] ?? -1) > (STATUS_RANK[v.status_stored] ?? -1)) {
+      v.status_stored = r.status_stored;
+    }
+  }
+
+  return [...byVenue.values()].map(v => {
+    const dormant = v._recent && v._recent.status === 'dormant';
+    const { _recent, ...rest } = v;
+    return { ...rest,
+      status: dormant ? 'dormant' : v.status_stored,
+      brand_count: v.brands.size,
+      units_moved: Math.round(v.units_moved * 100) / 100 };
+  });
+}
+
 export function monthRange(fromId, toId, months, onChange) {
   const from = document.getElementById(fromId);
   const to = document.getElementById(toId);

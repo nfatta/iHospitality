@@ -50,7 +50,8 @@
 
   <script type="module">
     import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum,
-             sortableTable, fillSelect, isContractor, isStaff } from './portal.js';
+             sortableTable, fillSelect, isContractor, isStaff,
+             foldVenuesByVenue } from './portal.js';
 
     const STATUS_ORDER = ['reordering', 'placed', 'pitched', 'prospect', 'dormant', 'lost'];
 
@@ -111,32 +112,15 @@
           .select('*').in('venue_id', ids);
         if (error) return render(document.getElementById('list'), { error });
 
-        const byVenue = new Map();
-        for (const r of data) {
-          const cur = byVenue.get(r.venue_id);
-          if (!cur) {
-            byVenue.set(r.venue_id, {
-              ...r, brands: new Set([r.brand_name]), grade: grades[r.venue_id],
-              activities: Number(r.activities || 0),
-              initial_sales: Number(r.initial_sales || 0),
-              reorders: Number(r.reorders || 0),
-              units_moved: Number(r.units_moved || 0),
-            });
-          } else {
-            cur.brands.add(r.brand_name);
-            cur.activities += Number(r.activities || 0);
-            cur.initial_sales += Number(r.initial_sales || 0);
-            cur.reorders += Number(r.reorders || 0);
-            cur.units_moved += Number(r.units_moved || 0);
-            if ((r.last_touched || '') > (cur.last_touched || '')) {
-              cur.last_touched = r.last_touched;
-              cur.days_since = r.days_since;
-              cur.status = r.status;
-              cur.status_stored = r.status_stored;
-            }
-          }
-        }
-        const rows = [...byVenue.values()].map(r => ({ ...r, brand_count: r.brands.size }));
+        // The fold moved into portal.js on 28 Aug 2026 so this page and
+        // venues.html cannot drift -- the promote.py arrangement, one definition
+        // and two callers. It also CORRECTS this page: the version that lived
+        // here took the status from the most recently visited brand, which
+        // understated 23 venues and understated every one of them. Big C read
+        // `pitched` with two brands placed in it. It is the furthest any brand
+        // has reached now (D156).
+        const rows = foldVenuesByVenue(data)
+          .map(r => ({ ...r, grade: grades[r.venue_id] }));
 
         buildFilters(rows);
         renderStats(rows);
