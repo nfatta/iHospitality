@@ -57,6 +57,16 @@ gallery rendered empty rather than erroring.
 
 ### Open, and none of it blocking
 
+0. ⚠️ **FIRST THING: A FIX IS PUSHED AND UNVERIFIED, AND THE BUG IS LIVE**
+   (D154). `activity-detail.html` threw `ReferenceError: staff is not defined`
+   for ADMINS ONLY — the page rendered its heading and date and then nothing, no
+   facts, no money, no photos. Found on a phone at 1:47 am on 28 Aug. The fix is
+   on `claude/streamlit-dashboard-alternatives-r1i4x6`; it reproduces in node
+   before and not after, and every page module passes `node --check`. **Nothing
+   proves it RENDERS.** Open a PR, load the deploy preview, **click one activity
+   signed in as yourself**, and merge if the facts grid, the money panel and the
+   photos all come back. That is the whole outstanding task and it takes a
+   minute.
 1. **SMTP is still Supabase's built-in mailer**, rate-limited per address. Fine
    for three people; needs a real provider before brands rely on password reset.
 2. **The test logins are still active** — `test-bluerun@example.com` and

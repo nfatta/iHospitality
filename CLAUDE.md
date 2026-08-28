@@ -500,6 +500,13 @@ reproduces it; keep it that way.
   the impersonated counts DIFFER from the service_role baseline, or the check
   cannot fail and proves nothing (D114). It covers isolation completely and
   rendering not at all.
+- **AND OPEN IT AS THE ROLE THE CHANGE WAS *NOT* ABOUT** (D154). A guard that
+  says "not you" can never be exercised by the role it excludes, so the only
+  eyes that can catch a fault in it belong to the role nobody re-checks —
+  the feature was not for them. D153 was built for a contractor, verified as a
+  contractor, and shipped a `ReferenceError` that fired **for admins only**,
+  blanking the activity page for both of them. The page kept its heading and
+  date, so it read as half-loaded rather than broken.
 - **Open every admin page — AND EVERY TAB — in a browser before calling a
   session done** (D79, D89). **This covers the brand portal's pages too.** And
   where a page takes input, TYPE IN IT (D92) — opening a page is not using it.

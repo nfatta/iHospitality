@@ -6575,3 +6575,64 @@ D137 sweep and the impersonation probe, both of which counted rows.
 Verified as a contractor rather than as staff: two photos load, the internal
 note and "Done by" render, "You earned" shows, and no money panel appears.
 
+
+---
+
+**D154 — A GUARD ADDED TO PROTECT ONE ROLE CAN ONLY BE TESTED BY THE ROLE IT
+DOES NOT PROTECT. D153'S OWN GUARD BROKE THE PAGE FOR ADMINS ONLY.**
+⚠️ found by the operator on a phone, 28 Aug 2026, 1:47 am: *"When I click on the
+activities I don't see the details. Before I could see the details and any pics
+attached."* Fixed the same night; **not yet verified in a browser.**
+
+`flags()` reads `staff`. `staff` is declared `const` inside the `else` block
+that renders the row; the function is declared OUTSIDE that block. **`staff` is
+therefore not on its scope chain**, and the call threw
+`ReferenceError: staff is not defined`.
+
+**IT THREW WHILE BUILDING `moneyPanel`, WHICH IS COMPUTED BEFORE
+`el.innerHTML`** — so the entire body was lost and `drawPhotos()` never ran. The
+heading, breadcrumb, venue name and date are set earlier, which is why the
+screenshot showed a page that looked half-finished rather than broken: title,
+`Jun 26, 2026 · Aspen Green Fresh Market Incentive`, then nothing at all above
+the footer.
+
+**THE LINE THAT THREW WAS THE ONE PROTECTING CONTRACTORS.** `if (!staff) return
+out;` was added in D153 so a contractor is not shown rate-card warnings they
+cannot verify (`unpriced` reads TRUE for them because `rate_card` is invisible).
+That guard is correct and stays. It was simply written where **only staff ever
+execute it** — `flags(m)` is called from inside the `moneyPanel` template, and
+D153 had just changed `hasMoney` to `staff && (…)`, so a brand or a contractor
+never evaluates the call at all.
+
+**The operator's own first theory was the right instinct, inverted.** He asked
+whether "I don't want contractors to see other people's details" had been
+applied to everything. Nothing leaked: RLS was never involved, every row arrived,
+and Eric's page was fine throughout. The contractor protection did not spread to
+everyone — **it landed in the one branch it was not meant for.**
+
+**AND THIS IS WHY D153 DID NOT CATCH IT.** Its commit message says, correctly and
+as a virtue, *"Verified as a contractor rather than as staff."* That is exactly
+the branch that skips this line. **A guard that says "not you" can never be
+exercised by the role it excludes** — the only way to test it is to be the role
+it lets through, which is the role nobody thinks to re-check because the feature
+was not for them. D79 already says open every page; this sharpens it:
+**open it as the role the change was NOT about.**
+
+Fixed by making `staff` a parameter — `flags(m, staff)` — with the trap written
+beside it. The early exit now returns `''` rather than `out`; every other exit
+from the function returns a string, and the array only ever worked because
+`${[]}` interpolates to empty.
+
+**Proved, and the limits of the proof stated.** The failure reproduces in node
+before the change and does not after; both touched page modules pass
+`node --check`; and a scan of every portal page finds no other function
+declaration reading `staff` from outside its block — `activity-detail.html` was
+the only one, and `venue.html` declares its `staff` at the top of the auth block
+where it belongs. ⚠️ **Rendering is NOT proved.** That needs the page opened as
+an ADMIN on the deploy preview, and no login was created to do it (D125). Until
+someone clicks one activity as themselves, this is a fix that type-checks.
+
+**A stale service worker would have served the OLD file, which worked.** The page
+being broken is itself proof the phone had the deploy — D150 read backwards, and
+worth remembering as the one case where the cache exonerates rather than
+accuses.
