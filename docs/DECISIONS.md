@@ -6575,3 +6575,134 @@ D137 sweep and the impersonation probe, both of which counted rows.
 Verified as a contractor rather than as staff: two photos load, the internal
 note and "Done by" render, "You earned" shows, and no money panel appears.
 
+
+---
+
+**D154 — A GUARD ADDED TO PROTECT ONE ROLE CAN ONLY BE TESTED BY THE ROLE IT
+DOES NOT PROTECT. D153'S OWN GUARD BROKE THE PAGE FOR ADMINS ONLY.**
+⚠️ found by the operator on a phone, 28 Aug 2026, 1:47 am: *"When I click on the
+activities I don't see the details. Before I could see the details and any pics
+attached."* Fixed the same night; **not yet verified in a browser.**
+
+`flags()` reads `staff`. `staff` is declared `const` inside the `else` block
+that renders the row; the function is declared OUTSIDE that block. **`staff` is
+therefore not on its scope chain**, and the call threw
+`ReferenceError: staff is not defined`.
+
+**IT THREW WHILE BUILDING `moneyPanel`, WHICH IS COMPUTED BEFORE
+`el.innerHTML`** — so the entire body was lost and `drawPhotos()` never ran. The
+heading, breadcrumb, venue name and date are set earlier, which is why the
+screenshot showed a page that looked half-finished rather than broken: title,
+`Jun 26, 2026 · Aspen Green Fresh Market Incentive`, then nothing at all above
+the footer.
+
+**THE LINE THAT THREW WAS THE ONE PROTECTING CONTRACTORS.** `if (!staff) return
+out;` was added in D153 so a contractor is not shown rate-card warnings they
+cannot verify (`unpriced` reads TRUE for them because `rate_card` is invisible).
+That guard is correct and stays. It was simply written where **only staff ever
+execute it** — `flags(m)` is called from inside the `moneyPanel` template, and
+D153 had just changed `hasMoney` to `staff && (…)`, so a brand or a contractor
+never evaluates the call at all.
+
+**The operator's own first theory was the right instinct, inverted.** He asked
+whether "I don't want contractors to see other people's details" had been
+applied to everything. Nothing leaked: RLS was never involved, every row arrived,
+and Eric's page was fine throughout. The contractor protection did not spread to
+everyone — **it landed in the one branch it was not meant for.**
+
+**AND THIS IS WHY D153 DID NOT CATCH IT.** Its commit message says, correctly and
+as a virtue, *"Verified as a contractor rather than as staff."* That is exactly
+the branch that skips this line. **A guard that says "not you" can never be
+exercised by the role it excludes** — the only way to test it is to be the role
+it lets through, which is the role nobody thinks to re-check because the feature
+was not for them. D79 already says open every page; this sharpens it:
+**open it as the role the change was NOT about.**
+
+Fixed by making `staff` a parameter — `flags(m, staff)` — with the trap written
+beside it. The early exit now returns `''` rather than `out`; every other exit
+from the function returns a string, and the array only ever worked because
+`${[]}` interpolates to empty.
+
+**Proved, and the limits of the proof stated.** The failure reproduces in node
+before the change and does not after; both touched page modules pass
+`node --check`; and a scan of every portal page finds no other function
+declaration reading `staff` from outside its block — `activity-detail.html` was
+the only one, and `venue.html` declares its `staff` at the top of the auth block
+where it belongs. ⚠️ **Rendering is NOT proved.** That needs the page opened as
+an ADMIN on the deploy preview, and no login was created to do it (D125). Until
+someone clicks one activity as themselves, this is a fix that type-checks.
+
+**A stale service worker would have served the OLD file, which worked.** The page
+being broken is itself proof the phone had the deploy — D150 read backwards, and
+worth remembering as the one case where the cache exonerates rather than
+accuses.
+
+
+---
+
+**D155 — MY PAY'S BASE IS A SENTENCE, THE RANGE OPENS ON YEAR TO DATE, AND THE
+TWO MONTH BOXES SAY WHICH IS WHICH.**
+Three operator asks, 28 Aug 2026, all on the same sitting.
+
+**A TABLE THAT SAYS ONE THING FIFTEEN TIMES IS NOT A TABLE.** `v_my_pay` returns
+one row per month, so My pay rendered fifteen identical rows — `$375.00`,
+`semimonthly`, `$812.50` — because **the base does not vary by month.** It varies
+only when it CHANGES, and a change is a new row with a later `effective_from`
+(D136), never an edit. So the only fact the table carried that a sentence cannot
+is a RISE, and the sentence names a rise when there is one. It sits under the
+stat cards now.
+
+**Dropping the table is not a licence to drop D130's sentence.** "Monthly
+equivalent is an annualised spread, not a payment" is what stops the figure
+reading as a bank balance, and it survives in full.
+
+**AND WHERE A RISE FALLS INSIDE THE RANGE, THE LINE SAYS WHICH MONTHS EACH RATE
+COVERS — NEVER WHEN IT STARTED.** The view is filtered to the chosen range, so
+the earliest month present is the earliest month ON SCREEN, which is not the
+`effective_from` unless the range happens to reach back that far. *"from June"*
+would be a claim about the raise; *"for June – December"* is only a claim about
+this table. The first would be wrong roughly whenever anyone narrows the range.
+
+**THE EARNED ROWS OPEN THE ACTIVITY**, the same `onRowClick` the venue page and
+the activity log already use. Anyone internal can open an activity (D153) and the
+detail page decides for itself what to show — photos and the internal note to
+anyone internal, the money to staff only — so there was nothing here to redirect
+a contractor away from. Guarded on the id, because a row with none would land on
+"Not found", which reads as a broken link rather than as a row with nowhere to go.
+
+**YEAR TO DATE, NOT A ROLLING TWELVE MONTHS** (`monthRange()`, so all four pages
+that carry the range: brand, brands, business, my-pay). A trailing year straddles
+two of them and answers neither *"how is this year going"* nor *"how did last
+year end"* — and the first is the question a page is usually opened with. This
+supersedes the opening range D131 left in place.
+
+⚠️ **THE YEAR COMES FROM THE NEWEST MONTH ON RECORD, NEVER FROM `new Date()`.**
+The data lags the calendar — a month is not complete until it is over and the
+invoices land later still — so anchoring on today's date would open **every
+January on an empty range**, on a portal with plenty in it, and the failure would
+arrive on a date rather than on a deploy. It also keeps the business fact (which
+months exist) in the query rather than compiled into the page, which is D60.
+
+**THE MONTH SELECTS WERE THE ONLY FILTER THAT DID NOT NAME ITSELF.** Every other
+control in `.filters` carries its own noun — "All brands", "All markets", "Search
+accounts…" — but a month select reads "January", and two side by side do not
+announce themselves as a range. They are "Start date" and "End date" now.
+
+**The `aria-label` came OFF rather than being left in place.** Three of these
+selects carried `aria-label="From month"`, which overrides the accessible name —
+so a screen reader would have said "From month" while the screen said "Start
+date". A visible label and an aria-label saying different things is the one thing
+a label must never do. The styling is in `portal.css`, never `site.css` (D121),
+and reuses `.fld label`'s size so the portal keeps one field-label style.
+
+**Proved without spending a deploy**, which was the constraint — Netlify build
+credits are finite and the operator asked for no new preview until everything was
+in. The real `monthRange` was run in node over seven month lists, including a
+newest-month-is-January edge that correctly opens Jan–Jan rather than empty; the
+page module was run across five cases (admin with a contractor mapping,
+contractor, admin with none, a rise in range, no base pay); every one of Eric's
+147 rows and all 80 of Nick's were checked to resolve in `v_brand_activity_log`
+by impersonation with `is_superuser = off` (D125), so no row is a dead link, and
+the two counts DIFFER, which is the control (D114). ⚠️ **Rendering is still not
+proved** — that needs the page opened, and D154 is why that sentence keeps
+appearing.

@@ -278,6 +278,17 @@ reproduces it; keep it that way.
   screen to say so. A venue is SHARED — Levee Liquors holds 8 brands — so the
   query carries no brand filter and RLS scopes it; verify by impersonation, not
   by logging in (D125).
+- **THE MONTH RANGE OPENS ON YEAR TO DATE, AND ITS YEAR COMES FROM THE DATA, NOT
+  FROM `new Date()`** (D155). `monthRange()` is shared by `brand.html`,
+  `brands.html`, `business.html` and `my-pay.html`, so its default is four pages
+  at once. The year is taken from the NEWEST MONTH ON RECORD because the data
+  lags the calendar — a month is not complete until it is over and the invoices
+  land later still — so anchoring on today's date opens **every January on an
+  empty range**, and that failure arrives on a DATE rather than on a deploy.
+  Which months exist is a business fact and belongs in the query (D60). The two
+  selects are labelled **Start date / End date**, with no `aria-label`: a visible
+  label and an aria-label saying different things is the one thing a label must
+  never do.
 - **Anything saying "revenue" reads `v_brand_month_revenue` or `v_month_business`,
   NEVER `v_brand_money`.** The latter is activity charge only, and the retainer is
   about two-thirds of what iHospitality sells ($110,850 of $167,580) — sourcing
@@ -500,6 +511,13 @@ reproduces it; keep it that way.
   the impersonated counts DIFFER from the service_role baseline, or the check
   cannot fail and proves nothing (D114). It covers isolation completely and
   rendering not at all.
+- **AND OPEN IT AS THE ROLE THE CHANGE WAS *NOT* ABOUT** (D154). A guard that
+  says "not you" can never be exercised by the role it excludes, so the only
+  eyes that can catch a fault in it belong to the role nobody re-checks —
+  the feature was not for them. D153 was built for a contractor, verified as a
+  contractor, and shipped a `ReferenceError` that fired **for admins only**,
+  blanking the activity page for both of them. The page kept its heading and
+  date, so it read as half-loaded rather than broken.
 - **Open every admin page — AND EVERY TAB — in a browser before calling a
   session done** (D79, D89). **This covers the brand portal's pages too.** And
   where a page takes input, TYPE IN IT (D92) — opening a page is not using it.
@@ -712,6 +730,7 @@ reproduces it; keep it that way.
 | `docs/` | The internal documents. **Force-404'd by `_redirects` — not public.** |
 | `docs/PORTAL_PLAN.md` | Architecture doc — phases, locked decisions. |
 | `docs/HANDOFF.md` | Where the last session stopped, and the next prompt. |
+| `docs/DATA_ACCESS_TIERS.md` | Reads / routine writes / dangerous writes, and where each belongs. **A design note, not a decision.** Read before V3. |
 | `../../Hubspot/portal_seed/admin/` | The staff admin (Streamlit). Analysis, review, cleanup. |
 | `../../Hubspot/portal_seed/promote.py` | Promote / reject / suppress a staged deal. One definition, two callers. |
 | `../../Hubspot/portal_seed/create_portal_user.py` | Create / re-scope / deactivate a login. One definition; the CLI and the admin's Users page both call it. |

@@ -196,7 +196,7 @@
                     ? `<span class="${Number(m.charge) - Number(m.cost) < 0 ? 'neg' : ''}">${money(Number(m.charge) - Number(m.cost))}</span>` : '')}
               ${fact('Priced on', m.source_activity_type ? esc(m.source_activity_type) : '')}
             </div>
-            ${flags(m)}
+            ${flags(m, staff)}
           </div>`;
 
         const summary = a.summary
@@ -224,12 +224,20 @@
          The three ways pricing goes wrong lie in DIFFERENT directions, and the
          direction is the useful half. A page that just showed a badge would
          leave the reader to remember which way each one bends. */
-      function flags(m) {
+      function flags(m, staff) {
         const out = [];
         // Staff only, for the reason on `hasMoney` above: every one of these
         // reads the rate card, which a contractor cannot see, so they would all
         // fire wrongly.
-        if (!staff) return out;
+        //
+        // ⚠️ `staff` IS A PARAMETER, NOT A CLOSURE. It is declared with `const`
+        // inside the `else` block that renders the row, and this function is
+        // declared OUTSIDE that block -- so reading it from here threw
+        // `ReferenceError: staff is not defined` and the page died before
+        // `el.innerHTML` ever ran. Only an admin ever reached it, because
+        // `hasMoney` is false for everyone else, so the one line written to
+        // protect contractors broke the page exclusively for staff.
+        if (!staff) return '';
         if (m.unpriced) out.push(['warn', 'Unpriced',
           'No rate line matched this work at all, so it charged nothing. This UNDERSTATES revenue — the work happened and was not billed for here.']);
         if (m.uncosted) out.push(['warn', 'Uncosted',

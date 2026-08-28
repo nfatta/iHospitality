@@ -57,6 +57,31 @@ gallery rendered empty rather than erroring.
 
 ### Open, and none of it blocking
 
+0. ⚠️ **FIRST THING: TWO PRs ARE OPEN AND UNVERIFIED, AND D154's BUG IS LIVE
+   UNTIL THE FIRST ONE MERGES.**
+
+   **#9 — the D154 fix.** `activity-detail.html` threw `ReferenceError: staff is
+   not defined` for ADMINS ONLY — the page rendered its heading and date and then
+   nothing, no facts, no money, no photos. Found on a phone at 1:47 am on 28 Aug.
+   Branch `claude/streamlit-dashboard-alternatives-r1i4x6`. The failure
+   reproduces in node before the change and not after. ⚠️ **`node --check` is NOT
+   evidence** — it passes on both versions, because a `ReferenceError` is a
+   runtime fault. Nothing proves it RENDERS.
+
+   **#10 — My pay and the month range (D155).** Branch `my-pay-base-line`,
+   **stacked on top of #9** so one deploy preview carries both; its base is #9's
+   branch and GitHub retargets it to `main` automatically once #9 merges. Merge
+   #9 first.
+
+   ⚠️ **BUILD CREDITS ARE FINITE, AND THE OPERATOR IS RATIONING THEM.** That is
+   why these are stacked on one preview rather than sitting on two, and why the
+   28 Aug work was proved in node and against a local server instead of by
+   pushing. Batch changes and spend one build, rather than pushing each fix.
+
+   **The whole outstanding task**: load the preview, sign in **as yourself**
+   (email and password — Google is not offered on a preview origin), click one
+   activity, and check My pay's one-line base, its clickable rows, and that the
+   range opens on January. Then merge #9, then #10.
 1. **SMTP is still Supabase's built-in mailer**, rate-limited per address. Fine
    for three people; needs a real provider before brands rely on password reset.
 2. **The test logins are still active** — `test-bluerun@example.com` and
@@ -78,6 +103,14 @@ gallery rendered empty rather than erroring.
    guarantee has to be reopened deliberately** rather than by accident.
 7. **The reconciliation, still 64 of 83.** Untouched for two days. Start with
    Heaven's Door — see the section further down.
+8. **`docs/DATA_ACCESS_TIERS.md`** — written 28 Aug from a late conversation, and
+   **nothing in it is decided.** Where a thing is allowed to happen, sorted by
+   reads / routine writes / dangerous writes rather than by "Streamlit versus the
+   website". **Read it before item 6's V3**, because V3 is what forces D61 open
+   and the gate pattern should be settled before then, not improvised. It also
+   answers "can brands run their own reports" — yes, and it needs no new
+   architecture, because RLS already does the part other products buy a vendor
+   for.
 
 ### Two things to know before debugging anything on a phone
 

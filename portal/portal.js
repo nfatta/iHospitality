@@ -399,8 +399,8 @@ export function param(name) {
  * A from/to month pair, populated from the months the data actually has.
  *
  * The month list is queried rather than generated so it can never offer a month
- * with nothing in it (D60 — no business fact compiled into a page). Defaults to
- * the last twelve months, matching the Streamlit Analysis page.
+ * with nothing in it (D60 — no business fact compiled into a page). Opens on
+ * YEAR TO DATE: January of the newest year on record, through the newest month.
  *
  * `months` is a sorted-descending array of 'YYYY-MM'. Calls `onChange(from, to)`
  * once immediately and again on every change.
@@ -417,15 +417,28 @@ export function monthRange(fromId, toId, months, onChange) {
   // caller hands `months` newest-first (it is the same array the page uses to
   // pick defaults), so the reversal happens HERE, on a copy, at render time.
   //
-  // The two `.value` assignments below still index the ORIGINAL descending
-  // array, and that is what keeps the opening range unchanged: a <select>'s
-  // value is set by value, not by position, so reordering the options moves
-  // nothing. From still opens on the 12th-newest month and To on the newest.
+  // The `.value` assignments below index the ORIGINAL descending array, and
+  // reordering the options moves nothing: a <select>'s value is set by value,
+  // not by position.
   const options = [...months].reverse().map(m =>
     `<option value="${esc(m)}">${esc(fmtMonth(m + '-01'))}</option>`).join('');
   from.innerHTML = options;
   to.innerHTML = options;
-  from.value = months[Math.min(11, months.length - 1)];
+
+  // YEAR TO DATE, NOT A ROLLING TWELVE MONTHS. Asked for on 28 Aug 2026. A
+  // trailing year straddles two of them, so it answers neither "how is this
+  // year going" nor "how did last year end" — and the first is the question a
+  // page is usually opened with.
+  //
+  // ⚠️ THE YEAR COMES FROM THE NEWEST MONTH ON RECORD, NEVER FROM TODAY'S DATE.
+  // The data lags the calendar — a month is not complete until it is over, and
+  // the invoices land later still — so anchoring on `new Date()` would open
+  // every January on a range with nothing in it, on a portal that has plenty.
+  // It would also put a business fact (which months exist) in the page rather
+  // than in the query, which is D60's rule.
+  const year = String(months[0]).slice(0, 4);
+  const toDate = months.filter(m => String(m).slice(0, 4) === year);
+  from.value = toDate[toDate.length - 1];
   to.value = months[0];
 
   const fire = () => {
