@@ -712,6 +712,7 @@ reproduces it; keep it that way.
 | `docs/` | The internal documents. **Force-404'd by `_redirects` — not public.** |
 | `docs/PORTAL_PLAN.md` | Architecture doc — phases, locked decisions. |
 | `docs/HANDOFF.md` | Where the last session stopped, and the next prompt. |
+| `docs/DATA_ACCESS_TIERS.md` | Reads / routine writes / dangerous writes, and where each belongs. **A design note, not a decision.** Read before V3. |
 | `../../Hubspot/portal_seed/admin/` | The staff admin (Streamlit). Analysis, review, cleanup. |
 | `../../Hubspot/portal_seed/promote.py` | Promote / reject / suppress a staged deal. One definition, two callers. |
 | `../../Hubspot/portal_seed/create_portal_user.py` | Create / re-scope / deactivate a login. One definition; the CLI and the admin's Users page both call it. |

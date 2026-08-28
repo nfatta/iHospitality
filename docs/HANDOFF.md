@@ -78,6 +78,14 @@ gallery rendered empty rather than erroring.
    guarantee has to be reopened deliberately** rather than by accident.
 7. **The reconciliation, still 64 of 83.** Untouched for two days. Start with
    Heaven's Door — see the section further down.
+8. **`docs/DATA_ACCESS_TIERS.md`** — written 28 Aug from a late conversation, and
+   **nothing in it is decided.** Where a thing is allowed to happen, sorted by
+   reads / routine writes / dangerous writes rather than by "Streamlit versus the
+   website". **Read it before item 6's V3**, because V3 is what forces D61 open
+   and the gate pattern should be settled before then, not improvised. It also
+   answers "can brands run their own reports" — yes, and it needs no new
+   architecture, because RLS already does the part other products buy a vendor
+   for.
 
 ### Two things to know before debugging anything on a phone
 
