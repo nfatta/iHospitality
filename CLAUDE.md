@@ -271,9 +271,36 @@ reproduces it; keep it that way.
   purpose (D67/D116) — reading it one level up in `v_month_business` is what
   shows the number without allocating it to brands. Label base pay as an
   ANNUALISED SPREAD or it reads as a bank figure.
+- **THE VENUE LIST IS NOW THE ACCOUNT UNIVERSE, AND `lifecycle` IS A THIRD AXIS**
+  (D157). A HubSpot company only becomes a venue when it lands on a **deal**, so
+  108 places we knew had never had a row; they exist now, each carrying its
+  Record ID. `venue_grading.lifecycle` is `prospect` (known, never worked),
+  `retired` (worked, stopped — the 20 Fresh Market stores) or null (active).
+  ⚠️ **It is NOT the account status.** `brand_venue_status` is per BRAND and
+  advance-only; `dormant` is derived at read time in
+  `account_status_effective()` and never stored (D86/D87). Lifecycle is per
+  VENUE, is a person's decision, and says nothing about recency. It sits on
+  `venue_grading` because a column on `venues` is a column a brand can
+  `select *` (D88). Compare a fresh export on the Venues page's **Compare
+  against HubSpot** tab — the matching itself is `bucket_export()` in
+  `normalize.py`, so it is testable without Streamlit.
+- **⚠️ AN IMPORT MUST NEVER ERASE A VENUE** (D158). "No company on the deal"
+  means "no information", never "this happened nowhere" — the portal is the
+  source of record (D84). Deleting one company in HubSpot silently nulled the
+  venue on three real activities, on a run that reported only success;
+  `promote()` now `coalesce`s `venue_id` in both branches, and
+  `test_admin_sql.py` fails on the old text. **The sync can set or change a
+  venue and can no longer remove one**; clearing one is a human action in the
+  admin. **Take before-and-after row counts around any import** — nothing else
+  found it.
+- **THE MONTH-END PULL IS A BUTTON ON REVIEW AND EDIT** (D157), above the queue
+  it fills, with the date of the last pull in its label. It previews (network,
+  no writes) then applies, and both halves call the same `fetch_rows()` /
+  `apply()` in `sync_hubspot.py` that the CLI does — the `promote.py`
+  arrangement. It changes nothing about the staging contract (D64).
 - **A VENUE PAGE LINKS BY `venue_id`, NEVER BY `venue_name`** (D129).
   `v_brand_activity_log` carries `venue_id` for exactly this. A name match works
-  today (340 venues, 340 distinct names) and blends two premises into one
+  today (441 venues, no colliding names) and blends two premises into one
   history the moment a chain arrives, with every figure wrong and nothing on
   screen to say so. A venue is SHARED — Levee Liquors holds 8 brands — so the
   query carries no brand filter and RLS scopes it; verify by impersonation, not

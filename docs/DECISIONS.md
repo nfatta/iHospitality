@@ -6769,3 +6769,148 @@ pages were then run across staff, contractor and brand — the brand user still
 gets 59 unfolded rows at brand grain with "Stocking your brand", and the
 contractor still has no Quiet column (D138). ⚠️ Rendering is not proved; that
 needs the page opened.
+
+---
+
+**D157 — THE VENUE LIST WAS NOT MISSING ANYTHING SOMEBODY DELETED. IT WAS
+MISSING 108 PLACES THAT HAD NEVER BEEN CREATED, BECAUSE A COMPANY ONLY BECOMES A
+VENUE WHEN IT LANDS ON A DEAL.**
+Asked for by the operator, 31 Aug 2026: *"I have a list of venues I would like to
+upload… I think its a mess. At first there were too many duplicates and I think
+when we cleaned it we took out too many."*
+
+**The premise was wrong in the way that mattered, and checking it first is what
+made the session useful.** The 22 Aug cleanup is on disk in
+`Hubspot/venue_merge_backup_20260822-104820.json` (15 merges) and `…-110159.json`
+(2). Seventeen rows were deleted, **not one of them carrying a single activity**,
+and every one of the seventeen names still resolves to a surviving venue today.
+Nothing was lost and nothing needed restoring. Zero venue names collided after
+normalisation either — there were no duplicates left to find.
+
+**THE GAP RAN THE OTHER WAY.** `apply()` in `sync_hubspot.py` and
+`_resolve_venue()` in `promote.py` only ever create a venue when a HubSpot
+company turns up **on a deal**. A company nobody has logged work against has
+never had a row at all. So the venue list has always meant *"places we have
+worked"*, while the operator was reading it as *"places we know"*. Against a
+412-row company export: **298 matched, 108 absent, 6 conflicting, 38 held here
+and not in HubSpot.**
+
+**THE RECORD ID WAS WORTH ASKING FOR BEFORE BUILDING ANYTHING.** The first export
+carried only `Company name` and `City`. Matching on names that carry trailing
+spaces and inconsistent case is guesswork, and a venue created without a company
+id is one the next sync cannot recognise — it would create a second copy the
+first time the place appeared on a deal, which is the exact duplicate this work
+exists to prevent. One re-export turned every match exact.
+
+**SIX VENUES WHERE THE NAME AGREES AND THE RECORD ID DOES NOT** — Coasters Pub,
+Double Tapp Grill, Hemingway's Tavern, Live! Hospitality, Morning Glory, The
+District. That is HubSpot holding two company records for one place while the
+portal is bound to whichever was on the deal. **The fix is an alias, not a
+merge**: `venue_hubspot_alias` makes both ids resolve to the one venue, which is
+what that table already exists for (D81). A name match with no id on our side is
+NOT this case — a venue created in the field carries no id to disagree with, and
+treating it as a conflict would put every field-created venue in a warning list
+for ever.
+
+**THE MATCHING LIVES IN `normalize.py`, NOT IN THE PAGE.** A rule inside a
+Streamlit page cannot be tested without running Streamlit, and this one is the
+difference between creating 108 venues and creating 108 duplicates.
+`bucket_export()` and `venue_match_key()` sit in the file whose own docstring
+says it exists so the messy rules are testable without Postgres, and
+`test_normalize.py` holds them to these counts. `5_Venues.py` now imports
+`venue_match_key` rather than keeping its own copy, so the duplicate-suggestion
+tab and the comparison fold names identically.
+
+⚠️ **AN AD-HOC SCRIPT AND THE REAL MATCHER DISAGREED BY ONE, AND THE MATCHER WAS
+RIGHT.** A throwaway check matched names independently of ids and reported 37
+extras; `bucket_export` reports 38. The extra one is
+**`Neighbors/DOMU East End`** — an orphan with no company id and no activity,
+sitting beside the real `Neighbors East End`, whose export row resolves BY ID
+onto the real venue. The duplicates tab cannot see it because the two names fold
+differently. It is now a test.
+
+**THE PAGE REPORTED HUBSPOT'S OWN DUPLICATES AND THEN CREATED THEM ANYWAY** —
+found by running it, not by reading it. `Malabar Liquors` appears twice in the
+export in one city, and `Maggie McFly` twice in two different cities; creating
+all four made two duplicate pairs the duplicates tab immediately asked somebody
+to merge, a fault the page had manufactured one section after warning about it.
+Companies duplicated inside the export are now **held back from the create
+grid** and listed for fixing at source. Nothing here can tell one place entered
+twice from two premises sharing a name, and that is exactly why it stops (D81).
+
+**LIFECYCLE IS A THIRD AXIS AND MUST NEVER BE CONFUSED WITH THE ACCOUNT STATUS**
+(D86/D87). `venue_grading.lifecycle` is `null` (active), `prospect` (known, never
+worked) or `retired` (worked, no longer called on). `brand_venue_status` is per
+BRAND and advance-only; `dormant` is 180 days quiet, derived at read time in
+`account_status_effective()` and deliberately never stored. Lifecycle is per
+VENUE, is a person's decision, and says nothing about recency. It lives on
+`venue_grading` because a column on `venues` is a column a brand can
+`select *` (D88), and it is `text` with a CHECK rather than an enum so it needs
+none of D142's marker dance.
+
+**20 FRESH MARKET STORES ARE `retired`, AND THE HISTORY STAYS.** Operator: *"so
+freshmarket and win dixies are only for Aspen green but we are moving away from
+that. So It would be nice to have that data but also they will not be called on
+again anytime soon."* Every one of the twenty is Aspen Green and nothing else.
+**One row per store, not folded into a chain** — each is a separate premises with
+its own buyer, and folding twenty histories into one is D129's trap.
+
+**SIX ROWS WERE NEVER VENUES**: 44° North Vodka, Dame Mas Tequila, Tequila Dame
+Más, Breakthru Beverage, Mexcor International, Southern Glazer. Operator ruling:
+keep the work, drop the venue. **`activities.venue_id` is `ON DELETE RESTRICT`,
+so the order is forced** — 17 activities freed first, then the rows deleted;
+money asserted identical before each commit and unchanged to the cent
+($37,963.93 / $24,370.90 / 1,238). ⚠️ Two of the seventeen are the Breakthru
+`Day Buy-Out` pair of 2025-09-06, which is billed work at a real address — the
+"Day Buy Out Split" `lib.canary()` cites — and is worth a second look.
+
+**Verified by running it, not by reasoning about it**: 298/6/108/38 on screen
+matching the headless run, 108 created carrying their Record IDs, and the two
+mutations of the matcher each caught by exactly the test written for them.
+
+---
+
+**D158 — AN IMPORT MUST NEVER ERASE A VENUE. "NO COMPANY ON THE DEAL" MEANS "NO
+INFORMATION", NEVER "THIS HAPPENED NOWHERE".**
+Found by running the new Pull button against live HubSpot and comparing row
+counts before and after — **not by any test, and not by anything on screen.**
+
+Somebody deleted the `Secrets Resort` company in HubSpot. The three deals
+attached to it lost their company association, `staging.hubspot_deals` recorded
+`venue_name` and `venue_company_id` as NULL, those rows became state `auto` (a
+change HubSpot made to a row nobody had hand-edited), and `promote()` carried it
+through as a bare `venue_id = %s`. **Three real activities that had a venue
+silently stopped having one**, on a run whose output was nothing but success.
+`activities` count unchanged, money unchanged, no error anywhere — only
+`count(*) where venue_id is null` going 114 → 117 showed it.
+
+**THE PORTAL IS THE SOURCE OF RECORD AND HUBSPOT IS AN INPUT** (D84), so an
+association a person established has to survive the CRM forgetting it. The same
+rule already governs the city one function away: `set_venue_city_from_hubspot()`
+refuses to blank a city HubSpot has stopped sending, and `apply()`'s own comment
+says *"coalesce keeps a city already on the row when HubSpot has none, so a value
+entered by hand is never blanked by an empty CRM field."* The venue had no such
+protection. It does now, in both of `promote()`'s branches.
+
+**Clearing a venue is a human action, taken in the admin.** The sync can set one
+and can change one; it can no longer remove one.
+
+⚠️ **THIS IS NOT NEW AND IT IS NOT MINE.** The same line has been in `promote()`
+since D64, so any earlier `--apply` run hit it too — 52 staged deals currently
+carry no venue name, and **not one of them is attached to an activity that still
+has a venue**, which is consistent with this having quietly happened before.
+Worth a look at the 114 venue-less activities before assuming they were always
+that way.
+
+**PROVED BY REPETITION, WHICH IS THE ONLY PROOF THAT COUNTS HERE.** The three
+were restored, then the *identical* sync that had destroyed them was run again:
+all three survived, 114 stayed 114, money unchanged. And
+`test_admin_sql.py::test_promote_never_blanks_an_existing_venue` fails on the
+real pre-fix text of `promote.py` and passes on the fixed one — a checker that
+cannot fail proves nothing (D114).
+
+**WHAT THIS SAYS ABOUT THE BUTTON.** Nothing about the fault was caused by
+putting a front door on the sync; the CLI would have done exactly the same. But
+the button will be pressed far more often than the CLI ever was, so a
+once-a-month silent erasure becomes a weekly one. **Before-and-after row counts
+are the check that found it, and they are worth running around any import.**

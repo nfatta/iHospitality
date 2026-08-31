@@ -1,5 +1,139 @@
 # HANDOFF — start here
 
+Written at the close of **31 Aug 2026**.
+
+## THE VENUE LIST IS THE ACCOUNT UNIVERSE NOW, AND THE SYNC HAS A BUTTON.
+
+**Nothing was deployed and no build credit was spent.** Every change is in
+`Hubspot/portal_seed/`, which is a separate repo and is not served. The website
+repo was untouched apart from these documents.
+
+### What changed today
+
+| | |
+|---|---|
+| Venues | **340 → 441.** 108 created from a HubSpot company export, each carrying its Record ID, each marked `prospect` |
+| Lifecycle | `venue_grading.lifecycle` — `prospect` (104), `retired` (20), null = active (314). D157 |
+| Fresh Market | 20 stores `retired`. History kept, off the call list — all 20 are Aspen Green and nothing else |
+| Six non-venues | 44° North Vodka, Dame Mas Tequila, Tequila Dame Más, Breakthru Beverage, Mexcor, Southern Glazer — deleted, their **17 activities kept** with no venue |
+| Venues page | Sixth tab: **Compare against HubSpot** — upload an export, see the four buckets, create / dismiss / bind / retire |
+| Review and edit | **Pull new deals from HubSpot**, above the queue it fills. Preview, then apply |
+| `sync_hubspot.py` | Split into `build_filters` / `fetch_rows` / `summarise` / `apply`-returns-a-dict, so the CLI and the page run the same code |
+| Tests | 153 → 165 pytest, plus a source checker that fails on the real pre-fix `promote.py` |
+
+**Money did not move: $37,963.93 charge, $24,370.90 cost, 1,238 activities,
+identical before and after and asserted before every commit.**
+
+### The premise was wrong, and checking it is what made the day useful
+
+The operator asked for this believing an earlier cleanup had deleted venues.
+**It had not.** Both merge backups are in `Hubspot/`: seventeen rows deleted, not
+one carrying a single activity, and every one of the seventeen names still
+resolves to a surviving venue. There were no leftover duplicates either.
+
+The gap ran the other way — **a HubSpot company only becomes a venue when it
+lands on a DEAL**, so 108 places we know had never had a row. Read D157 before
+touching the venue list.
+
+### ⚠️ D158 IS THE ONE TO READ FIRST
+
+**An import could erase a venue, and did.** Deleting the `Secrets Resort` company
+in HubSpot dropped the association on three deals; `promote()` carried that
+through as a bare assignment and **three real activities silently lost their
+venue** on a run that reported only success. Fixed — `venue_id` is now
+`coalesce`d in both branches, so the sync can set or change a venue and can no
+longer remove one — and proved by re-running the identical sync.
+
+⚠️ **The same line has been there since D64, so earlier CLI runs hit it too.**
+52 staged deals carry no venue name and **not one is attached to an activity that
+still has a venue**. Worth auditing the 114 venue-less activities before assuming
+they were always that way.
+
+### 42 deals are waiting in the review queue, right now
+
+The pull ran for real: staged deals 1,066 → 1,108, **42 in state `new`** —
+44 North 15, Wodka 14, Dame Mas 10, Aspen Green 3, and 41 of the 42 are August
+2026. **`activities` is unchanged at 1,238**, so nothing bypassed the staging
+zone. They are the month-end job, sitting on Review and edit.
+
+### Three things needing the operator, none blocking
+
+1. **`Maggie McFly` vs `Maggie McFly PSL`.** The sync recreated the first from a
+   live deal; the second holds one activity. Same city, almost certainly one
+   place — but that is a ruling, not a guess (D81). Bind or merge it.
+2. **Two `Breakthru Beverage` Day Buy-Outs** (2025-09-06) are billed work at a
+   real address, not a meeting — the "Day Buy Out Split" `lib.canary()` cites.
+   They lost their venue with the other fifteen. Worth a second look.
+3. **`Winn Dixie #2273` and `#2288`** appeared from live deals and are not in the
+   company export. The operator mentioned Winn-Dixie; these are the first two.
+
+### Still open from before, unchanged
+
+1. **SMTP is still Supabase's built-in mailer**, rate-limited per address.
+2. **The test logins are still active** — `test-bluerun@example.com`,
+   `test-wodka@example.com`, and `44ntest@test.com`.
+3. **Cost to serve's premise has changed** (D139) and switching it to real
+   attribution is a decision nobody has made. Read D116 first.
+4. **The three real pay start dates** (D128).
+5. **Dame Mas's nine commission months** — needs the distributor's per-venue
+   depletion reports for Jul 2025 – Mar 2026.
+6. **V2 and V3 of the contractor portal.** V3 reopens D61; read
+   `docs/DATA_ACCESS_TIERS.md` first.
+7. **The reconciliation, still 64 of 83.** Start with Heaven's Door.
+8. **`docs/DATA_ACCESS_TIERS.md`** — written 28 Aug, nothing in it decided.
+
+---
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D157–D158 plus D137–D156** in
+> `docs/DECISIONS.md`.
+>
+> The portal is LIVE and three people use it. **Ask me which I want before
+> starting.**
+>
+> ⚠️ **Build credits are rationed.** Prove what you can in node, verify against
+> production data on `localhost:8123`, and spend ONE build. Yesterday's work
+> spent none — it was all in `portal_seed`, which is not deployed.
+>
+> **A — clear the 42.** They are sitting in the review queue from the 31 Aug
+> pull, 41 of them August 2026. Promote what is right, fix what is not. Note
+> **4 are `recurring case`** — reorders actually being recorded, which D118 said
+> almost never happens — and **one has a NULL `source_activity_type`**, which is
+> D111's trap where the rate card cannot price real work.
+>
+> **B — audit the venue-less activities.** 114 of them, and D158 says some may
+> have lost a venue they once had rather than never having one. The evidence is
+> that 52 staged deals carry no venue name and none of them still points at a
+> venue. Money is not at stake; attribution is.
+>
+> **C — the reconciliation**, still 64 of 83. Start with **Heaven's Door**: its
+> commission ties exactly in both checked months, so the whole difference is that
+> it bills **account visits at $20** inside the consulting block where the rate
+> card prices `account visit` at $0.00 for all eight brands, plus a "Smoke Tops"
+> line. Confirm on the other invoices before changing a rate — editing one
+> **restates history** (D91).
+>
+> **D — Cost to serve on real attribution** (D139), or **E — V2/V3 of the
+> contractor portal**. Both unchanged from 28 Aug.
+>
+> Whichever: the billing is the truth (D56), no hardcoded business data (D60),
+> base pay is never allocated to a brand in a view (D67), a reimbursement never
+> earns (D78), reclassifying must not move money unless moving it is the point
+> (D93/D112), and **lifecycle is not the account status** (D157/D86).
+>
+> **Before calling it done:** open every page AND every tab, and type into
+> anything that takes input (D79/D89/D92). **Open it as the role the change was
+> NOT about** (D154). **And take before-and-after row counts around any import**
+> — that is the only thing that found D158, and neither a test nor the screen
+> said a word.
+
+---
+
+## ⚠️ SUPERSEDED — the 28 Aug opening.
+
+### The 28 Aug close-out, kept
+
 Written at the close of **28 Aug 2026**.
 
 ## IT IS LIVE. THE PORTAL IS ON ihospitality.vip AND PEOPLE ARE SIGNING IN.
@@ -162,6 +296,7 @@ endpoint the APPLICATION calls, not a convenient admin equivalent.
 > **`node --check` is not evidence** for a runtime fault; run the page module per
 > role with a control that fails on the old code. And **check the phone has the
 > deploy before debugging anything reported from one** (D150).
+
 
 ## ⚠️ SUPERSEDED — the 25 Aug opening. The five pages were committed on 26 Aug.
 
