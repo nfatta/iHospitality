@@ -21,6 +21,26 @@ it before it becomes real.
 > one: margin per brand is still not a meaningful number, and the Dame Mas
 > account read as *negative* until the retainer was found.
 
+### 2 Sep 2026 — two threads opened, neither built
+
+⚠️ **Ran in a cloud session with no `portal_seed` and no `DATABASE_URL`**, so
+nothing was verified against live data and no Python, schema or portal page was
+touched. Repo changes are confined to `docs/`.
+
+- **D159 — `closed` accounts.** `venue_grading.lifecycle` gains a fourth value
+  alongside `prospect` / `retired` / null. Fresh Market stays `retired`. The
+  migration is written and sits in `docs/HANDOFF.md`; **it has not been applied.**
+  The Streamlit control is not built.
+- **D160 — the brand scorecard.** The spec and implementation plan are now in
+  `docs/`. Tested against the real July 2026 44 North billing sheet: the charged
+  half re-prices to **$535.00**, matching the invoice to the cent, but
+  `uncharged_value` — the spec's strongest figure — computes to **$0.00**,
+  because the rate card holds charge rates and a list price is a field that does
+  not exist. Rates **do not transfer between brands** (operator ruling). Two of
+  the four headline metrics need a placements table nobody has built.
+- **Also found:** four percentages in the client-facing market summary do not
+  match their own underlying numbers. June reads −22% and is **−11.3%**.
+
 | Stage | What | State |
 |---|---|---|
 | 1 — Everything in | deals, taxonomy, titles, photos, cities, expense exclusion | ✅ done |

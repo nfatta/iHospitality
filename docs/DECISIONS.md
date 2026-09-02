@@ -6914,3 +6914,125 @@ putting a front door on the sync; the CLI would have done exactly the same. But
 the button will be pressed far more often than the CLI ever was, so a
 once-a-month silent erasure becomes a weekly one. **Before-and-after row counts
 are the check that found it, and they are worth running around any import.**
+
+---
+
+**D159 — AN ACCOUNT THAT SHUT DOWN IS `closed`, AND IT IS NOT `retired`.**
+Operator ruling, 2 Sep 2026: *"I just want a way to say this account closed down.
+So it doesn't keep showing up under venues but we keep a record of it."*
+
+`venue_grading.lifecycle` now holds FOUR values: `null` (active), `prospect`
+(known, never worked), `retired` (worked, we stopped calling on it) and
+**`closed`** (the premises is out of business).
+
+**THE TWO ARE NOT THE SAME FACT AND MUST NOT BE FOLDED TOGETHER.** `retired` is
+OUR decision, it is reversible, and the place is still trading — the 20 Fresh
+Market stores are open shops we chose to stop calling on (D157). `closed` is a
+fact about the world and it does not reverse. Fold them and the "who should we
+go back to?" list quietly fills with bars that no longer exist. The operator was
+explicit that Fresh Market is **not** to be swept into this: it stays `retired`.
+
+`lifecycle` is `text` with a CHECK rather than an enum, so adding a value needs
+none of D142's marker dance — but D91 still applies with full force: a CHECK on
+an existing table must be restated as an `ALTER`, never edited inside a
+`create table if not exists`, or it will pass every test while never existing on
+Supabase. The migration is in `docs/HANDOFF.md`, and it asserts BOTH directions —
+that `closed` is accepted AND that a junk value is still refused — because a
+check that cannot fail proves nothing (D114).
+
+**THE WRITE SURFACE IS THE ADMIN, NOT THE PORTAL** — operator: *"We are going to
+use the app to edit all the data, the online portal just reads said data."* That
+is D61 restated by the person who owns the consequence, and it settles the
+question for every future editing feature.
+
+⚠️ **"DOES NOT KEEP SHOWING UP UNDER VENUES" IS TWO SURFACES, NOT ONE.** The
+admin Venues page is a Streamlit filter and costs nothing. The portal's *All
+accounts* and *My accounts* tabs read `v_venue_performance`, which is a VIEW
+change and a website deploy. Check whether `retired` currently drops out of the
+portal list before building — if it does not, Fresh Market is still showing there
+and both should be handled in one pass.
+
+---
+
+**D160 — THE BRAND SCORECARD'S STRONGEST FIGURE COMPUTES TO $0.00, AND RATES DO
+NOT TRANSFER BETWEEN BRANDS.**
+Analysed 2 Sep 2026 against the real July 2026 44 North billing sheet.
+⚠️ **Nothing built, nothing changed in the portal. The mockup is a mockup.**
+
+`docs/BRAND_SCORECARD_SPEC.md` calls `uncharged_value` *"the single strongest
+price justification available"* — the dollar value of no-charge work, valued at
+rate card. Against July 2026 for 44 North it is **$0.00**, and the reason is
+structural rather than a data fault.
+
+July's free work was 16 account visits, 7 drink developments and one market
+favor. All three are carded at **$0.00 for 44 North**, so "value it at rate card"
+returns nothing. **The rate card records what a brand is CHARGED. A list price is
+a different field and no such field exists** — not in the sheet, not in
+`rate_card`. This is the fourth way the rate card goes quiet about real work,
+beside `unpriced`, `uncosted` and charge-≤-pay (D78/D90/D98).
+
+⚠️ **THE CROSS-BRAND SHORTCUT IS CLOSED, BY OPERATOR RULING.** The first attempt
+valued 44 North's visits at **$20 using Heaven's Door's invoiced rate** (D119) on
+the grounds that a real client really pays it. Operator: *"This isn't Heaven's
+Door, all brands are charged differently."* So a list rate **cannot be derived
+from another brand's rate card line**, and taking the maximum across brands is
+the same mistake wearing a formula. Every list rate is a pricing decision the
+operator makes once, in a table he can edit (D60).
+
+**THE CHARGED HALF IS SOUND, AND THAT IS THE USEFUL HALF OF THE FINDING.**
+Re-pricing all 29 July rows line by line off the sheet's own rate table returns
+**$535.00**, matching the invoiced commission to the cent ($1,450.00 retainer +
+$535.00 + $70.18 expenses = $2,055.18). The row data reproduces the billing. Only
+the free half is unpriced.
+
+**TWO OF THE FOUR HEADLINE METRICS CANNOT BE COMPUTED AT ALL.** *Live placements*
+and *accounts retained* both need placement STATE — the day a drink list came off
+at a menu reprint — and nothing records it. ⚠️ **Do not reach for
+`brand_venue_status`**: it is advance-only by design (D86) and can never retreat,
+so a count built on it only ever climbs. And do not substitute repeat VISITS for
+retention: July shares 5 accounts with June, which would print "5 of 28" on a
+client document while measuring the contractor's route rather than the brand's
+health. A placements table is the one genuinely new structure in the whole plan.
+
+**`new_doors` IS DEFINED TWICE IN THE SPEC AND THE TWO ANSWERS ARE 2 AND 18.**
+The metric card says "accounts placing a first order"; the computed field says
+"first ever activity row". Only Phyre Brewery & Tavern and Huck's Oyster Bar
+ordered. Eighteen accounts appear for the first time in the sheet — but the sheet
+starts in January, so "first ever" is **unanswerable from it**. The portal holds
+activity back to June 2025 and can answer it properly. That is one more reason
+the portal is the target and the sheet is the stopgap.
+
+**TERRITORY CANNOT BE BACKFILLED THE WAY THE PLAN ASSUMES.** The implementation
+plan says territory is *"derivable from the city column"*. The activity log has
+**no city column** — its headers are Date, Account, Notes, Qty, Opportunity,
+Images. It needs an account-to-territory lookup, which the portal already has and
+the sheet does not. ⚠️ **And check whether it is two territories or three**:
+Cocoa Beach, Melbourne and Kissimmee accounts are neither Orlando metro nor Palm
+Beach. Note also the vocabulary is drifting three ways — the spec says
+`orlando_metro`/`palm_beach`, the database enum says
+`central_florida`/`palm_beach_county`, and the sheet says neither. Two markets
+only; the enum enforces it.
+
+**FOUR PERCENTAGES IN THE MARKET SUMMARY DO NOT MATCH THEIR OWN NUMBERS**, which
+the spec suspected and this confirms by recomputation from the TY and LY cells
+sitting beside them:
+
+| Cell | Shown | Actual |
+|---|---|---|
+| Jan — accounts sold | −11% | **−25.8%** |
+| Mar — off-premise cases | −64% | **−55.6%** |
+| Jun — total cases | −22% | **−11.3%** |
+| Jan — accounts sold, Diff | **139** | −27 (it is ADDING 56+83) |
+
+June is the one that costs money in a negotiation: an 11 percent decline was
+reported to the brand as 22 percent. **The report was making the year look twice
+as bad as it was.** Every percentage must be computed, never typed.
+
+⚠️ **D118's 291 IS UNAGREED ANALYSIS AND IT REACHED A CLIENT-FACING PAGE.** The
+first mockup printed *"43 percent of your state volume"* from D118's 291-of-681
+cases. D118's own first line reads **"analysed 24 Aug 2026 — nothing agreed,
+nothing changed in the portal."** A figure carrying that warning either goes on
+the page with the warning attached or does not go on the page. Rescoping the
+market summary to serviced accounts is the operator's instruction and is right;
+**the cost is the year-over-year comparison**, because 291 exists for Jan–Jul
+2026 only and there is no prior-year equivalent at account level.

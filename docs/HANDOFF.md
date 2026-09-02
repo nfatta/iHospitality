@@ -1,6 +1,266 @@
 # HANDOFF — start here
 
-Written at the close of **31 Aug 2026**.
+Written at the close of **2 Sep 2026**.
+
+## TWO THREADS OPENED, NEITHER BUILT. THIS SESSION HAD NO DATABASE.
+
+⚠️ **READ THIS BEFORE TRUSTING ANYTHING BELOW.** This session ran as a *Claude
+Code on the web* session — a cloud container that clones the website repo from
+GitHub and nothing else. It had **no `portal_seed`, no `DATABASE_URL`, no
+Supabase, no Streamlit and no access to the operator's laptop.** So:
+
+- **Nothing was verified against live data.** No row counts, no impersonation
+  checks, no `verify_live.py`. Every number below comes from the committed docs
+  or from a Google Sheet, and both are named at each figure.
+- **Nothing in `portal_seed` was touched**, because it was not reachable. It is
+  not on GitHub either — the account holds `iHospitality`, `liquor-untappd`,
+  `cocktail-lab-live`, `ai-cocktail-lab`, `Karolyn`, `resolution-tracker` and
+  some old forks. It is local-only.
+- **The website repo was changed only in `docs/`.** No deploy, no build credit.
+
+The operator has since set up a local session. **That is where the work
+continues.** The cause was `Stop-Service CoworkVMService -Force` before a
+reinstall of the Claude desktop app; with that service stopped the session had
+nowhere local to run.
+
+### What changed in the repo today
+
+| | |
+|---|---|
+| `docs/DECISIONS.md` | **D159** (`closed` accounts) and **D160** (the scorecard findings) |
+| `docs/BRAND_SCORECARD_SPEC.md` | The report spec, moved into the repo so it is durable and 404'd |
+| `docs/SCORECARD_IMPLEMENTATION.md` | The implementation plan, same |
+| `docs/HANDOFF.md` | This |
+
+Nothing else. No code, no schema, no portal page.
+
+---
+
+## THREAD 1 — `closed` ACCOUNTS (D159). SQL WRITTEN, NOT APPLIED.
+
+Operator: *"I just want a way to say this account closed down. So it doesn't
+keep showing up under venues but we keep a record of it."*
+
+`venue_grading.lifecycle` gains a **fourth** value. It does **not** replace
+`retired`, and ⚠️ **the 20 Fresh Market stores stay `retired`** — the operator
+was explicit. `retired` is our decision and reverses; `closed` is a fact about
+the world and does not.
+
+Expect `prospect` 104 / `retired` 20 / `closed` 0 / null 314, 441 total, before
+and after — this migration reclassifies nothing.
+
+```sql
+begin;
+
+-- What the constraint is called right now. An inline `lifecycle text check (...)`
+-- gets the default name; anything else and this prints it so the drop below can
+-- be corrected rather than silently doing nothing.
+select conname, pg_get_constraintdef(oid) as def
+  from pg_constraint
+ where conrelid = 'public.venue_grading'::regclass
+   and contype  = 'c'
+   and pg_get_constraintdef(oid) ilike '%lifecycle%';
+
+alter table public.venue_grading
+  drop constraint if exists venue_grading_lifecycle_check;
+
+alter table public.venue_grading
+  add constraint venue_grading_lifecycle_check
+  check (lifecycle is null or lifecycle in ('prospect', 'retired', 'closed'));
+
+-- A check that cannot fail proves nothing (D114): assert BOTH directions.
+do $$
+begin
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.venue_grading'::regclass
+                    and conname  = 'venue_grading_lifecycle_check') then
+    raise exception 'the constraint is not there -- the drop removed one and added none';
+  end if;
+  if pg_get_constraintdef((select oid from pg_constraint
+                            where conrelid = 'public.venue_grading'::regclass
+                              and conname  = 'venue_grading_lifecycle_check')) not ilike '%closed%' then
+    raise exception 'the constraint exists but does not admit closed';
+  end if;
+end $$;
+
+savepoint p;
+update public.venue_grading set lifecycle = 'closed'
+ where venue_id = (select venue_id from public.venue_grading limit 1);
+rollback to savepoint p;
+
+do $$
+begin
+  begin
+    update public.venue_grading set lifecycle = 'shut'
+     where venue_id = (select venue_id from public.venue_grading limit 1);
+    raise exception 'a junk lifecycle was accepted -- the CHECK is not doing anything';
+  exception when check_violation then null;
+  end;
+end $$;
+
+select coalesce(lifecycle, '(active)') as lifecycle, count(*)
+  from public.venue_grading group by 1 order by 1;
+
+commit;
+```
+
+**Restate it as an `ALTER` in `db/schema.sql` too** — D91: a CHECK declared
+inside `create table if not exists` passes every test and never exists on
+Supabase.
+
+### Still to build for thread 1
+
+1. **The Streamlit control.** Set `lifecycle` on any venue from the Venues page,
+   not only through the Compare-against-HubSpot import flow. `create_portal_user.py`
+   is the pattern to copy — one implementation, the CLI and the page both call it
+   (D141). Watch the three traps that page has already been bitten by: never
+   `st.stop()` after `st.tabs()` (D89), never `disabled=` inside `st.form` (D92),
+   and a writing button's `key` must interpolate its target (D103).
+2. ⚠️ **Decide what "stops showing up under venues" means** — it is **two
+   surfaces**. The admin page is a filter and free; the portal's *All accounts*
+   and *My accounts* read `v_venue_performance`, which is a view change plus a
+   website deploy. **Check first whether `retired` currently drops out of the
+   portal list.** If it does not, Fresh Market is still showing there and both
+   should be handled in one pass.
+3. **Does `closed` need a date?** `venue_grading` may already carry an
+   `updated_at` that answers it. If not, a `lifecycle_set_on` is cheap now and
+   expensive to reconstruct later.
+
+---
+
+## THREAD 2 — THE BRAND SCORECARD (D160). MOCKUP BUILT, NOTHING PLUMBED.
+
+Two new documents in `docs/` hold the design: the **spec** (what the report
+says, in what order) and the **implementation plan** (what changes upstream).
+Read D160 before either — it records what happened when the spec met real data.
+
+**A working mockup exists**, built from the real July 2026 44 North billing
+sheet (*Test 2026 44N Activity Report*, shared to Drive 2 Sep):
+<https://claude.ai/code/artifact/1c3c7c0e-4620-43db-86fe-a64e33054c26>
+⚠️ It has **no wake subscription** — the artifact service refused one for that
+session — so republishing it elsewhere will not notify anybody. Re-read it before
+editing.
+
+### The three findings that matter
+
+1. **`uncharged_value` computes to $0.00.** The spec's strongest idea. July's
+   free work is 16 account visits, 7 drink developments and 1 market favor, all
+   carded at $0.00 for 44 North. The rate card records what a brand is CHARGED;
+   **a list price is a different field and does not exist anywhere.**
+2. ⚠️ **Rates do not transfer between brands** — operator ruling: *"This isn't
+   Heaven's Door, all brands are charged differently."* So D119's $20 account
+   visit **cannot** value 44 North's, and "take the max across brands" is the
+   same mistake as a formula. Every list rate is a pricing decision, made once,
+   in an editable table (D60).
+3. **The charged half ties exactly.** Re-pricing all 29 July rows off the
+   sheet's own rate table returns **$535.00**, matching the invoiced commission
+   to the cent. $1,450.00 retainer + $535.00 + $70.18 = **$2,055.18**. The row
+   data reproduces the billing; only the free half is unpriced.
+
+### Blocked until someone builds or decides
+
+- **A placements table.** Two of the four headline metrics — *live placements*
+  and *accounts retained* — cannot be computed without placement STATE. ⚠️ Not
+  `brand_venue_status`: it is advance-only (D86) and can never retreat. And do
+  not substitute repeat visits for retention — July shares 5 accounts with June,
+  which would print "5 of 28" on a client document while measuring the route.
+- **List rates.** See finding 2. Nobody can derive these; the operator sets them.
+- **Territory.** The plan says it is derivable from a city column; **the activity
+  log has no city column.** It needs an account-to-territory lookup, which the
+  portal has. ⚠️ **Check whether it is two territories or three** — Cocoa Beach,
+  Melbourne and Kissimmee are neither Orlando metro nor Palm Beach. And keep one
+  vocabulary: the enum is `central_florida` / `palm_beach_county`.
+- **`new_doors`, defined twice**, giving 2 (first orders) and 18 (first touch).
+  The sheet starts in January so "first ever" is unanswerable from it; the portal
+  goes back to June 2025.
+
+### Direction, settled today
+
+**The portal is the target and the sheet is the stopgap** (operator's choice).
+And **all editing happens in the Streamlit admin — the portal only reads**,
+which is D61 restated by the person who owns the consequence.
+
+### One correction to carry forward
+
+⚠️ The first mockup printed **"43 percent of your state volume"** from D118's
+291-of-681 cases. **D118's own first line says "nothing agreed, nothing changed
+in the portal."** An unagreed figure either carries its warning onto the page or
+stays off it. Rescoping the market summary to serviced accounts is right and is
+what the operator asked for — but the cost is the **year-over-year comparison**,
+because 291 exists for Jan–Jul 2026 only with no prior-year equivalent.
+
+### And fix the old report's arithmetic regardless
+
+Four percentages in the market summary do not match the TY and LY cells beside
+them: Jan accounts sold reads −11% and is **−25.8%**; Mar off-premise reads −64%
+and is **−55.6%**; Jun total cases reads −22% and is **−11.3%**; and Jan
+accounts sold's Diff cell reads **139**, which is 56+83 added instead of
+subtracted. **June is the expensive one — an 11 percent decline was reported to
+the brand as 22 percent.** That is live in a sheet a client can open.
+
+---
+
+## Still open from before, unchanged
+
+1. **The 42 deals in the review queue** from the 31 Aug pull. Untouched.
+2. **The three operator rulings** — `Maggie McFly` vs `Maggie McFly PSL`, the two
+   `Breakthru Beverage` Day Buy-Outs, `Winn Dixie #2273`/`#2288`.
+3. **SMTP is still Supabase's built-in mailer**, rate-limited per address.
+4. **The test logins are still active** — `test-bluerun@example.com`,
+   `test-wodka@example.com`, `44ntest@test.com`.
+5. **Cost to serve's premise changed** (D139) and nobody has decided. Read D116.
+6. **The three real pay start dates** (D128).
+7. **Dame Mas's nine commission months.**
+8. **The reconciliation, still 64 of 83.** Start with Heaven's Door.
+9. **V2/V3 of the contractor portal.** V3 reopens D61; read `docs/DATA_ACCESS_TIERS.md`.
+
+---
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D159–D160 plus D157–D158** in
+> `docs/DECISIONS.md`. For the scorecard also read
+> `docs/BRAND_SCORECARD_SPEC.md` and `docs/SCORECARD_IMPLEMENTATION.md`.
+>
+> **You should be running LOCALLY.** Confirm it before anything else — if you
+> cannot `ls ../../Hubspot/portal_seed`, stop and say so, because the last
+> session could not and half of this is unbuildable without it.
+>
+> **Ask me which I want before starting.**
+>
+> **A — `closed` accounts (D159).** The SQL is written and in this document.
+> Apply it, restate it as an `ALTER` in `db/schema.sql`, then build the control
+> on the Venues page. **Decide the second surface first** — whether a `closed`
+> venue also drops out of the portal's account lists, and whether `retired`
+> already does.
+>
+> **B — the scorecard's data model (D160).** The placements table is the one
+> genuinely new structure and it unblocks two of the four headline metrics.
+> Same schema session as A. ⚠️ Not `brand_venue_status` — advance-only (D86).
+>
+> **C — list rates.** A pricing decision only the operator can make, brand by
+> brand, in a table he can edit (D60). Rates **do not transfer between brands**.
+> Until this exists the scorecard's strongest figure reads $0.00.
+>
+> **D — the 42 deals**, still sitting in the review queue from 31 Aug.
+>
+> **E — the reconciliation**, still 64 of 83, starting with Heaven's Door.
+>
+> Whichever: the billing is the truth (D56), no hardcoded business data (D60),
+> base pay is never allocated to a brand in a view (D67), a reimbursement never
+> earns (D78), reclassifying must not move money (D93/D112), **lifecycle is not
+> the account status** (D157/D86), and **an import must never erase a venue**
+> (D158).
+>
+> **Before calling it done:** open every page AND every tab, and type into
+> anything that takes input (D79/D89/D92). **Open it as the role the change was
+> NOT about** (D154). **Take before-and-after row counts around any import**
+> (D158). And where a figure carries "nothing agreed" in its own decision entry,
+> it does not go on a client-facing page without that warning attached (D160).
+
+---
+
+## ⚠️ SUPERSEDED — the 31 Aug opening. Kept for the 42 deals and D157–D158.
 
 ## THE VENUE LIST IS THE ACCOUNT UNIVERSE NOW, AND THE SYNC HAS A BUTTON.
 

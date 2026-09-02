@@ -284,6 +284,24 @@ reproduces it; keep it that way.
   `select *` (D88). Compare a fresh export on the Venues page's **Compare
   against HubSpot** tab — the matching itself is `bucket_export()` in
   `normalize.py`, so it is testable without Streamlit.
+- **A `closed` ACCOUNT AND A `retired` ONE ARE DIFFERENT FACTS** (D159).
+  `lifecycle` holds FOUR values now: null, `prospect`, `retired`, `closed`.
+  `retired` is OUR decision, it reverses, and the place is still trading — the 20
+  Fresh Market stores. `closed` means the premises is out of business and does
+  not reverse. Fold them together and the "who do we go back to?" list fills with
+  bars that no longer exist. ⚠️ **"Stops showing up under venues" is TWO
+  surfaces** — the admin page is a filter, but the portal's account lists read
+  `v_venue_performance`, which is a view change and a deploy.
+- **THE SCORECARD'S `uncharged_value` COMPUTES TO $0.00, AND RATES DO NOT
+  TRANSFER BETWEEN BRANDS** (D160). The rate card records what a brand is
+  CHARGED; a LIST PRICE is a different field and exists nowhere. 44 North's
+  account visits and drink development are carded at $0.00, so "value the free
+  work at rate card" returns nothing — the fourth way the rate card goes quiet,
+  beside `unpriced`, `uncosted` and charge-≤-pay. ⚠️ **Never value one brand's
+  work from another brand's rate** (operator: *"all brands are charged
+  differently"*), and taking the max across brands is the same mistake as a
+  formula. **Two of the four headline metrics need a placements table** that does
+  not exist — and NOT `brand_venue_status`, which is advance-only (D86).
 - **⚠️ AN IMPORT MUST NEVER ERASE A VENUE** (D158). "No company on the deal"
   means "no information", never "this happened nowhere" — the portal is the
   source of record (D84). Deleting one company in HubSpot silently nulled the
@@ -768,6 +786,8 @@ reproduces it; keep it that way.
 | `css/site.css` | Shared tokens, nav, buttons, section base, footer, mobile nav. |
 | `docs/` | The internal documents. **Force-404'd by `_redirects` — not public.** |
 | `docs/PORTAL_PLAN.md` | Architecture doc — phases, locked decisions. |
+| `docs/BRAND_SCORECARD_SPEC.md` | The client-facing scorecard: what it says, in what order. Read D160 with it. |
+| `docs/SCORECARD_IMPLEMENTATION.md` | What changes upstream to feed it. ⚠️ Its territory backfill assumes a city column the activity log does not have. |
 | `docs/HANDOFF.md` | Where the last session stopped, and the next prompt. |
 | `docs/DATA_ACCESS_TIERS.md` | Reads / routine writes / dangerous writes, and where each belongs. **A design note, not a decision.** Read before V3. |
 | `../../Hubspot/portal_seed/admin/` | The staff admin (Streamlit). Analysis, review, cleanup. |
