@@ -101,6 +101,38 @@ puts the portal on the live domain.
 
 ---
 
+## 2 Sep 2026 (local) — the July scorecard, and reconciling every 44 North account
+
+Nothing deployed, no build credit spent. The work is in the operator's Google
+Sheets, `Invoicing/`, and these documents.
+
+**Built.** A single `SCORECARD` tab in the 44 North brand workbook, driven by a
+month dropdown in `B3`. Cards for cases moved, accounts that bought, services
+delivered and amount billed; a table of the account base against Florida; the
+month's biggest buyers; and the billing block last. Verified against July and
+June by recalculating the workbook, not by reading the formulas (D164).
+
+**Reconciled.** Every 44 North case sale in the 2025 and 2026 masters, against
+the distributor's flash: **106 ruled pairs, 2 chains, 17 rejections**, in
+`Invoicing/flash_match.py`, written up in `docs/FLASH_ACCOUNT_MATCHING.md` with
+a lookup copy at `44 North/ACCOUNT_MAP_44North.csv` (D163).
+
+⚠️ **The July year-over-year moved five times during that reconciliation and
+changed sign: +33.3% → +12.9% → -5.4% → -7.9% → -5.1% → -7.3%.** Each move came
+from the operator recognising an account the matching had missed. Florida was
+-17.9% over the same month, so the accounts beat the market by 10 points — but
+"we grew while Florida fell" was never true and nearly shipped three times.
+
+**Changed in the data.** Reorders are now logged as `recurring case` at $0.00 in
+the activity master, one row per account per month, netted against cases already
+billed as `Case Sale`. Last year's cases live in the 2025 master as `Case Sale`
+and reach the brand file through a `<Month> 2025` IMPORTRANGE tab (D161, D162).
+
+**Still fiction.** Only July 2025 is reconciled, so June 2026 reads **+212.5%**.
+Every month before July needs the same backfill.
+
+---
+
 ## Done
 
 ### Phase 0 — Secure the HubSpot token ✅ 10 Aug 2026 (one step outstanding)

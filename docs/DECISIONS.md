@@ -7036,3 +7036,87 @@ the page with the warning attached or does not go on the page. Rescoping the
 market summary to serviced accounts is the operator's instruction and is right;
 **the cost is the year-over-year comparison**, because 291 exists for Jan–Jul
 2026 only and there is no prior-year equivalent at account level.
+
+---
+
+**D161 — A REORDER IS AN OUTCOME, NOT AN ACTIVITY, AND LAST YEAR'S LIVES IN LAST
+YEAR'S MASTER.**
+
+Reorders are logged in the activity master as `recurring case` at **$0.00**, one
+row per account per month, so cases can be counted without touching billing. The
+operator's instinct was right twice over. First: *"reorders aren't activities"* —
+an earlier draft wrote a qty-0 July row for accounts nobody had visited, which
+invents a visit that did not happen. Second: *"I can't be posting activities from
+last year into this year's report"* — the 2026 activity report covers 2026. Last
+year's cases go in the **2025 master** as `Case Sale`, and the brand file pulls
+them into a `<Month> 2025` tab by IMPORTRANGE.
+
+⚠️ **Net out cases already billed as `Case Sale` before writing reorder rows.**
+The flash counts every case that shipped, billed or not. July had 3 already
+logged (Phyre 2, Huck's 1); writing them again double counts. The netting must
+key on the **flash customer**, not the account name — the master calls it
+`Phyre Brewery & Tavern` and the portal calls it `Phyre Saloon`, and a raw string
+comparison missed it.
+
+---
+
+**D162 — AN ACCOUNT WITH CASES IN EITHER YEAR GETS A ROW. A LAPSE IS A REAL LOSS.**
+
+Operator: *"it is only counting the venues that ordered in july of this year but
+if a venue ordered last year and didnt reorder this year thats a negative
+change."* He is right and it was material. Restricting to accounts active in 2026
+hid seven accounts that bought in July 2025 and nothing in July 2026, and with
+them 9 cases of decline.
+
+The rule is: **every account of ours with cases in either period is logged.** No
+qty-0 rows are needed once last year lives in its own master — a lapse is simply
+an account with a 2025 row and no 2026 one, and the anti-join finds it.
+
+---
+
+**D163 — THE ACCOUNT MAP IS RULED, NEVER DERIVED. THE CUSTOMER NUMBER IS THE ONLY
+DURABLE KEY.**
+
+106 pairs and 2 chains in `Invoicing/flash_match.py`, every one ruled by the
+operator, with 17 rejected pairs kept so nothing re-adopts them. Written up in
+`docs/FLASH_ACCOUNT_MATCHING.md` with a lookup copy at
+`44 North/ACCOUNT_MAP_44North.csv`.
+
+Fuzzy matching proposed **Universal Studios** (58 FYTD cases) for "University
+Wine and Spirit", collapsed three Orlando bars onto one NONA SOCIAL, and offered
+a panhandle wine shop for a Palm Beach one. It also **failed silently**: six
+flash names are shared by several stores and a name-keyed dict kept whichever
+came last, scoring our Port St Lucie Maggie McFly off the Boca Raton store.
+Ambiguity now raises.
+
+⚠️ **The number moved five times as accounts were found: +33.3% → +12.9% →
+-5.4% → -7.9% → -5.1% → -7.3%.** It began as growth and ended as a decline.
+Every correction needed the operator's knowledge, not better code.
+
+---
+
+**D164 — ONE SCORECARD TAB, DRIVEN BY A MONTH DROPDOWN, READING THE WORKBOOK
+ITSELF.**
+
+`B3` holds the month; every block follows it. This year's activity comes from
+`'<MONTH>'`, last year's from `'<Month> 2025'` (`PROPER()` bridges the casing),
+billing from SUMMARY's Annual Recap, and Florida from `Market Summary 2026`.
+There is no FlashData tab: the flash is a source and a cross-check, not a
+dependency.
+
+⚠️ **Market Summary's month label is a DATE.** It displays as "Jul 2026" and is
+`7/1/2026`. A wildcard MATCH and an exact-text MATCH both returned `#N/A` before
+the operator spotted it. Match `DATEVALUE("1 "&$B$3&" 2026")` instead.
+
+Three more traps, all found by testing rather than reading:
+- Matching cases on `"*case*"` also catches **"TAP w/2 cases"**, a tap placement.
+  Match `"*case sale*"` and `"recurring case"` explicitly.
+- `recurring case` is carded at $0.00, so a naive "services covered by the
+  retainer" count swept reorders in and read **58** instead of 23.
+- Inlining the last-year total into the change formula produced `-A+B` and `/A+B`
+  without brackets. It gave the right answer **only because 2025 has no
+  `recurring case` rows yet**, and would have broken silently on backfill. Each
+  number is now computed once in a cell and referenced.
+
+A `QUERY` spills into the cells to its right and cannot spill into merged ones,
+so it runs off-screen in a hidden column and the visible rows read from it.

@@ -284,6 +284,20 @@ reproduces it; keep it that way.
   `select *` (D88). Compare a fresh export on the Venues page's **Compare
   against HubSpot** tab — the matching itself is `bucket_export()` in
   `normalize.py`, so it is testable without Streamlit.
+- **NEVER FUZZY-MATCH THE OPERATOR'S ACCOUNTS** (D163). The distributor's flash
+  names accounts differently from both the masters and the portal. Matching
+  proposes; only Nicholas adopts. Left alone it offered **Universal Studios**
+  (58 FYTD cases) for "University Wine and Spirit" and collapsed three Orlando
+  bars onto one customer. It also failed **silently**: six flash names are shared
+  by several stores, and a name-keyed lookup scored our Port St Lucie account off
+  the Boca Raton one. The customer number (`700xxxxxx`) is the only durable key.
+  ⚠️ **Verify the mapping with him BEFORE building anything on it** — *"building
+  doesnt make sense if the data is wrong."*
+- **A REORDER IS AN OUTCOME, NOT AN ACTIVITY** (D161/D162). It is logged as
+  `recurring case` at $0.00 in the activity master, netted against cases already
+  billed as `Case Sale`, and **last year's cases live in last year's master**.
+  An account with cases in EITHER year gets a row: a lapse is a real loss, and
+  counting only this year's buyers turned a **-7.3%** month into **+33.3%**.
 - **A `closed` ACCOUNT AND A `retired` ONE ARE DIFFERENT FACTS** (D159).
   `lifecycle` holds FOUR values now: null, `prospect`, `retired`, `closed`.
   `retired` is OUR decision, it reverses, and the place is still trading — the 20
@@ -787,6 +801,10 @@ reproduces it; keep it that way.
 | `docs/` | The internal documents. **Force-404'd by `_redirects` — not public.** |
 | `docs/PORTAL_PLAN.md` | Architecture doc — phases, locked decisions. |
 | `docs/BRAND_SCORECARD_SPEC.md` | The client-facing scorecard: what it says, in what order. Read D160 with it. |
+| `docs/FLASH_ACCOUNT_MATCHING.md` | Our accounts against the distributor's flash. 106 ruled pairs, 17 rejections. Read before touching any case figure. |
+| `../../../44 North/ACCOUNT_MAP_44North.csv` | The same mapping as a lookup table. Open this one to check an account. |
+| `../../../Invoicing/flash_match.py` | What actually runs the matching. Raises on an ambiguous name rather than guessing. |
+| `../../../Invoicing/build_scorecard_v2.py` | Builds the month-dropdown scorecard tab. |
 | `docs/SCORECARD_IMPLEMENTATION.md` | What changes upstream to feed it. ⚠️ Its territory backfill assumes a city column the activity log does not have. |
 | `docs/HANDOFF.md` | Where the last session stopped, and the next prompt. |
 | `docs/DATA_ACCESS_TIERS.md` | Reads / routine writes / dangerous writes, and where each belongs. **A design note, not a decision.** Read before V3. |

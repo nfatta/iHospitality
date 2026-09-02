@@ -1,6 +1,123 @@
 # HANDOFF — start here
 
-Written at the close of **2 Sep 2026**.
+Written at the close of **2 Sep 2026**, local session. An earlier 2 Sep session
+ran in the cloud with no database and no `portal_seed`; its notes are kept below
+under **THE EARLIER 2 SEP SESSION**.
+
+## THE JULY SCORECARD IS BUILT AND LIVE IN THE BRAND'S GOOGLE SHEET.
+
+Nothing was deployed and **no build credit was spent.** The work is in the
+operator's Google Sheets, in `Invoicing/`, and in these documents.
+
+### ⚠️ THE HEADLINE NUMBER MOVED FIVE TIMES AND CHANGED SIGN
+
+| After | Jul 2026 | Jul 2025 | Change |
+|---|---|---|---|
+| 2026-active accounts only | 32 | 24 | +33.3% |
+| including lapsed accounts | 35 | 31 | +12.9% |
+| three renamed accounts found | 35 | 37 | -5.4% |
+| Good Pour Gainesville | 35 | 38 | -7.9% |
+| Jellyfish, Golden Ox, Breeze | 37 | 39 | -5.1% |
+| every case sale in both masters reconciled | **38** | **41** | **-7.3%** |
+
+**It began as growth and ended as a decline.** Florida was -17.9%, so the account
+base still beat the market by 10 points, which is the honest story. Every single
+correction came from the operator recognising an account, not from better code.
+Read **D163** before touching any of this.
+
+### What exists now
+
+| | |
+|---|---|
+| `Invoicing/flash_match.py` | 106 ruled pairs, 2 chains, 17 rejections. Raises on an ambiguous name |
+| `docs/FLASH_ACCOUNT_MATCHING.md` | the reasoning, the traps, the monthly routine |
+| `44 North/ACCOUNT_MAP_44North.csv` | the lookup copy. Open this one to check an account |
+| `Invoicing/build_scorecard_v2.py` | builds the scorecard tab. Verified on July and June |
+| Brand Google Sheet | `SCORECARD` tab live, month dropdown in `B3` |
+
+**July reads:** 38 cases against 41, -7.3%. Florida 110 against 134, -17.9%.
+23 accounts bought against 22. 27 services, 23 covered by the retainer.
+$2,055.18 billed. All computed, none typed.
+
+### ⚠️ JUNE READS +212.5% AND IT IS FICTION
+
+Only **July 2025** has been reconciled. The 2025 master holds billed case sales
+and **no reorders**, because reorders were not being logged last year. June 2025
+has 8 cases in it, so June 2026 prints +212.5%.
+
+**Every month before July needs the same backfill**, which needs last year's flash
+for each month. Until then the dropdown is honest for July only.
+
+### Three things the operator caught that the code did not
+
+1. **Lapsed accounts.** *"if a venue ordered last year and didnt reorder this year
+   thats a negative change."* Seven accounts, 9 cases, all hidden. D162.
+2. **Reorders are not activities.** A draft wrote qty-0 rows inventing visits to
+   accounts nobody had been to, and put last year's cases in this year's report.
+   D161.
+3. **The Market Summary month label is a date.** It displays "Jul 2026" and holds
+   `7/1/2026`. Two MATCH attempts failed before he spotted it. D164.
+
+### Still open, unchanged
+
+1. **`closed` accounts (D159 on this branch).** SQL written, not applied.
+2. **The scorecard's placements metrics.** Still no placement state. Flash PODS is
+   `#UNAVAILABLE` for 224 of 342 customers.
+3. **Territory on the scorecard.** Needs City added to the 2026 brand-file import.
+4. **The 42 deals in the review queue** from the 31 Aug pull.
+5. **SMTP**, the **test logins**, **cost to serve** (D139), **pay start dates**
+   (D128), **Dame Mas commission months**, **reconciliation 64 of 83**, **V2/V3**.
+
+### ⚠️ D159 IS USED TWICE
+
+`main` has D159 as the staging correction overlay. This branch has D159 as
+`closed` accounts and D160 as the scorecard findings, because the cloud session
+branched from a `main` that never received the 1 Sep commits. **Renumber before
+merging.** Today's entries are D161–D164 and do not collide.
+
+---
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D161–D164 plus D159–D160** in
+> `docs/DECISIONS.md`. For the scorecard also read
+> `docs/FLASH_ACCOUNT_MATCHING.md`.
+>
+> **Confirm you are running locally** before anything else: `ls ../../../Hubspot/portal_seed`
+> (three levels up from the website repo, not two).
+>
+> **Ask me which I want before starting.**
+>
+> **A — backfill 2025.** Jan–Jun, so the dropdown stops lying on every month but
+> July. Needs last year's flash per month. This is the biggest open item.
+>
+> **B — territory on the scorecard.** Add City to the 2026 brand-file import,
+> then the territory block can be built. Two buckets, Central Florida and Palm
+> Beach, plus Other for the west coast accounts.
+>
+> **C — the year-to-date view.** The operator asked for it after the monthly one
+> works. `docs/FLASH_ACCOUNT_MATCHING.md` has what it needs.
+>
+> **D — `closed` accounts (D159)**, **E — the 42 deals**, **F — the reconciliation**.
+>
+> ⚠️ **VERIFY THE DATA WITH HIM BEFORE BUILDING.** Operator, 2 Sep: *"building
+> doesnt make sense if the data is wrong."* Three rebuilds happened before that
+> was learned. Surface the mapping, wait for a ruling, then build.
+>
+> ⚠️ **Do not fuzzy-match his accounts.** Propose, never adopt. D163.
+>
+> **Keep responses short.** He has ADHD and asked directly. Bullets, not prose.
+>
+> Whichever: the billing is the truth (D56), no hardcoded business data (D60),
+> base pay is never allocated to a brand in a view (D67), a reimbursement never
+> earns (D78), reclassifying must not move money (D93/D112), **lifecycle is not
+> the account status** (D157/D86), and **an import must never erase a venue**
+> (D158).
+
+---
+
+## ⚠️ SUPERSEDED — THE EARLIER 2 SEP SESSION, run in the cloud with no database.
+
 
 ## TWO THREADS OPENED, NEITHER BUILT. THIS SESSION HAD NO DATABASE.
 
