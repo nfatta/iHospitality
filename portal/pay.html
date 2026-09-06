@@ -35,7 +35,7 @@
     <div class="panel">
       <div class="panel-head">
         <h2>Base pay, per person</h2>
-        <span class="hint">Read-only — edits happen in the staff admin</span>
+        <span class="hint" id="roster-hint">Read-only — edits happen in the staff admin</span>
       </div>
       <div id="people"></div>
       <div id="flags"></div>
@@ -114,7 +114,7 @@
           byPerson[k].sort((a, b) => String(b.effective_from).localeCompare(String(a.effective_from)));
         }
 
-        const rows = (people.data || []).map(c => {
+        const rows = (people.data || []).filter(c => c.is_active).map(c => {
           const periods = byPerson[c.id] || [];
           const current = periods.find(p => !p.effective_to) || periods[0] || null;
           const base = current ? Number(current.base_pay) : null;
@@ -168,8 +168,7 @@
 
         sortableTable(el, rows, [
           { head: 'Contractor', always: true, cls: 'venue', sortValue: r => r.name,
-            get: r => `<a href="contractor.html?id=${encodeURIComponent(r.id)}">${esc(r.name)}</a>`
-                    + (r.active ? '' : ' <span class="pill pill-lost">Retired</span>') },
+            get: r => esc(r.name) },
           { head: 'Base pay', cls: 'num', always: true, value: r => r.base, sortValue: r => r.base ?? -1,
             get: r => r.base == null ? '<span class="pill pill-dormant">none on file</span>' : money(r.base) },
           { head: 'Paid', get: r => esc(r.freq || ''), sortValue: r => r.freq || '' },
@@ -185,11 +184,22 @@
           { head: 'Periods', cls: 'num', value: r => r.periods, sortValue: r => r.periods,
             get: r => fmtNum(r.periods) },
           { head: 'Note', get: r => esc(r.note || ''), sortValue: r => r.note || '' },
-        ], { sort: 'A month', dir: 'desc' });
+        ], {
+          sort: 'A month', dir: 'desc',
+          // Keyed on the id, never the name (D129's rule applied to people).
+          onRowClick: (r) => {
+            location.href = `contractor.html?id=${encodeURIComponent(r.id)}`;
+          },
+        });
 
         // A person with no pay row is not free — they are unrecorded, and every
         // company-wide cost figure is short by whatever they actually earn.
-        const missing = rows.filter(r => r.active && r.base == null);
+        const retired = (people.data || []).filter(c => !c.is_active).length;
+        document.getElementById('roster-hint').textContent =
+          'Current people only. Read-only — edits happen in the staff admin'
+          + (retired ? `. ${retired} retired, not shown` : '');
+
+        const missing = rows.filter(r => r.base == null);
         document.getElementById('flags').innerHTML = missing.length
           ? `<div class="note-flag warn"><b>No rate on file</b><span>${
               esc(missing.map(m => m.name).join(', '))} ${missing.length === 1 ? 'has' : 'have'} no pay
