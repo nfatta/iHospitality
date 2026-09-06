@@ -577,10 +577,16 @@ reproduces it; keep it that way.
   Read tab 3's *our cases at a venue with no customer number* BEFORE accepting
   anything on tab 2. And **check what `merge_venue()` does not rescue** before
   merging: `venue_note`, `venue_contact_link` and `venue_profile` cascade.
-- **⚠️ A RUNNING STREAMLIT IS NOT THE CODE ON DISK** (D173). A fix committed at
-  23:11 cannot explain an import that ran at 23:10, and the admin holds whatever
-  it started with. When a fix "does not work", compare the two clocks before
-  looking anywhere else -- and restart the admin after any page change.
+- **⚠️ A RUNNING STREAMLIT IS NOT THE CODE ON DISK, AND A RERUN DOES NOT FIX
+  AN IMPORTED MODULE** (D173). Two shapes, and the second is worse. A PAGE file
+  is re-read on every rerun. An IMPORTED module -- `flash_report`, `lib`,
+  `promote` -- is cached in `sys.modules` and is **not**, so new page code runs
+  against the old module and raises `AttributeError` on whatever was just added
+  to it. That is not a bug in the change; it is a **stale process**. RESTART the
+  admin after touching anything that is imported, never just Rerun. And when a
+  fix "does not work", compare the clock on the commit against the clock on the
+  action before looking anywhere else -- a fix committed at 23:11 cannot explain
+  an import that ran at 23:10.
 - **A RETURN IS A NEGATIVE DEPLETION AND STAYS VISIBLE** (D169). `case_return`
   carries a case equivalent of **-1.0**, so the quantity stays positive (the
   CHECK forbids a negative one) and `sum(quantity * case_equivalent)` nets to
