@@ -7407,3 +7407,44 @@ Two rules survive the change and both are load-bearing:
   page's subject. `st.data_editor` keeps edits by ROW POSITION, so a different
   upload re-projects them onto whatever now sits in that row - the same fault
   D103 records costing a real depletion.
+
+---
+
+**D171 - CONTRACTOR PAY IS MODELLED EVEN WHEN NOBODY DRAWS IT, AND THE FLASH MUST ASK WHO DID THE WORK.**
+
+Operator ruling, 6 Sep 2026: *"Even though phil doesnt take a the pay we need to
+model it for accuracy when we hire someone to fill that position. But some of
+those are mine and Eric and we get paid."*
+
+So the pay rate stands on every activity whether or not the person invoices for
+it. **A contractor is who DID the work, not who was paid for it**, and the two
+part company on purpose: Phil owns 41 of the 46 rows the flash created and draws
+nothing on a reorder, while Nicholas and Eric do get paid on theirs. Modelling
+it is what makes the month answer "what would this cost with someone hired into
+that seat".
+
+⚠️ **THE CONSEQUENCE IS A NEGATIVE ACTIVITY MARGIN, AND IT IS CORRECT.** 44
+North's `recurring case` is carded at $0.00 charge and $5.00 pay (D118), so the
+46 rows from the July and August flash added:
+
+| | Charge | Pay | Margin |
+|---|---|---|---|
+| Case Reorder, 44 rows | $0.00 | $335.00 | **-$335.00** |
+| Case Sale, 2 rows | $150.00 | $75.00 | +$75.00 |
+
+Every reorder recorded makes activity margin worse while the retainer carries
+the month. Do not "fix" the rate and do not read the sign as a fault. It is the
+same shape as mileage and the fresh market incentive (D91/D100), and it is the
+third thing on the list D119 warns is a priced decision rather than a data
+error.
+
+**THE FLASH PAGE HAS TO ASK.** It wrote `activities` and nothing else, so all 46
+landed with no `activity_contractor` and the operator assigned every one by
+hand afterwards - a second pass the page should have made unnecessary. The add
+grid needs a Contractor column defaulted from
+`venue_grading.owner_contractor_id`, editable per row, written in the same
+transaction. `activity_contractor`'s primary key is `activity_id` alone, so one
+contractor per activity and an upsert cannot fan out.
+
+Blank still means NOT RECORDED, never "nobody" (D135). 186 activities carry no
+contractor, and each is missing pay rather than free work.
