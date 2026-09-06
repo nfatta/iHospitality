@@ -553,6 +553,19 @@ reproduces it; keep it that way.
 - **The fresh market incentive is a PASS-THROUGH like mileage** (D100). Charged
   $100.00, paid $100.00, keeps nothing. Its $0.00 margin is correct and it
   belongs in the at-or-below-cost list. Do not "fix" it.
+- **RULE IN THE TABLE, NOT IN A PICKER BESIDE IT** (D170). Operator preference,
+  6 Sep 2026: *"can we just make the table able to be edited? That is so much
+  easier for me instead of the drop down."* When a page asks for the same
+  decision on many rows, put the deciding column IN the grid with
+  `st.data_editor` and one Save, rather than a selectbox that walks one record
+  at a time -- thirty accounts is thirty round trips otherwise. **Most of the
+  time, not always**: a single-target action, or one whose inputs differ per
+  row, is still better as a form. Two rules survive the change and both are
+  load-bearing: nothing may be pre-selected on a grid that writes (a blank
+  default means an unread row writes nothing), and the editor's `key` must
+  carry the filter and the row count as well as the page's subject, because
+  `st.data_editor` keeps edits by ROW POSITION and will re-project them onto
+  whatever now sits in that row (D103).
 - **A WRITING BUTTON'S `key` MUST CARRY WHAT IT WRITES TO** (D103). A Streamlit
   rerun can REPLAY a button press, so `st.button(key="save")` beside a
   selectbox delivers the replayed press to whatever the selector fell back to.

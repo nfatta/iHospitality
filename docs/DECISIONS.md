@@ -7309,3 +7309,101 @@ same rule applies to whoever is holding the keyboard.
 
 **Numbered D167, not D159.** This was written on 1 Sep 2026 and sat unpushed on a local `main` while a session that had branched from before it took D159 for the `closed` lifecycle ruling on 2 Sep, then ran on through D166. Two different decisions carried one number for five days. The work itself shipped regardless: `staging.hubspot_deal_correction` is live and holds a row, and `db/test/12_correction_test.sql` passes. Only the record was missing.
 
+---
+
+**D168 - THE DISTRIBUTOR'S CUSTOMER NUMBER, AND THE FLASH THE PORTAL CAN NOW READ.**
+
+The EOM flash is the ONLY source for reorders: they reach the venue through the
+distributor's rep with no iHospitality visit, so there is nothing for a
+contractor to log (D118). July 2026 is the size of the gap - the portal held
+**4** cases of 44 North and the flash held **38**.
+
+`distributor`, `venue_distributor_account`, `distributor_account_rejection`.
+The mapping moves out of a hardcoded dict in `Invoicing/flash_match.py`, which
+is a business fact compiled into a script and what D60 forbids. 108 mappings
+across 105 venues, plus the 17 rejections, seeded by
+`seed_distributor_accounts.py` and idempotent.
+
+**IT HANGS OFF THE DISTRIBUTOR, NOT THE BRAND.** The number is the account's
+LIQUOR LICENCE, so one mapping serves every brand: load the Wodka flash and
+every 44 North account it mentions already resolves. That is also the
+cross-check nobody had before.
+
+⚠️ **MANY-TO-MANY IN BOTH DIRECTIONS, and both are real.** One venue with
+several numbers: Hampton bills on and off premise separately, Spirits2U trades
+under three. One number with several venues: Aku Aku and Stardust Lounge share
+a licence, one customer to the distributor and two places to us. So there is
+deliberately **no unique constraint on the customer number**, and reconciliation
+compares at the **match group** - a connected component of the venue/number
+graph - summing BOTH sides. Comparing per venue reports one of a shared pair
+short and the other over. 105 groups today, 103 of them 1:1.
+
+`flash_report.py` parses and reconciles with no database and no Streamlit, so
+it is testable without a network. The header is LOCATED rather than assumed,
+every read is by RAW column index because compacting a row does not line the
+columns up, and `(3)` parses as minus three. The parse is checked against the
+file's own stated customer count and refuses to continue if they disagree.
+
+⚠️ **THE MONTH CANNOT BE DERIVED FROM THE FILE.** July's flash was pulled on
+8/2 and August's on 8/31, so "Date As Of" records when the report ran, not what
+MTD covers. The operator picks it; the page shows both dates so the choice can
+be checked rather than trusted.
+
+Idempotency is `external_ref`, unique, shaped
+`flash:<distributor>:<brand>:<month>:<customer_no>`. Re-uploading a month
+updates rather than duplicating - which is also why an account already recorded
+never appears in the add list, and Hurricane Alley could not be double-counted
+on the first real run.
+
+July, applied: 20 activities, 34 cases, and the portal now reads 38 against the
+flash's 38.
+
+---
+
+**D169 - A RETURN IS A NEGATIVE DEPLETION, AND IT STAYS VISIBLE.**
+
+August 2026 carries `HOLLERBACHS (700405764)` at **(3)**, against +3 in July.
+Net zero across the two months.
+
+`activities.quantity` is `CHECK (>= 0)`, so a return cannot be a negative
+quantity. **It does not need to be.** The QUANTITY stays positive and the CASE
+EQUIVALENT carries the sign: `case_return` is seeded at **-1.0**, so three
+cases returned is quantity 3, and `sum(quantity * case_equivalent)` nets to
+zero by itself in every view that already computes `units_moved`. No special
+case anywhere, and no schema change beyond the new type.
+
+`is_depletion` is TRUE on purpose. A return is a depletion event pointing the
+other way, and leaving it false would drop it out of exactly the reports that
+need to show it.
+
+⚠️ **NETTING IT AWAY SILENTLY WAS THE ALTERNATIVE, AND THE BRANDS READ THIS
+DATA.** Operator, 6 Sep 2026: *"if we reported 3 sold in july then they
+returned it in august really we sold a net of 0 and this system we are building
+will also be used by the brands so need to be transparent with that."* Both
+rows show on the brand's log. Whether a return also credits the commission is a
+Rate card decision (D60); `rate_card` has no non-negative constraint, so a
+credit is expressible when he wants one.
+
+---
+
+**D170 - RULE IN THE TABLE, NOT IN A PICKER BESIDE IT.**
+
+Operator preference, 6 Sep 2026, on being handed a per-record selectbox:
+*"can we just make the table able to be edited? That is so much easier for me
+instead of the drop down."*
+
+When a page asks the same decision of many rows, the deciding column belongs IN
+the grid with one Save. Thirty unclaimed accounts through a picker is thirty
+round trips. **Most of the time, not always** - a single-target action, or one
+whose inputs differ per row, is still better as a form.
+
+Two rules survive the change and both are load-bearing:
+
+- **Nothing is pre-selected on a grid that writes.** A blank default means a
+  row nobody read writes nothing. On the flash's claim tab that matters more
+  than usual: it is the tab where fuzzy matching offered Universal Studios for
+  "University Wine and Spirit" (D163).
+- **The editor's `key` carries the filter and the row count**, not just the
+  page's subject. `st.data_editor` keeps edits by ROW POSITION, so a different
+  upload re-projects them onto whatever now sits in that row - the same fault
+  D103 records costing a real depletion.
