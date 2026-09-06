@@ -7150,3 +7150,45 @@ the order fails silently in the same direction as the bug it fixes.
 `v_my_activity_pay` (773 for Phil King), and `v_venue_performance` and
 `v_brand_venue_counts` (692 each). They break silently at 1,000, and the pay one
 under-reports a contractor's own earnings when it does.
+
+---
+
+**D166 - A BILLING ROLL-UP IS NOT AN ACTIVITY, AND IS NOW FLAGGED AS ONE.**
+
+The dashboard read **1,255** activities while the Activity page read **1,246**,
+and nothing on either screen explained the gap. The nine rows between them are
+Dame Mas `monthly_commission`, Jul 2025 to Mar 2026.
+
+They are not work anybody did. They carry **no HubSpot deal id, no external ref
+and no venue**, because they came off the INVOICES: those months had no
+venue-level depletion, so the month's commission was booked whole and the
+individual case sales in the same window are priced at $0.00 so the money is
+counted once (D93/D51).
+
+⚠️ **THE ROWS MUST STAY.** They hold ALL of Dame Mas's revenue for those nine
+months, **$3,307.28** of it. Every other Dame Mas activity in that window
+charges $0.00 by design, so deleting the roll-ups reads as nine months of $0.
+What was wrong was only that they were COUNTED as activities.
+
+`activity_types.is_rollup`, seeded once for `monthly_commission` inside a DO
+block so a routine re-apply cannot re-flip what the operator later changes --
+the same shape as `is_reorder`, and the trap `rate_card.per_unit` documents. A
+FLAG rather than a code hardcoded in the views, per D60: the portal already
+hardcodes that string once, in `activity.html`, and the next roll-up type should
+be a checkbox on the Activity types page rather than a schema edit.
+
+`v_monthly_summary` and `v_brand_monthly_summary` count only `where not
+t.is_rollup`. **Every money view is untouched on purpose.** Verified against
+live: all three counts now agree at 1,246, while total charged stays
+$38,558.93, contractor cost $24,770.90 and revenue $125,033.93; `depletion_events`
+and `units_moved` do not move, because a roll-up was never a depletion.
+
+⚠️ **`venues_touched` and `brands_active` were already immune** - a roll-up has
+a NULL venue and `count(distinct)` ignores NULLs, and Dame Mas has other work in
+each of those months. Only `count(*)` was ever wrong.
+
+A footnote on method: an ad-hoc check of the same numbers written as
+`source_activity_type <> 'monthly commission'` came back one row short, because
+one Dame Mas row has a NULL `source_activity_type` and `NULL <> 'x'` is NULL,
+not true. The flag test has no such hole. **Prefer a flag to a string
+comparison, and never filter on a nullable column with `<>`.**
