@@ -51,7 +51,7 @@
 
   <script type="module">
     import { db, requireAuth, renderShell, render, esc, fmtDate, fmtMonth, fmtNum,
-             MARKET_LABEL, sortableTable, fillSelect } from './portal.js';
+             MARKET_LABEL, sortableTable, fillSelect, selectAll } from './portal.js';
 
     const auth = await requireAuth();
     if (auth) {
@@ -82,8 +82,8 @@
       // THE MONEY IS UNAFFECTED. Revenue and margin come from v_activity_money
       // and v_brand_month_revenue, which still include it. This hides an entry
       // from a list; it does not remove a charge.
-      const { data, error } = await db.from('v_brand_activity_log')
-        .select('*').neq('activity_type_code', 'monthly_commission');
+      const { data, error } = await selectAll(() => db.from('v_brand_activity_log')
+        .select('*').neq('activity_type_code', 'monthly_commission'), 'id');
       if (error) {
         render(document.getElementById('log'), { error });
       } else if (!data.length) {

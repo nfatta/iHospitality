@@ -22,6 +22,45 @@ export const db = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 export const AUTH_BASE = `${SUPABASE_URL}/auth/v1`;
 export const AUTH_KEY = SUPABASE_PUBLISHABLE_KEY;
 
+/* ---------- reading a view that is bigger than one page (D165) ----------
+   POSTGREST CAPS A RESPONSE AT 1,000 ROWS AND THE CLIENT CANNOT LIFT IT.
+   Measured against this project, not assumed: a plain select on
+   v_activity_money answers `Content-Range: 0-999/1255`, and it still answers
+   0-999 with an explicit `limit=2000` and with a `Range: 0-1999` header. The
+   only thing that reaches row 1,000 is a second request.
+
+   So a page that reads a growing view and then sums it in the browser is
+   SHORT the moment that view crosses the cap, and nothing says so -- no error,
+   no warning, just a smaller number. business.html, pay.html, rate-card.html
+   and activity.html were each totalling 1,000 of 1,255 activities. The admin
+   never had this because it talks to Postgres through psycopg, which is why
+   the two disagreed and the portal was always the low one.
+
+   THE TIEBREAK IS NOT DECORATION. A .range() over an unordered result is not a
+   stable page -- rows can repeat or vanish at a boundary -- which is the same
+   fault D122 describes for the gallery. Pass a column that is UNIQUE across
+   the result so the sort is TOTAL; it is applied last, so a caller may still
+   order for display inside build(). It is required rather than optional
+   because forgetting it fails silently, in the same direction as the bug this
+   exists to fix.
+
+   Takes a FACTORY, not a query. A PostgREST builder is thenable and single
+   use, so the same object cannot be re-ranged for a second page. */
+export async function selectAll(build, tiebreak) {
+  if (!tiebreak) throw new Error('selectAll needs a unique tiebreak column');
+  const PAGE = 1000;
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build()
+      .order(tiebreak, { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) return { data: null, error };
+    rows.push(...(data || []));
+    // A short page is the last page. An exactly-full one might not be.
+    if (!data || data.length < PAGE) return { data: rows, error: null };
+  }
+}
+
 /* ---------- installable on a phone (D137) ----------
    Registered from here so every page gets it without repeating the snippet.
 

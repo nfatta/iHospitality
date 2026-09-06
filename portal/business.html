@@ -89,7 +89,8 @@
        every month by that much and could flip the sign of net.
        ========================================================== */
     import { db, requireAuth, renderShell, render, esc, isStaff,
-             fmtNum, fmtMonth, money, monthRange, sortableTable, guardStaffPage} from './portal.js';
+             fmtNum, fmtMonth, money, monthRange, sortableTable, guardStaffPage,
+             selectAll } from './portal.js';
 
     const auth = await requireAuth();
     if (auth) {
@@ -112,8 +113,9 @@
           db.from('v_month_business').select('*'),
           // Everything the two fault panels need, at row grain so both can be
           // windowed by month. `month` is on the view already.
-          db.from('v_activity_money')
+          selectAll(() => db.from('v_activity_money')
             .select('month, brand_name, source_activity_type, charge_rate, pay_rate, charge, cost, unpriced'),
+            'activity_id'),
           db.from('brands').select('name, is_active'),
         ]);
 

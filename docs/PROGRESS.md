@@ -21,6 +21,26 @@ it before it becomes real.
 > one: margin per brand is still not a meaningful number, and the Dame Mas
 > account read as *negative* until the retainer was found.
 
+### 2 Sep 2026 — two threads opened, neither built
+
+⚠️ **Ran in a cloud session with no `portal_seed` and no `DATABASE_URL`**, so
+nothing was verified against live data and no Python, schema or portal page was
+touched. Repo changes are confined to `docs/`.
+
+- **D159 — `closed` accounts.** `venue_grading.lifecycle` gains a fourth value
+  alongside `prospect` / `retired` / null. Fresh Market stays `retired`. The
+  migration is written and sits in `docs/HANDOFF.md`; **it has not been applied.**
+  The Streamlit control is not built.
+- **D160 — the brand scorecard.** The spec and implementation plan are now in
+  `docs/`. Tested against the real July 2026 44 North billing sheet: the charged
+  half re-prices to **$535.00**, matching the invoice to the cent, but
+  `uncharged_value` — the spec's strongest figure — computes to **$0.00**,
+  because the rate card holds charge rates and a list price is a field that does
+  not exist. Rates **do not transfer between brands** (operator ruling). Two of
+  the four headline metrics need a placements table nobody has built.
+- **Also found:** four percentages in the client-facing market summary do not
+  match their own underlying numbers. June reads −22% and is **−11.3%**.
+
 | Stage | What | State |
 |---|---|---|
 | 1 — Everything in | deals, taxonomy, titles, photos, cities, expense exclusion | ✅ done |
@@ -78,6 +98,38 @@ with [PR #1](https://github.com/nfatta/iHospitality/pull/1) open, which gives a
 Netlify deploy preview at
 `https://deploy-preview-1--cool-dusk-e84d8f.netlify.app`. Merging that PR is what
 puts the portal on the live domain.
+
+---
+
+## 2 Sep 2026 (local) — the July scorecard, and reconciling every 44 North account
+
+Nothing deployed, no build credit spent. The work is in the operator's Google
+Sheets, `Invoicing/`, and these documents.
+
+**Built.** A single `SCORECARD` tab in the 44 North brand workbook, driven by a
+month dropdown in `B3`. Cards for cases moved, accounts that bought, services
+delivered and amount billed; a table of the account base against Florida; the
+month's biggest buyers; and the billing block last. Verified against July and
+June by recalculating the workbook, not by reading the formulas (D164).
+
+**Reconciled.** Every 44 North case sale in the 2025 and 2026 masters, against
+the distributor's flash: **106 ruled pairs, 2 chains, 17 rejections**, in
+`Invoicing/flash_match.py`, written up in `docs/FLASH_ACCOUNT_MATCHING.md` with
+a lookup copy at `44 North/ACCOUNT_MAP_44North.csv` (D163).
+
+⚠️ **The July year-over-year moved five times during that reconciliation and
+changed sign: +33.3% → +12.9% → -5.4% → -7.9% → -5.1% → -7.3%.** Each move came
+from the operator recognising an account the matching had missed. Florida was
+-17.9% over the same month, so the accounts beat the market by 10 points — but
+"we grew while Florida fell" was never true and nearly shipped three times.
+
+**Changed in the data.** Reorders are now logged as `recurring case` at $0.00 in
+the activity master, one row per account per month, netted against cases already
+billed as `Case Sale`. Last year's cases live in the 2025 master as `Case Sale`
+and reach the brand file through a `<Month> 2025` IMPORTRANGE tab (D161, D162).
+
+**Still fiction.** Only July 2025 is reconciled, so June 2026 reads **+212.5%**.
+Every month before July needs the same backfill.
 
 ---
 
