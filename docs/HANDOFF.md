@@ -1,4 +1,252 @@
-# HANDOFF — start here
+# HANDOFF - start here
+
+Written at the close of **6 Sep 2026**, local session with a live database.
+Earlier sessions are kept below, newest first, each marked superseded.
+
+## THE FLASH IS NOW SOMETHING THE PORTAL READS, AND JULY AND AUGUST ARE IN.
+
+The session began as a data-integrity audit and turned into the reorder pipeline.
+Four PRs merged (#11 to #14), all deployed. Six decisions recorded, D165 to D170.
+
+### The audit found one live bug, and the database was otherwise clean
+
+**The web portal was silently showing 80% of the data.** PostgREST caps a
+response at 1,000 rows and the cap cannot be raised from the client: a plain
+select on `v_activity_money` answers `Content-Range: 0-999/1255`, and it still
+answers `0-999` with an explicit `limit=2000`. Four pages read a growing view
+unbounded and summed it in the browser, so `business.html`, `pay.html`,
+`rate-card.html` and `activity.html` were each totalling 1,000 of 1,255
+activities with no error anywhere. `selectAll()` in `portal.js` pages until a
+short page comes back. **D165.**
+
+The Streamlit admin was never affected because it reaches Postgres through
+psycopg, which is why the two surfaces disagreed and **the portal was always the
+low one** - it read as a reconciliation gap rather than a bug, and that is how it
+survived.
+
+Everything else checked clean: zero duplicate keys, zero orphan rows, zero view
+fan-out, and the two overlap constraints the static read flagged as the top risk
+(`brand_retainer_no_overlap`, `contractor_pay_no_overlap`) **do** exist on
+Supabase. That was a false alarm.
+
+⚠️ **Three in-repo comments were stale and are corrected**: `5_Venues.py` said
+seventeen venue names were exact duplicates (it is zero, they were merged),
+`schema.sql` said 97 venue-less activities (it is 114), and `pg_class` row
+estimates in this database are stale enough to mis-diagnose a fan-out that is
+not there. **Use `count(*)`, never the estimate.**
+
+### `closed` was a decision that had never been implemented
+
+D159 and CLAUDE.md both said `venue_grading.lifecycle` held four values. It held
+two. `closed` was missing from the CHECK constraint and from the picker, and in
+438 graded venues had never once been set because it could not be. Worse,
+lifecycle was editable in exactly ONE place - the grid on "Compare against
+HubSpot", which lists only venues the export does not mention - so any venue with
+a Record ID had no route to a lifecycle at all.
+
+Both fixed. "Edit a venue" now carries the control. The Wildflower in Baldwin
+Park is closed, the first real use.
+
+### A billing roll-up is not an activity
+
+The dashboard read 1,255 and the Activity page read 1,246 with nothing
+explaining the gap. The nine rows between them are Dame Mas `monthly_commission`,
+which came off the invoices, carry no deal id and no venue, and hold **all** of
+Dame Mas's revenue for Jul 2025 to Mar 2026. `activity_types.is_rollup` takes
+them out of every count and leaves every money figure untouched. **D166.**
+
+### The flash pipeline
+
+`distributor`, `venue_distributor_account`, `distributor_account_rejection`,
+hanging off the **distributor** rather than the brand because the customer number
+is the account's liquor licence. One mapping serves every brand. **D168.**
+
+Many-to-many both ways and both are real: Hampton bills on and off premise under
+two numbers, Spirits2U under three, and Aku Aku shares a licence with Stardust
+Lounge. So reconciliation compares at the **match group**, a connected component
+of the venue/number graph, summing both sides.
+
+`case_return` at case equivalent **-1.0**, so a return nets by itself without a
+negative quantity. **D169.** The claim tab is an editable grid, not a picker.
+**D170.**
+
+### What is in the database now
+
+| | |
+|---|---|
+| Activities | 1,303 (1,294 excluding billing roll-ups) |
+| Venues | 453 |
+| Distributor mappings / rejections | 116 / 17 |
+| Activities created from the flash | 46 |
+| July 2026, 44 North | 24 rows, 40 cases |
+| August 2026, 44 North | 22 rows, 30 cases |
+
+July reconciles exactly: the portal reads what the flash reads.
+
+---
+
+## ⚠️ THE CONTRACTOR IS NOT SET WHEN A FLASH ACTIVITY IS CREATED. FIX THIS FIRST.
+
+**This is the one thing the operator asked for that is not built.** He caught it
+after doing both months: *"one thing I forgot is we need to assign a contractor
+to them, that should have been an option."*
+
+The Flash page writes `activities` and nothing else, so all 46 rows landed with
+no `activity_contractor`. He assigned every one by hand afterwards, which is a
+second pass the page should have made unnecessary.
+
+**What to build:** a Contractor column on the add grid in tab 2, defaulting to
+the venue's owning contractor from `venue_grading.owner_contractor_id` where one
+exists, editable per row, written to `activity_contractor` in the same
+transaction as the activity. `activity_contractor`'s primary key is
+`activity_id` alone, so one contractor per activity and an upsert cannot fan out.
+
+⚠️ **CONTRACTORS ARE PAID ON ACTIVITIES, SO A MISSING ONE IS MISSING PAY**
+(D135/D139). Blank means NOT RECORDED, never "nobody". 186 activities still
+carry no contractor.
+
+### The pay is modelled even when nobody draws it
+
+Operator ruling, 6 Sep 2026: *"Even though phil doesnt take a the pay we need to
+model it for accuracy when we hire someone to fill that position. But some of
+those are mine and Eric and we get paid."*
+
+So the pay rate stands on every reorder whether or not the person invoices for
+it. The consequence is visible and intended:
+
+| From the 46 flash rows | Charge | Pay | Margin |
+|---|---|---|---|
+| Case Reorder (44 rows) | $0.00 | $335.00 | **-$335.00** |
+| Case Sale (2 rows) | $150.00 | $75.00 | +$75.00 |
+
+44 North's `recurring case` is carded at **$0.00 charge and $5.00 pay** (D118),
+so every reorder we record makes the activity margin worse while the retainer
+carries the month. **Do not "fix" that**, and do not read the negative as an
+error. Phil owns 41 of the 46; Nicholas owns 2.
+
+---
+
+## What the audit found and nobody has acted on yet
+
+None of these are bugs in the pipeline. They are rows to rule on.
+
+1. **39 HubSpot deals staged and never promoted**, 9 of them older than Aug 2026
+   and reaching back to Nov 2025, including billable case sales. Invisible to
+   every revenue and depletion figure until promoted.
+2. **13 activities whose quantity disagrees with HubSpot with no hand-edit
+   recorded.** Wodka 2025-12-16 reads 12 in HubSpot and 1 in the portal; Blue Run
+   the same date reads 6 and 1. One date differs by a month, which moves revenue
+   between reporting months. Possibly bottle-to-case conversion, but nothing says
+   which number is authoritative.
+3. **7 `mileage` rows are flagged `is_expense = false`**, so they price as
+   revenue ($1,243.90 across 5 brands) instead of as the pass-through D91 says
+   they are.
+4. **2 Dame Mas `staff training` rows carry a percentage rate and a NULL
+   amount**, so they charge `charge_pct * COALESCE(amount, 0)` = **$0.00** while
+   looking priced. This is D98's fourth failure mode.
+5. **46 activities are `unpriced`.** 28 of them because `source_activity_type` is
+   blank while `activity_type_id` is set correctly, mostly Starr Rum and Heavens
+   Door. The rate card keys on the raw string (D74), so they can never price.
+6. **19 activities are filed under the `iHospitality` brand** but are client work
+   ("44North Tasting American Liquor"). That brand has no rate card, so they
+   price at $0.
+7. **`invoice_recap` holds `Barmen 1873 + Coors Whiskey + Five Trail`**, a
+   combined payer matching no row in `brands`. 9 months, $19,887.66, joins to
+   nothing.
+8. **22 activities have neither `hubspot_deal_id` nor `external_ref`** and so
+   have no duplicate protection at all.
+9. **8 groups of same brand/venue/date/type/amount.** Seven carry **two different
+   HubSpot deal ids**, so they are double entry in HubSpot, faithfully synced.
+   Not a pipeline defect.
+
+### Query-shape traps that are not biting yet
+
+- `1_Analysis.py:517` groups a venue aggregate by `v.name`, not `venue_id`. Safe
+  only because there are currently zero duplicate venue names, and it violates
+  D129.
+- The Analysis page's five tabs use **three different row populations** - Money
+  and Mix take everything, Venues and Cities inner-join venues and drop the 114
+  venue-less rows, Every-activity left-joins. Same filter, three counts, nothing
+  on screen says why.
+- `v_city_summary` inner-joins venues and silently drops those 114.
+- `my-pay.html`, `venues.html`, `index.html`, `my-venues.html` and `brands.html`
+  still read unbounded. Correct today only because those views are under 1,000
+  rows; `v_my_activity_pay` is at 773 for Phil King and breaks first.
+- `3_Account_sold.py:201` rewrites `source_activity_type`, which moves money on
+  one click with no preview and no `hand_edited_at`, against D93/D74.
+- `8_Retainer.py:80-99` hardcodes reconciliation targets bounded at `2026-07`,
+  now two months stale.
+
+---
+
+## Still open from before, unchanged
+
+1. **The scorecard's placements metrics.** Still no placement state. Flash PODS
+   is `#UNAVAILABLE` for 224 of 342 customers.
+2. **Territory on the scorecard.** Needs City added to the 2026 brand-file import.
+3. **Backfill 2025 on the scorecard.** Jan to Jun, so the month dropdown stops
+   lying on every month but July. Needs last year's flash per month.
+4. **The year-to-date scorecard view**, asked for after the monthly one works.
+5. **SMTP**, the **test logins**, **cost to serve** (D139), **pay start dates**
+   (D128), **Dame Mas commission months**, **reconciliation 64 of 83**, **V2/V3**.
+
+**`closed` accounts is DONE** and comes off this list. **The D159 collision is
+RESOLVED**: the staging correction overlay is now D167, and `closed` keeps D159.
+
+---
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D165 to D170** in
+> `docs/DECISIONS.md`. For the flash also read `docs/FLASH_ACCOUNT_MATCHING.md`.
+>
+> **Confirm you are running locally** before anything else:
+> `ls ../../../Hubspot/portal_seed` (three levels up from the website repo).
+>
+> **Start with the contractor column on the Flash page.** It is the one thing
+> the operator asked for that is not built, and he had to assign 46 rows by hand
+> without it. Default it from `venue_grading.owner_contractor_id`, make it
+> editable per row, write `activity_contractor` in the same transaction.
+>
+> Then ask which of these he wants:
+>
+> **A - the 39 staged deals**, 9 of them older than August and including case
+> sales. They are invisible to every revenue figure until promoted.
+>
+> **B - the 13 quantity disagreements** with HubSpot. Needs his ruling on which
+> number is authoritative before anything is changed.
+>
+> **C - the 7 mileage rows** booked as revenue rather than as the pass-through
+> they are.
+>
+> **D - Wodka and Dame Mas through the flash.** The mapping already serves every
+> brand, so their flashes need no new plumbing, only their customer numbers
+> claimed on tab 3.
+>
+> **E - the scorecard backfill**, still the biggest open item.
+>
+> ⚠️ **VERIFY THE DATA WITH HIM BEFORE BUILDING.** Operator, 2 Sep: *"building
+> doesnt make sense if the data is wrong."*
+>
+> ⚠️ **Do not fuzzy-match his accounts.** Propose, never adopt (D163). The
+> matcher offered Universal Studios for "University Wine and Spirit" and Secrets
+> Hideaway for Hideaway Bar, which are different premises.
+>
+> ⚠️ **Rule in the table, not in a picker beside it** (D170). He works down long
+> lists and a per-row dropdown is a round trip each.
+>
+> **Keep responses short.** He has ADHD and asked directly. Bullets, not prose.
+>
+> Whichever: the billing is the truth (D56), no hardcoded business data (D60), a
+> reimbursement never earns (D78), reclassifying must not move money (D93/D112),
+> lifecycle is not the account status (D157/D86), an import must never erase a
+> venue (D158), and **contractors are paid on activities so a blank one is
+> missing pay** (D135/D139).
+
+---
+
+## ⚠️ SUPERSEDED - the 2 Sep 2026 local session.
+
 
 Written at the close of **2 Sep 2026**, local session. An earlier 2 Sep session
 ran in the cloud with no database and no `portal_seed`; its notes are kept below

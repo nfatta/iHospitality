@@ -47,13 +47,18 @@ touched. Repo changes are confined to `docs/`.
 | 2 — Analysis | activity mix, venue performance, city summary, money views | ✅ done |
 | 3 — Presentation | dashboard, activity, venues, gallery, business page | ✅ done — programme summary dropped by the operator |
 | 5 — Staff admin | analysis + data cleanup, 11 pages | ✅ live; corrections before landing, 1 Sep (D167) |
+| 6 — The distributor's flash | reorder reconciliation, 12 pages | ✅ live 6 Sep 2026 (D168-D171) |
 
-**Live as of 6 Sep 2026:** 1,246 activities · 441 venues · 412 photos ·
+**Live as of 6 Sep 2026, evening:** 1,294 activities · 453 venues · 412 photos ·
 12 brands (5 active) · 253 rate-card lines · 38 classification rules ·
-14 months of invoice recap.
+14 months of invoice recap · 116 distributor account mappings.
 
-The activity count excludes billing roll-ups from D166 onward. It read 1,255
-before that, and the nine-row difference is Dame Mas monthly commission.
+The activity count excludes billing roll-ups from D166 onward, so it is not
+comparable with anything written before that date. 46 of the activities were
+created from the July and August EOM flash (D168) and are the first reorders
+the portal has ever held at scale: 44 North had ONE in its entire history
+before this, because a reorder happens without a visit and so leaves nothing
+to log (D118).
 
 Everything is committed. **`ihospitality.vip` is still untouched** — only merging
 [PR #1](https://github.com/nfatta/iHospitality/pull/1) changes that, and the two

@@ -553,6 +553,27 @@ reproduces it; keep it that way.
 - **The fresh market incentive is a PASS-THROUGH like mileage** (D100). Charged
   $100.00, paid $100.00, keeps nothing. Its $0.00 margin is correct and it
   belongs in the at-or-below-cost list. Do not "fix" it.
+- **THE FLASH IS THE ONLY SOURCE FOR REORDERS, AND IT IS READ ON THE FLASH PAGE**
+  (D168). Upload the month's EOM CSV; the customer number `700xxxxxx` is the
+  durable key and it hangs off the DISTRIBUTOR, not the brand, because it is the
+  account's liquor licence - so one mapping serves every brand. ⚠️ **The grain is
+  the MATCH GROUP**, a connected component of the venue/number graph, with both
+  sides summed: Hampton bills on and off premise under two numbers and Aku Aku
+  shares a licence with Stardust. ⚠️ **The month cannot be derived from the
+  file** - July's flash was pulled on 8/2 and August's on 8/31 - so the operator
+  picks it. Idempotency is `external_ref`, so re-uploading a month updates rather
+  than duplicating, and anything already recorded never appears in the add list.
+- **A RETURN IS A NEGATIVE DEPLETION AND STAYS VISIBLE** (D169). `case_return`
+  carries a case equivalent of **-1.0**, so the quantity stays positive (the
+  CHECK forbids a negative one) and `sum(quantity * case_equivalent)` nets to
+  zero by itself. Never net a return away silently: the brands read this data.
+- **⚠️ CONTRACTOR PAY IS MODELLED EVEN WHEN NOBODY DRAWS IT** (D171). A
+  contractor is who DID the work, not who was paid. Phil takes nothing on a
+  reorder and Nicholas and Eric do get paid, and the rate stands either way so a
+  month can answer what it would cost with someone hired into that seat.
+  **Reorders therefore make activity margin NEGATIVE and that is correct** -
+  `recurring case` is $0.00 charge and $5.00 pay for 44 North (D118). Do not
+  "fix" it. And **a blank contractor is missing pay, never free work** (D135).
 - **RULE IN THE TABLE, NOT IN A PICKER BESIDE IT** (D170). Operator preference,
   6 Sep 2026: *"can we just make the table able to be edited? That is so much
   easier for me instead of the drop down."* When a page asks for the same
