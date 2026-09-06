@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Contractor | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow"><a href="pay.html">Contractor pay</a></span>
+        <h1 id="name">…</h1>
+        <p class="portal-sub" id="sub"></p>
+      </div>
+      <div class="filters">
+        <select id="from" aria-label="Start month"></select>
+        <select id="to" aria-label="End month"></select>
+      </div>
+    </div>
+
+    <div id="stats"></div>
+    <div id="base"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>What they did</h2>
+        <span class="hint" id="rowcount"></span>
+      </div>
+      <div id="log"></div>
+    </div>
+
+    <p class="caveat" id="foot"></p>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    /* ONE CONTRACTOR, ONE PERIOD. D172.
+       Reached by clicking a name on pay.html, the venue.html arrangement.
+
+       ⚠️ STAFF ONLY, AND THE VIEW GATES ITSELF. `v_contractor_activity_pay`
+       joins `contractors`, whose RLS is is_staff(), and the view is
+       security_invoker -- so a contractor opening this page reads zero rows
+       rather than a colleague's earnings. `is_internal()` would NOT have been
+       enough: that is the line for internal data, never for money (D137).
+       guardStaffPage() is the visible half; the view is the real lock.
+
+       WHAT IT ANSWERS. Not just "what do I owe them" but whether the seat pays
+       for itself: activities, what their work BILLED the brands, what we owe
+       them for it, and the difference. Base pay is shown beside that total and
+       never inside it -- the two run on different clocks (Eric and Nicholas
+       semimonthly on the 1st and 15th, Phil weekly), so one combined figure
+       would be wrong for somebody (D171). */
+    import { db, requireAuth, renderShell, render, esc, isStaff, param,
+             fmtDate, fmtMonth, fmtNum, money, sortableTable, guardStaffPage,
+             selectAll } from './portal.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      await guardStaffPage(auth.profile);
+      renderShell('pay.html', auth.profile);
+      const el = document.getElementById('log');
+
+      if (!isStaff(auth.profile)) {
+        render(el, { empty: {
+          title: 'Staff only',
+          body: 'This page shows what people are paid and is not part of your portal.' } });
+      } else {
+        const id = param('id');
+        const [who, pay, work] = await Promise.all([
+          db.from('contractors').select('id, name, is_active, note')
+            .eq('id', id).maybeSingle(),
+          db.from('contractor_pay').select(
+            'base_pay, pay_frequency, effective_from, effective_to, note')
+            .eq('contractor_id', id).order('effective_from', { ascending: false }),
+          // Paged: the view is past 1,000 rows and PostgREST caps a response
+          // there with no error (D165). Filtered in Postgres, not after the
+          // fetch, so paging cannot return a partial person.
+          selectAll(() => db.from('v_contractor_activity_pay').select(
+            'activity_id, activity_date, month, brand_name, venue_name, '
+            + 'activity_type, quantity, pay, charge, unpriced')
+            .eq('contractor_id', id), 'activity_id'),
+        ]);
+
+        const bad = who.error || pay.error || work.error;
+        if (bad) {
+          render(el, { error: bad });
+        } else if (!who.data) {
+          render(el, { empty: { title: 'No such contractor',
+                                body: 'Go back and pick one from the list.' } });
+        } else {
+          const rows = work.data || [];
+          document.getElementById('name').textContent = who.data.name;
+          document.getElementById('sub').textContent =
+            (who.data.is_active ? '' : 'Retired. ') + (who.data.note || '');
+
+          // The range runs over the months THIS PERSON has, taken from the data
+          // rather than from new Date(): the portal's months lag the calendar,
+          // so anchoring on today opens an empty range on the first of a month
+          // (D155). Oldest at the top, newest at the bottom.
+          const months = [...new Set(rows.map(r => r.month))].sort();
+          const from = document.getElementById('from');
+          const to = document.getElementById('to');
+          if (!months.length) {
+            from.style.display = to.style.display = 'none';
+          } else {
+            const options = months.map(m =>
+              `<option value="${esc(m)}">${esc(fmtMonth(m + '-01'))}</option>`).join('');
+            from.innerHTML = options;
+            to.innerHTML = options;
+            from.value = months[months.length - 1];
+            to.value = months[months.length - 1];
+          }
+
+          function draw() {
+            let a = from.value, b = to.value;
+            // A backwards range would silently return nothing. Swap, do not scold.
+            if (a && b && a > b) [a, b] = [b, a];
+            const shown = rows.filter(r =>
+              (!a || r.month >= a) && (!b || r.month <= b));
+
+            // NULL is not zero, and the two are counted separately. A row with
+            // no pay rate earns an UNKNOWN amount; adding it as 0 understates
+            // what is owed and flatters the margin (D78).
+            const charged = shown.reduce((t, r) => t + Number(r.charge || 0), 0);
+            const paid = shown.reduce((t, r) => t + Number(r.pay || 0), 0);
+            const noPay = shown.filter(r => r.pay == null).length;
+            const noCharge = shown.filter(r => r.charge == null).length;
+            const margin = charged - paid;
+
+            document.getElementById('stats').className = 'stat-grid';
+            document.getElementById('stats').innerHTML = `
+              <div class="stat-card">
+                <span class="num">${fmtNum(shown.length)}</span>
+                <span class="lbl">Activities</span>
+                <div class="meta">${fmtNum(new Set(shown.map(r => r.venue_name)).size)} venues,
+                  ${fmtNum(new Set(shown.map(r => r.brand_name)).size)} brands</div>
+              </div>
+              <div class="stat-card">
+                <span class="num">${money(charged)}</span>
+                <span class="lbl">Billed to brands</span>
+                <div class="meta">${noCharge ? fmtNum(noCharge) + ' not priced' : 'all priced'}</div>
+              </div>
+              <div class="stat-card">
+                <span class="num">${money(paid)}</span>
+                <span class="lbl">Owed to them</span>
+                <div class="meta">${noPay ? fmtNum(noPay) + ' with no pay rate' : 'all rated'}</div>
+              </div>
+              <div class="stat-card">
+                <span class="num">${money(margin)}</span>
+                <span class="lbl">${margin < 0 ? 'Lost on the work' : 'Made on the work'}</span>
+                <div class="meta">before base pay</div>
+              </div>`;
+
+            document.getElementById('rowcount').textContent =
+              shown.length ? `${fmtNum(shown.length)} shown` : '';
+
+            if (!shown.length) {
+              render(el, { empty: { title: 'Nothing in that range',
+                                    body: 'Widen the months above.' } });
+              return;
+            }
+            sortableTable(el, shown, [
+              { head: 'Date', always: true, nowrap: true,
+                sortValue: r => r.activity_date,
+                get: r => esc(fmtDate(r.activity_date)) },
+              { head: 'Brand', get: r => esc(r.brand_name) },
+              { head: 'Venue', cls: 'venue', get: r => esc(r.venue_name) },
+              { head: 'What', get: r => esc(r.activity_type) },
+              { head: 'Qty', cls: 'num', value: r => Number(r.quantity),
+                get: r => r.quantity ? fmtNum(r.quantity)
+                                     : '<span class="muted">-</span>' },
+              { head: 'Billed', cls: 'num', value: r => Number(r.charge || 0),
+                get: r => r.charge != null ? money(r.charge)
+                                           : '<span class="muted">not priced</span>' },
+              { head: 'Owed', cls: 'num', always: true,
+                value: r => Number(r.pay || 0),
+                get: r => r.pay != null ? money(r.pay)
+                                        : '<span class="muted">no pay rate</span>' },
+            ], { sort: 'Date', dir: 'desc' });
+          }
+          from.addEventListener('change', draw);
+          to.addEventListener('change', draw);
+          draw();
+
+          // BESIDE the activity figures, never added to them. Shown as the
+          // standing cost so the two clocks stay visible.
+          const periods = pay.data || [];
+          const current = periods.find(p => !p.effective_to) || periods[0];
+          document.getElementById('base').innerHTML = current
+            ? `<p class="caveat">Base pay <strong>${money(current.base_pay)}</strong>
+               ${esc(current.pay_frequency)}, since
+               ${esc(fmtDate(current.effective_from))}. Paid on its own cycle and
+               <strong>not included</strong> in the figures above.</p>`
+            : '<p class="caveat">No base pay on file. The figures above are the whole of what this person earns.</p>';
+
+          document.getElementById('foot').innerHTML =
+            '<strong>Billed and Owed both come from the rate card</strong>, per activity, ' +
+            'through <code>v_activity_money</code>. A reorder is carded at $0.00 charge ' +
+            'and $5.00 pay for 44 North, so a month of reorders can show a loss here and ' +
+            'still be right — the retainer carries it, and the pay is modelled even where ' +
+            'nobody draws it (D118/D171).';
+        }
+      }
+    }
+  </script>
+
+</body>
+</html>

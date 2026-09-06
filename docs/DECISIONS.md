@@ -7448,3 +7448,53 @@ contractor per activity and an upsert cannot fan out.
 
 Blank still means NOT RECORDED, never "nobody" (D135). 186 activities carry no
 contractor, and each is missing pay rather than free work.
+
+---
+
+**D172 - A CONTRACTOR HAS A PAGE, AND IT ANSWERS WHETHER THE SEAT PAYS FOR ITSELF.**
+
+Operator, 6 Sep 2026: *"click on Eric and then it brings me to an Eric page that
+gives me a summary of the month and then below that the list of activities... the
+amount of activities done, the amount of money he brought in, then how much we
+pay him, and then the difference, how much we made or lost."*
+
+`contractor.html?id=`, reached by clicking a name on the pay page. Four cards -
+activities, billed to brands, owed to them, and the difference - then the
+activity list, over a month range taken from the months that person actually
+has.
+
+`v_contractor_activity_pay` is one row per activity with its contractor, brand,
+venue, type, quantity, pay and charge.
+
+⚠️ **IT GATES ITSELF, AND THAT IS THE DESIGN.** `contractors` carries the RLS
+policy `contractors_staff_only` (is_staff()) and the view is security_invoker,
+so the join to it filters every row away for a contractor. `is_internal()` would
+NOT have been enough: that is the line for internal data, never for money
+(D137), and a contractor holding their own rate AND a colleague's earnings is
+the disclosure that line exists to prevent. Verified by impersonation with a
+control (D125): staff read 1,135 rows, a contractor reads 0, and that same
+contractor still reads 153 of their own through `v_my_activity_pay`.
+
+⚠️ **BASE PAY IS SHOWN BESIDE THE TOTAL AND NEVER INSIDE IT.** They run on
+different clocks - Eric and Nicholas semimonthly on the 1st and 15th, Phil
+weekly - so one combined figure would be wrong for somebody. The difference card
+is labelled *before base pay* for the same reason.
+
+**A NEGATIVE DIFFERENCE IS OFTEN CORRECT.** Eric's March 2026 billed $10.00 and
+owed $25.00. A reorder is carded $0.00 charge and $5.00 pay for 44 North (D118)
+and the pay is modelled even where nobody draws it (D171), so a month of
+reorders shows a loss here and the retainer carries it. Do not "fix" the sign.
+
+Two faults were found building the view, both of which would have shipped a
+BLANK PAGE rather than an error, which is D154's shape:
+
+- the first cut selected `a.notes`. `activities` is granted to authenticated as
+  a written-out COLUMN LIST and `notes` is deliberately not in it (D134), so it
+  failed for EVERY authenticated caller, staff included.
+- `create or replace view` cannot remove a column, so fixing that needed an
+  explicit drop first.
+
+And the page is in `login.html`'s `ALLOWED` list, without which it would be
+silently redirected to the dashboard after a successful sign-in (D124). Checked
+rather than assumed: the redirect carries `?next=contractor.html%3Fid%3D1` and
+the allowlist matches the filename half, so the deep link survives the login.
