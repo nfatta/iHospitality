@@ -7498,3 +7498,70 @@ And the page is in `login.html`'s `ALLOWED` list, without which it would be
 silently redirected to the dashboard after a successful sign-in (D124). Checked
 rather than assumed: the redirect carries `?next=contractor.html%3Fid%3D1` and
 the allowlist matches the filename half, so the deep link survives the login.
+
+---
+
+**D173 - THE FLASH DECIDES REORDER OR FIRST SALE. OUR OWN HISTORY CANNOT.**
+
+Operator on the June import: *"almost everything came in as a case sale instead
+of recurring."* Three faults, and they hid one another.
+
+**The default was backwards.** It asked OUR activities whether the account had
+bought before. It almost never has: a reorder reaches the venue through the
+distributor's rep with no visit, so it was never logged, and 44 North held ONE
+reorder in its entire history before the flash arrived (D118). June 2026
+proposed **14 first-time case sales out of 18**, while the distributor's own
+FYTD and last-year columns say **51 of 61** had bought before.
+
+`Group.bought_before` now reads the flash: FYTD greater than MTD, or any LYMTD,
+or any FLYTD. Our activity history stays as a SECOND OPINION, because a venue
+sold through another distributor is still not a new placement. Measured against
+all three real files rather than asserted: June 51/10, July 54/5, August 56/6.
+
+⚠️ **It is a proposal, not a fact.** In the FIRST month of a fiscal year FYTD
+equals MTD for everybody, so that month rests on the two last-year columns alone
+and a long-standing but quiet account can still read as new.
+
+**The grid threw the answer away.** `chosen` was built from the list handed TO
+`st.data_editor`, holding the derived defaults, while only "Add" was read back
+from the edited frame. Reading "Add" correctly is what made it look like it
+worked: the right rows were added, at the wrong type. Same family as D103 -- the
+widget's value and the value written have to be the same object.
+
+**And a re-import could not correct a type.** The conflict target is
+`external_ref` and the DO UPDATE set only quantity and notes, so a month
+imported wrong stayed wrong however many times it was re-uploaded. That is what
+made the first fault look unfixable. It updates `activity_type_id` and
+`source_activity_type` now.
+
+⚠️ **A RUNNING STREAMLIT IS NOT THE CODE ON DISK.** The June import ran at
+23:10:10 UTC and the first fix was committed at 23:11:54 -- two minutes later --
+so the operator was testing a fix that did not exist yet, on a server started
+before it. When a fix cannot be reproduced, check the clock on both before
+looking anywhere else.
+
+---
+
+**D174 - A VENUE WITH NO CUSTOMER NUMBER IS INVISIBLE TO THE FLASH, AND ITS CASES GET PROPOSED TWICE.**
+
+Secrets Resort and Secrets Hideaway were both venues, both in Kissimmee, and the
+operator had already ruled them one property on 2 Sep. Only Hideaway carried the
+customer number.
+
+So June held **6 cases where the flash said 3**: a real HubSpot Case Sale of 3
+at Secrets Resort, plus 3 more the reconciliation proposed at Hideaway because
+it could not see the first. The operator accepted a proposal that was wrong for
+a reason nothing on screen could show him.
+
+Merged through `merge_venue()` (D81), which moved 3 activities, merged one brand
+status upward and left zero orphans. The folded HubSpot id is kept in
+`venue_hubspot_alias`, so the next sync recognises it instead of recreating the
+venue and undoing the merge. Checked first that the source held no
+`venue_note`, `venue_contact_link` or `venue_profile` -- `merge_venue()` does not
+rescue those and would have cascade-deleted them silently.
+
+⚠️ **THE PATTERN RECURS.** Any venue holding cases without a customer number is
+invisible to the reconciliation, and its cases will be proposed again under
+whichever venue does hold the number. The Flash page's third tab has the bucket
+for it -- *our cases at a venue with no customer number* -- and it is worth
+reading BEFORE accepting anything on tab 2.

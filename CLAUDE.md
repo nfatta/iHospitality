@@ -563,6 +563,24 @@ reproduces it; keep it that way.
   file** - July's flash was pulled on 8/2 and August's on 8/31 - so the operator
   picks it. Idempotency is `external_ref`, so re-uploading a month updates rather
   than duplicating, and anything already recorded never appears in the add list.
+- **⚠️ THE FLASH DECIDES REORDER OR FIRST SALE, NOT OUR OWN HISTORY** (D173).
+  Asking our activities "has this account bought before" answers NO for almost
+  everybody, because a reorder arrives through the distributor's rep with no
+  visit and was never logged (D118). June 2026 proposed **14 first-time case
+  sales out of 18** where the distributor's FYTD and last-year columns say 51 of
+  61 had bought before. Read the flash; keep our history as a second opinion
+  only. ⚠️ In the FIRST month of a fiscal year FYTD equals MTD for everybody, so
+  that month rests on the last-year columns alone.
+- **⚠️ A VENUE WITH NO CUSTOMER NUMBER IS INVISIBLE TO THE FLASH** (D174), and
+  its cases get proposed a SECOND time under whichever venue does hold the
+  number. That is how June carried 6 cases at Secrets against a flash of 3.
+  Read tab 3's *our cases at a venue with no customer number* BEFORE accepting
+  anything on tab 2. And **check what `merge_venue()` does not rescue** before
+  merging: `venue_note`, `venue_contact_link` and `venue_profile` cascade.
+- **⚠️ A RUNNING STREAMLIT IS NOT THE CODE ON DISK** (D173). A fix committed at
+  23:11 cannot explain an import that ran at 23:10, and the admin holds whatever
+  it started with. When a fix "does not work", compare the two clocks before
+  looking anywhere else -- and restart the admin after any page change.
 - **A RETURN IS A NEGATIVE DEPLETION AND STAYS VISIBLE** (D169). `case_return`
   carries a case equivalent of **-1.0**, so the quantity stays positive (the
   CHECK forbids a negative one) and `sum(quantity * case_equivalent)` nets to
