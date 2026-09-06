@@ -46,11 +46,14 @@ touched. Repo changes are confined to `docs/`.
 | 1 — Everything in | deals, taxonomy, titles, photos, cities, expense exclusion | ✅ done |
 | 2 — Analysis | activity mix, venue performance, city summary, money views | ✅ done |
 | 3 — Presentation | dashboard, activity, venues, gallery, business page | ✅ done — programme summary dropped by the operator |
-| 5 — Staff admin | analysis + data cleanup, 7 pages | ✅ v1 works |
+| 5 — Staff admin | analysis + data cleanup, 11 pages | ✅ live; corrections before landing, 1 Sep (D167) |
 
-**Live as of end of 19 Aug 2026:** 1,088 activities · 353 venues · 412 photos ·
-11 brands (5 active) · 232 rate-card lines · 38 classification rules · 7 months
-of invoice recap.
+**Live as of 6 Sep 2026:** 1,246 activities · 441 venues · 412 photos ·
+12 brands (5 active) · 253 rate-card lines · 38 classification rules ·
+14 months of invoice recap.
+
+The activity count excludes billing roll-ups from D166 onward. It read 1,255
+before that, and the nine-row difference is Dame Mas monthly commission.
 
 Everything is committed. **`ihospitality.vip` is still untouched** — only merging
 [PR #1](https://github.com/nfatta/iHospitality/pull/1) changes that, and the two

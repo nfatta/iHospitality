@@ -436,6 +436,29 @@ reproduces it; keep it that way.
   **prices the row by inserting it and rolling back** (D91) so charge, cost and
   margin are on screen before saving. `activities_date_not_future` is a CHECK
   constraint — an activity cannot be dated ahead of today.
+- **A STAGED DEAL IS CORRECTED BESIDE ITSELF, NEVER INSIDE ITSELF** (D167).
+  `staging.hubspot_deal_correction` holds a person's ruling and `promote()` lays
+  it over HubSpot's values, so a miscategorised deal is fixed BEFORE it lands.
+  **Editing `staging.hubspot_deals` destroys the zone it edits**: a BEFORE
+  trigger recomputes `content_hash` FROM the edit so the row reads `in_sync`
+  with a value HubSpot never sent, `apply()` overwrites it on the next pull, and
+  nothing asks — `conflict` needs `hand_edited_at`, which lives on the ACTIVITY.
+  A source checker fails on that shortcut. The correction's venue is a
+  **`venue_id`, not a name**, because `_resolve_venue()` prefers the company id
+  and would silently ignore a name. `based_on_hash` records WHICH version was
+  ruled on, so a correction about superseded facts becomes a `conflict` instead
+  of re-applying itself.
+- **⚠️ `resolve_activity_type()` IS A WRITER AND LOOKS LIKE A READ** (D167). It
+  CREATES and flags anything unrecognised — which is what `promote()` wants and
+  what a report never does. A query written to LIST the rate card's vocabulary
+  made nine junk `activity_types` rows. **49 rate-card strings currently have no
+  type alias**, so they are the ones that will do it.
+- **THE PULL CAN GO BY CLOSE DATE, NOT JUST BY LAST-MODIFIED.** On Review and
+  edit, "A whole month" filters `closedate` in a half-open interval — so pulling
+  in September for deals CLOSED in August catches ones edited after the 31st.
+  The bound is `< the 1st of the next month`, never `<= the last day`:
+  `closedate` is a timestamp, and the second form compares against midnight and
+  silently cost 12 of June 2026's 103 deals.
 - **HubSpot lands in staging; a person promotes it** (D64) — **for DEALS only.**
   `apply()` upserts `brands` and `venues` DIRECTLY, before the staging zone is
   reached (D83). Do not assume the staging zone covers anything but deals.
@@ -696,8 +719,12 @@ reproduces it; keep it that way.
   prices `account visit` at $0.00 for all eight brands, so those visits are
   invisible. Its commission ties EXACTLY in both checked months, so this and a
   "Smoke Tops" line are the whole of its difference.
-- **The portal does not yet model the retainer**, which is most of what every
-  brand pays, so no revenue or margin figure here is complete. See `docs/HANDOFF.md`.
+- **THE RETAINER IS MODELLED NOW — `brand_retainer`, 13 rows across 8 brands.**
+  This line used to say it was not, and stayed wrong long enough to mislead:
+  revenue reads `v_brand_month_revenue` or `v_month_business`, both of which
+  include it. What is still incomplete is the RECONCILIATION, not the schema.
+  Never source revenue from `v_brand_money` — that is activity charge only, and
+  the retainer is **69.2% of what iHospitality sells**.
 - **The invoice PDFs are the billing source, and `parse_invoices.py` reads
   them** (D93). They carry the line detail the QuickBooks API blanks (D70),
   including the month's GROSS stated on the commission line. **Every invoice
@@ -809,7 +836,8 @@ reproduces it; keep it that way.
 | `docs/HANDOFF.md` | Where the last session stopped, and the next prompt. |
 | `docs/DATA_ACCESS_TIERS.md` | Reads / routine writes / dangerous writes, and where each belongs. **A design note, not a decision.** Read before V3. |
 | `../../Hubspot/portal_seed/admin/` | The staff admin (Streamlit). Analysis, review, cleanup. |
-| `../../Hubspot/portal_seed/promote.py` | Promote / reject / suppress a staged deal. One definition, two callers. |
+| `../../Hubspot/portal_seed/promote.py` | Promote / reject / suppress a staged deal, **applying any correction** (D167). One definition, two callers. |
+| `../../Hubspot/portal_seed/db/test/12_correction_test.sql` | The correction overlay's contract: applied, HubSpot untouched, stale ruling raises a conflict. |
 | `../../Hubspot/portal_seed/create_portal_user.py` | Create / re-scope / deactivate a login. One definition; the CLI and the admin's Users page both call it. |
 | `../../Hubspot/portal_seed/backfill_activity_contractor.py` | Who did the work, from the HubSpot deal owner (D139). |
 | `../../Hubspot/portal_seed/` | Python tooling + `db/schema.sql`. Separate repo. |
