@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>My accounts | iHospitality Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">My work</span>
+        <h1>My accounts</h1>
+        <p class="portal-sub" id="count"></p>
+      </div>
+      <div class="filters">
+        <input type="search" id="f-search" placeholder="Search accounts…" style="min-width:200px">
+        <select id="f-status"><option value="">All statuses</option></select>
+        <select id="f-city"><option value="">All cities</option></select>
+      </div>
+    </div>
+
+    <div id="stats"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>The accounts you own</h2>
+        <span class="hint" id="shown"></span>
+      </div>
+      <div id="list"></div>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum,
+             sortableTable, fillSelect, isContractor, isStaff,
+             foldVenuesByVenue } from './portal.js';
+
+    const STATUS_ORDER = ['reordering', 'placed', 'pitched', 'prospect', 'dormant', 'lost'];
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('my-venues.html', auth.profile);
+
+      // WHOSE ACCOUNTS. A contractor sees their own; staff picks a person, so
+      // this page doubles as "what does Eric's week look like" without anyone
+      // needing his login (D125 — never create a login to look at something).
+      let ownerId = auth.profile.contractor_id;
+
+      if (isStaff(auth.profile) && !ownerId) {
+        const { data: people } = await db.from('v_contractor_names')
+          .select('id, name').eq('is_active', true).order('name');
+        if (people?.length) {
+          const sel = document.createElement('select');
+          sel.innerHTML = people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+          document.querySelector('.filters').prepend(sel);
+          ownerId = people[0].id;
+          sel.addEventListener('change', () => { ownerId = Number(sel.value); load(); });
+        }
+      }
+
+      if (!ownerId) {
+        render(document.getElementById('list'), { empty: {
+          title: 'No accounts assigned',
+          body: 'This login is not linked to a contractor, so no accounts are owned by it.' } });
+      } else {
+        load();
+      }
+
+      async function load() {
+        // OWNERSHIP IS THE SPINE OF THIS PAGE, and it is a DIFFERENT question
+        // from "work I did" (which is my-pay.html, keyed on
+        // activity_contractor). A venue you own where a colleague worked
+        // appears here and earns you nothing; that is correct, and the earnings
+        // column says so rather than hiding the row.
+        const { data: mine, error: e1 } = await db.from('venue_grading')
+          .select('venue_id, grade').eq('owner_contractor_id', ownerId);
+        if (e1) return render(document.getElementById('list'), { error: e1 });
+
+        if (!mine.length) {
+          return render(document.getElementById('list'), { empty: {
+            title: 'No accounts assigned yet',
+            body: 'Venues assigned to you will appear here.' } });
+        }
+
+        const ids = mine.map(m => m.venue_id);
+        const grades = Object.fromEntries(mine.map(m => [m.venue_id, m.grade]));
+
+        // v_venue_performance is one row per BRAND per venue. A venue is
+        // SHARED -- Levee Liquors holds 8 brands (D129) -- so the rows are
+        // folded to one per venue here, taking the most recent visit across
+        // every brand. Reading it per brand would list the same bar eight times
+        // in a worklist whose whole job is "where do I go next".
+        const { data, error } = await db.from('v_venue_performance')
+          .select('*').in('venue_id', ids);
+        if (error) return render(document.getElementById('list'), { error });
+
+        // The fold moved into portal.js on 28 Aug 2026 so this page and
+        // venues.html cannot drift -- the promote.py arrangement, one definition
+        // and two callers. It also CORRECTS this page: the version that lived
+        // here took the status from the most recently visited brand, which
+        // understated 23 venues and understated every one of them. Big C read
+        // `pitched` with two brands placed in it. It is the furthest any brand
+        // has reached now (D156).
+        const rows = foldVenuesByVenue(data)
+          .map(r => ({ ...r, grade: grades[r.venue_id] }));
+
+        buildFilters(rows);
+        renderStats(rows);
+        ['f-search', 'f-status', 'f-city'].forEach(id => {
+          const el = document.getElementById(id);
+          el.oninput = () => draw(rows);
+        });
+        document.getElementById('count').textContent =
+          `${fmtNum(rows.length)} accounts you own`;
+        draw(rows);
+      }
+
+      function buildFilters(rows) {
+        const statuses = [...new Set(rows.map(r => r.status).filter(Boolean))]
+          .sort((a, b) => STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b));
+        fillSelect('f-status', statuses.map(s => [s, s[0].toUpperCase() + s.slice(1)]));
+        const cities = [...new Set(rows.map(r => r.city).filter(Boolean))].sort();
+        fillSelect('f-city', cities.map(c => [c, c]));
+      }
+
+      function renderStats(rows) {
+        // COUNTS READ `status_stored`, THE TABLE DISPLAYS `status` (D87).
+        // Dormancy layers over the stored value at read time, so counting
+        // stocking accounts off the displayed status silently drops every one
+        // that has gone quiet -- which on this page is precisely the set the
+        // contractor is being asked to go and fix.
+        const counts = {};
+        for (const r of rows) counts[r.status_stored] = (counts[r.status_stored] || 0) + 1;
+        const placed = (counts.placed || 0) + (counts.reordering || 0);
+        const quiet = rows.filter(r =>
+          r.days_since !== null && Number(r.days_since) > 90 &&
+          (r.status_stored === 'placed' || r.status_stored === 'reordering')).length;
+        const never = rows.filter(r => r.days_since === null).length;
+
+        const el = document.getElementById('stats');
+        el.className = 'stat-grid';
+        el.innerHTML = `
+          <div class="stat-card"><span class="num">${fmtNum(rows.length)}</span>
+            <span class="lbl">My accounts</span></div>
+          <div class="stat-card"><span class="num">${fmtNum(placed)}</span>
+            <span class="lbl">Stocking</span>
+            <div class="meta">placed or reordering</div></div>
+          <div class="stat-card"><span class="num">${fmtNum(quiet)}</span>
+            <span class="lbl">Quiet 90+ days</span>
+            <div class="meta">stocking, but not seen lately</div></div>
+          <div class="stat-card"><span class="num">${fmtNum(never)}</span>
+            <span class="lbl">Never visited</span>
+            <div class="meta">no activity on record</div></div>`;
+      }
+
+      function draw(rows) {
+        const q = document.getElementById('f-search').value.trim().toLowerCase();
+        const status = document.getElementById('f-status').value;
+        const city = document.getElementById('f-city').value;
+
+        const filtered = rows.filter(r =>
+          (!status || r.status === status) &&
+          (!city || r.city === city) &&
+          (!q || (r.venue_name || '').toLowerCase().includes(q) ||
+                 (r.city || '').toLowerCase().includes(q)));
+
+        document.getElementById('shown').textContent =
+          filtered.length === rows.length
+            ? `${fmtNum(rows.length)} shown`
+            : `${fmtNum(filtered.length)} of ${fmtNum(rows.length)} shown`;
+
+        const el = document.getElementById('list');
+        if (!filtered.length) {
+          return render(el, { empty: {
+            title: 'No accounts match',
+            body: 'Try a different search or clear the filters.' } });
+        }
+
+        sortableTable(el, filtered, [
+          { head: 'Account', always: true, cls: 'venue',
+            value: r => r.venue_name, get: r => esc(r.venue_name) },
+          { head: 'City', value: r => r.city,
+            get: r => r.city ? esc(r.city) : '<span class="muted">—</span>' },
+          { head: 'Brands', cls: 'num', value: r => r.brand_count,
+            get: r => fmtNum(r.brand_count) },
+          { head: 'Grade', value: r => r.grade,
+            // A BLANK GRADE MEANS NOT GRADED YET, NEVER A BAD GRADE (D88).
+            get: r => r.grade ? `<span class="pill">${esc(r.grade)}</span>`
+                              : '<span class="muted">—</span>' },
+          { head: 'Status', always: true, value: r => r.status,
+            sortValue: r => STATUS_ORDER.indexOf(r.status),
+            get: r => `<span class="pill pill-${esc(r.status)}">${esc(r.status)}</span>` },
+          { head: 'Activities', always: true, cls: 'num',
+            value: r => Number(r.activities), get: r => fmtNum(r.activities) },
+          { head: 'Sales', cls: 'num', value: r => Number(r.initial_sales),
+            get: r => Number(r.initial_sales) ? fmtNum(r.initial_sales) : '<span class="muted">—</span>' },
+          { head: 'Reorders', cls: 'num', value: r => Number(r.reorders),
+            get: r => Number(r.reorders) ? `<strong>${fmtNum(r.reorders)}</strong>` : '<span class="muted">—</span>' },
+          { head: 'Units', cls: 'num', value: r => Number(r.units_moved),
+            get: r => Number(r.units_moved) ? fmtNum(r.units_moved) : '<span class="muted">—</span>' },
+          { head: 'Last visit', always: true, nowrap: true,
+            sortValue: r => r.last_touched || '',
+            get: r => r.last_touched ? esc(fmtDate(r.last_touched)) : '<span class="muted">never</span>' },
+          { head: 'Quiet', always: true, cls: 'num', nowrap: true,
+            sortValue: r => r.days_since === null ? null : Number(r.days_since),
+            value: r => r.days_since === null ? null : Number(r.days_since),
+            get: r => {
+              if (r.days_since === null) return '<span class="muted">—</span>';
+              const d = Number(r.days_since);
+              const cls = d > 180 ? 'pill pill-lost' : d > 90 ? 'pill pill-dormant' : 'muted';
+              return `<span class="${cls}">${fmtNum(d)}d</span>`;
+            } },
+        ], {
+          // Quietest first: this page is a worklist, so it opens on the
+          // accounts that have waited longest rather than on the alphabet.
+          sort: 'Quiet', dir: 'desc',
+          onRowClick: (r) => {
+            location.href = `venue.html?id=${encodeURIComponent(r.venue_id)}`;
+          },
+        });
+      }
+    }
+  </script>
+</body>
+</html>

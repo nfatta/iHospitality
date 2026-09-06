@@ -45,59 +45,14 @@
     "publisher": { "@id": "https://ihospitality.vip/#business" }
   }
   </script>
+  <link rel="stylesheet" href="css/site.css">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --black: #0A0A0A; --black-rich: #111111; --black-soft: #1A1A1A;
-      --gold: #C9A84C; --gold-light: #E8C97A; --gold-dim: rgba(201,168,76,0.12);
-      --gold-border: rgba(201,168,76,0.25); --amber: #B5651D;
-      --white: #FFFFFF; --off-white: #F7F4EF; --light-bg: #F2EDE4;
-      --text-dark: #1A1512; --text-mid: #5C5248;
-      --divider-dark: rgba(255,255,255,0.08); --divider-light: rgba(26,21,18,0.1);
-    }
-    html { scroll-behavior: smooth; }
-    body { font-family: 'Inter', sans-serif; background: var(--black); color: #E8E0D5; line-height: 1.6; }
-    h1,h2,h3,h4 { font-family: 'Cormorant Garamond', serif; line-height: 1.1; }
+    /* Page-specific styles only. Shared reset, tokens, nav, buttons, section
+       base, footer and mobile nav live in css/site.css, linked above so any
+       rule here still wins — the .section-header override below relies on it. */
 
-    /* NAV */
-    nav {
-      position: fixed; top:0; left:0; right:0; z-index:100;
-      background: rgba(10,10,10,0.95); backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--divider-dark);
-      padding: 0 6%; display:flex; align-items:center; justify-content:space-between; height:76px;
-    }
-    .nav-logo { display:flex; align-items:center; gap:0.75rem; text-decoration:none; }
-    .nav-logo img { height:38px; width:38px; border-radius:50%; object-fit:cover; }
-    .nav-logo-text { font-family:'Cormorant Garamond',serif; font-size:1.5rem; font-weight:600; color:var(--white); letter-spacing:0.5px; }
-    .nav-logo-text span { color:var(--gold); }
-    .nav-links { display:flex; align-items:center; gap:2.5rem; list-style:none; }
-    .nav-links a { text-decoration:none; color:rgba(232,224,213,0.6); font-size:0.78rem; font-weight:500; letter-spacing:1.5px; text-transform:uppercase; transition:color 0.2s; }
-    .nav-links a:hover { color:var(--white); }
-    .nav-links a.current { color:var(--gold); }
-    .nav-cta { border:1px solid var(--gold-border) !important; color:var(--gold) !important; padding:0.5rem 1.4rem !important; border-radius:2px; transition:background 0.2s,color 0.2s !important; }
-    .nav-cta:hover { background:var(--gold) !important; color:var(--black) !important; }
-    .hamburger { display:none; flex-direction:column; gap:5px; cursor:pointer; background:none; border:none; padding:4px; }
-    .hamburger span { display:block; width:22px; height:1.5px; background:var(--white); }
-
-    /* MOBILE NAV */
-    .mobile-nav { display:none; position:fixed; top:76px; left:0; right:0; z-index:99; background:rgba(10,10,10,0.98); backdrop-filter:blur(16px); border-bottom:1px solid var(--divider-dark); padding:2rem 6%; flex-direction:column; gap:1.5rem; }
-    .mobile-nav.open { display:flex; }
-    .mobile-nav a { text-decoration:none; color:rgba(232,224,213,0.6); font-size:0.85rem; font-weight:500; padding-bottom:1.25rem; border-bottom:1px solid var(--divider-dark); letter-spacing:1px; text-transform:uppercase; transition:color 0.2s; }
-    .mobile-nav a:last-child { border-bottom:none; padding-bottom:0; }
-    .mobile-nav a:hover { color:var(--gold); }
-    .mobile-nav a.current { color:var(--gold); }
-
-    /* SECTION BASE */
-    section { padding:8rem 6%; }
-    .section-label { font-size:0.7rem; font-weight:600; letter-spacing:3px; text-transform:uppercase; display:block; margin-bottom:1.25rem; }
-    .dark .section-label { color:var(--gold); }
-    .section-title { font-size:clamp(2.5rem,4vw,3.75rem); margin-bottom:1.5rem; font-weight:600; }
-    .dark .section-title { color:var(--white); }
-    .section-subtitle { font-size:1rem; max-width:620px; line-height:1.9; font-weight:300; }
-    .dark .section-subtitle { color:rgba(232,224,213,0.65); }
+    /* This page runs a tighter section header than the homepage. */
     .section-header { margin-bottom:3.5rem; }
-    .section-header.centered { text-align:center; }
-    .section-header.centered .section-subtitle { margin:0 auto; }
 
     /* GALLERY PAGE */
     #gallery { background:var(--black); padding:calc(76px + 5rem) 6% 3rem; }
@@ -131,40 +86,14 @@
     .lightbox-prev { left:1.5rem; }
     .lightbox-next { right:1.5rem; }
 
-    /* FOOTER */
-    footer { background:var(--black); border-top:1px solid var(--divider-dark); padding:3rem 6%; }
-    .footer-top { display:flex; align-items:center; justify-content:space-between; padding-bottom:2rem; margin-bottom:2rem; border-bottom:1px solid var(--divider-dark); flex-wrap:wrap; gap:1.5rem; }
-    .footer-logo { display:flex; align-items:center; gap:0.75rem; text-decoration:none; }
-    .footer-logo img { height:32px; width:32px; border-radius:50%; object-fit:cover; }
-    .footer-logo-text { font-family:'Cormorant Garamond',serif; font-size:1.3rem; font-weight:600; color:var(--white); }
-    .footer-logo-text span { color:var(--gold); }
-    .footer-links { display:flex; gap:2.5rem; flex-wrap:wrap; }
-    .footer-links a { font-size:0.72rem; color:rgba(232,224,213,0.4); text-decoration:none; letter-spacing:1.5px; text-transform:uppercase; transition:color 0.2s; }
-    .footer-links a:hover { color:var(--gold); }
-    .footer-links a.current { color:var(--gold); }
-    .footer-bottom { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; }
-    .footer-bottom p { font-size:0.78rem; color:rgba(232,224,213,0.3); }
-    .footer-social { display:flex; gap:0.5rem; }
-    .footer-social a { width:30px; height:30px; border-radius:2px; border:1px solid var(--divider-dark); display:flex; align-items:center; justify-content:center; text-decoration:none; color:rgba(232,224,213,0.4); font-size:0.65rem; font-weight:700; transition:border-color 0.2s,color 0.2s; }
-    .footer-social a:hover { border-color:var(--gold-border); color:var(--gold); }
-
     /* RESPONSIVE */
     /* Desktop nav needs ~1016px; below that it collides with the logo, so switch to the hamburger. */
-    @media (max-width:1024px) {
-      .nav-links { display:none; }
-      .hamburger { display:flex; }
-    }
     @media (max-width:1100px) {
       .gallery-grid { grid-template-columns:repeat(3,1fr); }
     }
     @media (max-width:768px) {
-      .nav-links { display:none; }
-      .hamburger { display:flex; }
-      nav { padding:0 5%; }
-      section { padding:5rem 5%; }
       #gallery { padding:calc(76px + 3rem) 5% 2rem; }
       .gallery-grid { grid-template-columns:repeat(2,1fr); gap:0.85rem; }
-      .footer-top,.footer-bottom { flex-direction:column; }
       .lightbox-prev { left:0.5rem; width:42px; height:42px; font-size:1.4rem; }
       .lightbox-next { right:0.5rem; width:42px; height:42px; font-size:1.4rem; }
       .lightbox-close { top:1rem; right:1rem; width:38px; height:38px; }
@@ -185,6 +114,7 @@
       <li><a href="index.html#about">About</a></li>
       <li><a href="gallery.html" class="current">Gallery</a></li>
       <li><a href="index.html#contact" class="nav-cta">Partner With Us</a></li>
+      <li><a href="portal/login.html" class="nav-login">Log In</a></li>
     </ul>
     <button class="hamburger" onclick="toggleNav()" aria-label="Menu">
       <span></span><span></span><span></span>
@@ -198,6 +128,7 @@
     <a href="index.html#about" onclick="closeNav()">About</a>
     <a href="gallery.html" class="current" onclick="closeNav()">Gallery</a>
     <a href="index.html#contact" onclick="closeNav()">Partner With Us</a>
+    <a href="portal/login.html" class="mobile-login">Log In</a>
   </div>
 
   <!-- GALLERY -->

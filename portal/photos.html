@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Photos | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">Brand Portal</span>
+        <h1>Photos</h1>
+        <p class="portal-sub" id="count"></p>
+      </div>
+      <div class="filters">
+        <select id="f-group" aria-label="Group by">
+          <option value="month">Group by month</option>
+          <option value="brand">Group by brand</option>
+          <option value="activity">Group by activity</option>
+        </select>
+        <select id="f-month"><option value="">All months</option></select>
+        <select id="f-brand"><option value="">All brands</option></select>
+        <select id="f-type"><option value="">All activity types</option></select>
+      </div>
+    </div>
+
+    <div id="groups"></div>
+
+    <div class="more-wrap" id="more-wrap" hidden>
+      <button class="btn-more" id="more">Show more</button>
+      <span class="more-count" id="more-count"></span>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <div class="lightbox" id="lightbox">
+    <button class="lightbox-close" id="lb-close" aria-label="Close">&times;</button>
+    <button class="lightbox-prev" id="lb-prev" aria-label="Previous">&#8249;</button>
+    <button class="lightbox-next" id="lb-next" aria-label="Next">&#8250;</button>
+    <div class="lightbox-content">
+      <img id="lb-img" alt="">
+      <p class="lightbox-cap" id="lb-cap"></p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtMonth, fmtNum,
+             fillSelect } from './portal.js';
+
+    /* ============================================================
+       THE GALLERY IS BOUNDED, AND THAT IS THE POINT.
+
+       Photos are the one table here that grows without limit — every activation
+       adds more, for ever, while brands and activity types do not move. So this
+       page never asks for "all photos": it asks Postgres to order and slice, and
+       pulls one page at a time.
+
+       Two consequences worth stating, because both are easy to undo by accident:
+
+       1. THE FILTERS ARE APPLIED IN POSTGRES, not in the browser. Filtering a
+          page after it arrives would silently show 60 rows drawn from the wrong
+          set — the filter has to reach the query or paging means nothing.
+       2. THE FACET LISTS DO NOT COME FROM THE PHOTOS. Building the dropdowns
+          from the photo rows would require reading every photo to populate a
+          control, which is the exact thing being avoided. They come from three
+          small tables that RLS scopes the same way.
+       ============================================================ */
+
+    const PAGE = 60;
+
+    let rows = [];            // what has been loaded so far, in display order
+    let from = 0;             // next range offset
+    let total = 0;            // how many match the current filters, per Postgres
+    let shots = [];           // display-order photos for the lightbox
+    let index = 0;
+    const signedFor = {};     // storage_path -> signed URL, cached for the session
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('photos.html', auth.profile);
+      await buildFilters();
+
+      ['f-month', 'f-brand', 'f-type'].forEach(id =>
+        document.getElementById(id).addEventListener('change', reload));
+      // Regrouping is a redraw of what is already here — it must not refetch.
+      document.getElementById('f-group').addEventListener('change', draw);
+      document.getElementById('more').addEventListener('click', loadPage);
+
+      await reload();
+    }
+
+    /* ---------- facets ----------
+       Months come from the monthly rollup (one row per brand-month, and it
+       already counts photos, so a month with none is never offered). Brands come
+       from `brands`. Types come from the activity mix, which knows which types a
+       brand actually does — `activity_types` would offer all 29 to everyone. */
+    async function buildFilters() {
+      const [months, brands, types] = await Promise.all([
+        db.from('v_brand_monthly_summary').select('month').gt('photo_count', 0),
+        db.from('brands').select('name').order('name'),
+        db.from('v_activity_mix').select('activity_type'),
+      ]);
+      const uniq = (res, key) =>
+        [...new Set((res.data || []).map(r => r[key]).filter(Boolean))].sort();
+
+      const m = uniq(months, 'month').reverse();
+      document.getElementById('f-month').insertAdjacentHTML('beforeend',
+        m.map(x => `<option value="${esc(x)}">${esc(fmtMonth(x + '-01'))}</option>`).join(''));
+
+      // fillSelect hides a filter with fewer than two choices, so a brand user
+      // never sees a brand picker containing only their own name.
+      fillSelect('f-brand', uniq(brands, 'name').map(b => [b, b]));
+      fillSelect('f-type', uniq(types, 'activity_type').map(t => [t, t]));
+    }
+
+    /* ---------- fetching ---------- */
+    function query() {
+      const month = document.getElementById('f-month').value;
+      const brand = document.getElementById('f-brand').value;
+      const type = document.getElementById('f-type').value;
+
+      // No brand filter is applied unless the operator picked one: RLS decides
+      // what a login can see, in Postgres. Never add .eq('brand_id', …) here —
+      // it would imply the isolation lives in this file, and it does not.
+      let q = db.from('v_brand_photos').select('*', { count: 'exact' });
+      if (month) q = q.eq('month', month);
+      if (brand) q = q.eq('brand_name', brand);
+      if (type) q = q.eq('activity_type', type);
+
+      // Order explicitly. The view carries an ORDER BY, but a range over an
+      // unordered result is not a stable page — rows could repeat or vanish
+      // between pages. Tie-broken down to the photo id so it is total.
+      return q.order('activity_date', { ascending: false })
+              .order('activity_id', { ascending: false })
+              .order('id', { ascending: false });
+    }
+
+    async function reload() {
+      rows = []; from = 0; total = 0;
+      document.getElementById('groups').innerHTML =
+        '<div class="state">Loading…</div>';
+      await loadPage();
+    }
+
+    async function loadPage() {
+      const btn = document.getElementById('more');
+      btn.disabled = true;
+      btn.textContent = 'Loading…';
+
+      const { data, error, count } = await query().range(from, from + PAGE - 1);
+      btn.textContent = 'Show more';
+
+      if (error) {
+        render(document.getElementById('groups'), { error });
+        document.getElementById('more-wrap').hidden = true;
+        return;
+      }
+      total = count ?? total;
+      from += (data || []).length;
+      rows = rows.concat(data || []);
+
+      // Sign only what just arrived. The cache means switching a filter back
+      // never re-signs anything already held.
+      const need = [...new Set(rows.map(r => r.storage_path))].filter(p => !signedFor[p]);
+      if (need.length) {
+        const { data: signed, error: signError } = await db.storage
+          .from('activation-photos').createSignedUrls(need, 3600);
+        if (signError) {
+          render(document.getElementById('groups'), { error: signError });
+          return;
+        }
+        (signed || []).forEach(s => { if (!s.error) signedFor[s.path] = s.signedUrl; });
+      }
+      draw();
+    }
+
+    /* ---------- drawing ---------- */
+    function draw() {
+      const el = document.getElementById('groups');
+      const wrap = document.getElementById('more-wrap');
+      const usable = rows.filter(r => signedFor[r.storage_path]);
+
+      document.getElementById('count').textContent = total
+        ? `${fmtNum(total)} photo${total === 1 ? '' : 's'}`
+        : '';
+
+      if (!usable.length) {
+        shots = [];
+        wrap.hidden = true;
+        return render(el, { empty: {
+          title: 'No photos match',
+          body: 'Try another month, brand or activity type.' } });
+      }
+
+      const mode = document.getElementById('f-group').value;
+      const keyOf = (r) => mode === 'brand' ? r.brand_name
+                        : mode === 'activity' ? r.activity_id
+                        : r.month;
+
+      // Grouping applies to what has been LOADED, never to the whole table —
+      // that is what keeps the page bounded. Rows arrive newest-first, so the
+      // month blocks are already contiguous.
+      const groups = new Map();
+      shots = [];
+      for (const r of usable) {
+        const k = keyOf(r);
+        if (!groups.has(k)) groups.set(k, { head: r, items: [] });
+        // The lightbox walks photos in DISPLAY order, so the index is assigned
+        // here rather than taken from the unfiltered list.
+        groups.get(k).items.push({ ...r, i: shots.length });
+        shots.push(r);
+      }
+
+      el.innerHTML = [...groups.values()].map(({ head, items }) => {
+        const heading =
+          mode === 'brand' ? head.brand_name
+          : mode === 'activity' ? (head.summary || head.activity_type || 'Activation')
+          : fmtMonth(head.month + '-01');
+
+        const meta = (mode === 'activity'
+          ? [fmtDate(head.activity_date), head.venue_name, head.activity_type]
+          : [`${items.length} photo${items.length === 1 ? '' : 's'}`]
+        ).filter(Boolean).map(esc).join(' &middot; ');
+
+        return `<div class="photo-group">
+          <h3>${esc(heading)}</h3>
+          <p class="when">${mode === 'activity' ? `${meta} &middot; ${items.length} photo${items.length === 1 ? '' : 's'}` : meta}</p>
+          <div class="photo-grid">
+            ${items.map(p => `<div class="photo-item" data-i="${p.i}" tabindex="0"
+                                   role="button" aria-label="Open photo">
+              <img src="${esc(signedFor[p.storage_path])}"
+                   alt="${esc(p.summary || p.venue_name || 'Activation photo')}"
+                   loading="lazy">
+              <span class="cap">
+                <b>${esc(p.activity_type || 'Activation')}</b>
+                ${esc(p.summary || p.venue_name || '')}
+              </span>
+            </div>`).join('')}
+          </div></div>`;
+      }).join('');
+
+      el.querySelectorAll('.photo-item').forEach(node => {
+        const go = () => open(Number(node.dataset.i));
+        node.addEventListener('click', go);
+        node.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+        });
+      });
+
+      const more = total - usable.length;
+      wrap.hidden = more <= 0;
+      document.getElementById('more').disabled = false;
+      document.getElementById('more-count').textContent =
+        more > 0 ? `${fmtNum(usable.length)} of ${fmtNum(total)} shown` : '';
+    }
+
+    /* ---------- lightbox ---------- */
+    const box = document.getElementById('lightbox');
+    function open(i) { index = i; paint(); box.classList.add('open'); document.body.style.overflow = 'hidden'; }
+    function close() { box.classList.remove('open'); document.body.style.overflow = ''; }
+    function step(d) { if (shots.length) { index = (index + d + shots.length) % shots.length; paint(); } }
+    function paint() {
+      const s = shots[index];
+      if (!s) return;
+      document.getElementById('lb-img').src = signedFor[s.storage_path];
+      // Every photo carries its reason into the lightbox: what happened, where,
+      // what kind of activity, when — and a way through to the activity itself.
+      const line = [s.summary, s.venue_name, s.activity_type,
+                    s.activity_date ? fmtDate(s.activity_date) : ''].filter(Boolean).map(esc).join(' · ');
+      document.getElementById('lb-cap').innerHTML =
+        `${line}<br><a href="activity-detail.html?id=${encodeURIComponent(s.activity_id)}">Open this activity &rarr;</a>`;
+    }
+
+    document.getElementById('lb-close').onclick = close;
+    document.getElementById('lb-prev').onclick = () => step(-1);
+    document.getElementById('lb-next').onclick = () => step(1);
+    box.addEventListener('click', e => { if (e.target === box) close(); });
+    document.addEventListener('keydown', e => {
+      if (!box.classList.contains('open')) return;
+      if (e.key === 'Escape') close();
+      if (e.key === 'ArrowLeft') step(-1);
+      if (e.key === 'ArrowRight') step(1);
+    });
+  </script>
+</body>
+</html>

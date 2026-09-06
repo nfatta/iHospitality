@@ -1,0 +1,124 @@
+/* ============================================================
+   iHospitality — shared site styles
+   ============================================================
+   Everything identical across index.html, gallery.html and the
+   brand portal lives here. Page-specific CSS stays inline in each
+   page, in a <style> block AFTER the link to this file, so a page
+   can still override any rule below (gallery.html does exactly
+   that for .section-header).
+
+   Change brand colours in :root only. Nothing below hard-codes a
+   brand colour.
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --black: #0A0A0A; --black-rich: #111111; --black-soft: #1A1A1A;
+  --gold: #C9A84C; --gold-light: #E8C97A; --gold-dim: rgba(201,168,76,0.12);
+  --gold-border: rgba(201,168,76,0.25); --amber: #B5651D;
+  --white: #FFFFFF; --off-white: #F7F4EF; --light-bg: #F2EDE4;
+  --text-dark: #1A1512; --text-mid: #5C5248;
+  --divider-dark: rgba(255,255,255,0.08); --divider-light: rgba(26,21,18,0.1);
+}
+html { scroll-behavior: smooth; }
+body { font-family: 'Inter', sans-serif; background: var(--black); color: #E8E0D5; line-height: 1.6; }
+h1,h2,h3,h4 { font-family: 'Cormorant Garamond', serif; line-height: 1.1; }
+
+/* NAV */
+nav {
+  position: fixed; top:0; left:0; right:0; z-index:100;
+  background: rgba(10,10,10,0.95); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--divider-dark);
+  padding: 0 6%; display:flex; align-items:center; justify-content:space-between; height:76px;
+}
+.nav-logo { display:flex; align-items:center; gap:0.75rem; text-decoration:none; }
+.nav-logo img { height:38px; width:38px; border-radius:50%; object-fit:cover; }
+.nav-logo-text { font-family:'Cormorant Garamond',serif; font-size:1.5rem; font-weight:600; color:var(--white); letter-spacing:0.5px; }
+.nav-logo-text span { color:var(--gold); }
+.nav-links { display:flex; align-items:center; gap:2.5rem; list-style:none; }
+.nav-links a { text-decoration:none; color:rgba(232,224,213,0.6); font-size:0.78rem; font-weight:500; letter-spacing:1.5px; text-transform:uppercase; transition:color 0.2s; }
+.nav-links a:hover { color:var(--white); }
+.nav-links a.current { color:var(--gold); }
+.nav-cta { border:1px solid var(--gold-border) !important; color:var(--gold) !important; padding:0.5rem 1.4rem !important; border-radius:2px; transition:background 0.2s,color 0.2s !important; }
+.nav-cta:hover { background:var(--gold) !important; color:var(--black) !important; }
+
+/* Log in — the way a brand or a contractor reaches the portal.
+   DELIBERATELY QUIETER THAN .nav-cta. "Partner With Us" is what this site is
+   for and must stay the loudest thing in the bar; a second gold button beside
+   it would split the eye between winning a client and serving one. Muted until
+   hovered, with a hairline separating it from the CTA so it reads as a
+   different KIND of action rather than a lesser version of the same one. */
+.nav-login {
+  margin-left:0.4rem; padding-left:1.4rem;
+  border-left:1px solid rgba(232,224,213,0.18);
+  color:rgba(232,224,213,0.45) !important;
+}
+.nav-login:hover { color:var(--gold) !important; }
+
+/* On a phone the nav-links list is hidden entirely and the drawer takes over,
+   so the link has to be repeated there or it disappears below 900px -- which
+   is where a contractor standing in a bar will be looking for it. */
+.mobile-login { color:var(--gold) !important; }
+.hamburger { display:none; flex-direction:column; gap:5px; cursor:pointer; background:none; border:none; padding:4px; }
+.hamburger span { display:block; width:22px; height:1.5px; background:var(--white); }
+
+/* BUTTONS */
+.btn-gold { background:var(--gold); color:var(--black); padding:clamp(0.75rem, 2vw, 1rem) clamp(1.5rem, 3vw, 2.5rem); border-radius:2px; text-decoration:none; font-weight:700; font-size:clamp(0.7rem, 1.8vw, 0.8rem); letter-spacing:1.5px; text-transform:uppercase; transition:background 0.2s,transform 0.2s; display:inline-block; }
+.btn-gold:hover { background:var(--gold-light); transform:translateY(-2px); }
+.btn-outline-gold { border:1px solid rgba(232,224,213,0.35); color:rgba(232,224,213,0.85); padding:clamp(0.75rem, 2vw, 1rem) clamp(1.5rem, 3vw, 2.5rem); border-radius:2px; text-decoration:none; font-weight:500; font-size:clamp(0.7rem, 1.8vw, 0.8rem); letter-spacing:1.5px; text-transform:uppercase; transition:border-color 0.2s,color 0.2s; display:inline-block; }
+.btn-outline-gold:hover { border-color:var(--gold); color:var(--gold); }
+
+/* SECTION BASE */
+section { padding:8rem 6%; }
+.section-label { font-size:0.7rem; font-weight:600; letter-spacing:3px; text-transform:uppercase; display:block; margin-bottom:1.25rem; }
+.dark .section-label { color:var(--gold); }
+.light .section-label { color:var(--amber); }
+.section-title { font-size:clamp(2.5rem,4vw,3.75rem); margin-bottom:1.5rem; font-weight:600; }
+.dark .section-title { color:var(--white); }
+.light .section-title { color:var(--text-dark); }
+.section-subtitle { font-size:1rem; max-width:620px; line-height:1.9; font-weight:300; }
+.dark .section-subtitle { color:rgba(232,224,213,0.65); }
+.light .section-subtitle { color:var(--text-mid); }
+.section-header { margin-bottom:5rem; }
+.section-header.centered { text-align:center; }
+.section-header.centered .section-subtitle { margin:0 auto; }
+
+/* FOOTER */
+footer { background:var(--black); border-top:1px solid var(--divider-dark); padding:3rem 6%; }
+.footer-top { display:flex; align-items:center; justify-content:space-between; padding-bottom:2rem; margin-bottom:2rem; border-bottom:1px solid var(--divider-dark); flex-wrap:wrap; gap:1.5rem; }
+.footer-logo { display:flex; align-items:center; gap:0.75rem; text-decoration:none; }
+.footer-logo img { height:32px; width:32px; border-radius:50%; object-fit:cover; }
+.footer-logo-text { font-family:'Cormorant Garamond',serif; font-size:1.3rem; font-weight:600; color:var(--white); }
+.footer-logo-text span { color:var(--gold); }
+.footer-links { display:flex; gap:2.5rem; flex-wrap:wrap; }
+.footer-links a { font-size:0.72rem; color:rgba(232,224,213,0.4); text-decoration:none; letter-spacing:1.5px; text-transform:uppercase; transition:color 0.2s; }
+.footer-links a:hover { color:var(--gold); }
+.footer-links a.current { color:var(--gold); }
+.footer-bottom { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; }
+.footer-bottom p { font-size:0.78rem; color:rgba(232,224,213,0.3); }
+.footer-social { display:flex; gap:0.5rem; }
+.footer-social a { width:30px; height:30px; border-radius:2px; border:1px solid var(--divider-dark); display:flex; align-items:center; justify-content:center; text-decoration:none; color:rgba(232,224,213,0.4); font-size:0.65rem; font-weight:700; transition:border-color 0.2s,color 0.2s; }
+.footer-social a:hover { border-color:var(--gold-border); color:var(--gold); }
+
+/* MOBILE NAV */
+.mobile-nav { display:none; position:fixed; top:76px; left:0; right:0; z-index:99; background:rgba(10,10,10,0.98); backdrop-filter:blur(16px); border-bottom:1px solid var(--divider-dark); padding:2rem 6%; flex-direction:column; gap:1.5rem; }
+.mobile-nav.open { display:flex; }
+.mobile-nav a { text-decoration:none; color:rgba(232,224,213,0.6); font-size:0.85rem; font-weight:500; padding-bottom:1.25rem; border-bottom:1px solid var(--divider-dark); letter-spacing:1px; text-transform:uppercase; transition:color 0.2s; }
+.mobile-nav a:last-child { border-bottom:none; padding-bottom:0; }
+.mobile-nav a:hover { color:var(--gold); }
+.mobile-nav a.current { color:var(--gold); }
+
+/* RESPONSIVE — shared rules only. Page-specific breakpoints stay in the page. */
+/* Desktop nav needs ~1016px; below that it collides with the logo, so switch to the hamburger. */
+@media (max-width:1024px) {
+  .nav-links { display:none; }
+  .hamburger { display:flex; }
+}
+@media (max-width:768px) {
+  .nav-links { display:none; }
+  .hamburger { display:flex; }
+  nav { padding:0 5%; }
+  section { padding:5rem 5%; }
+  .footer-top,.footer-bottom { flex-direction:column; }
+}

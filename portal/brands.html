@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Brands | iHospitality Brand Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">Internal</span>
+        <h1>Brands</h1>
+        <p class="portal-sub" id="count"></p>
+      </div>
+      <div class="filters">
+        <label class="filter-field"><span>Start date</span><select id="f-from"></select></label>
+        <label class="filter-field"><span>End date</span><select id="f-to"></select></label>
+        <select id="f-scope" aria-label="Which brands">
+          <option value="active">Current brands</option>
+          <option value="all">All brands, including retired</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="stats"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Every brand, over the months chosen</h2>
+        <span class="hint">Click a brand to open it</span>
+      </div>
+      <div id="list"></div>
+    </div>
+
+    <p class="caveat" id="foot"></p>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, isStaff,
+             fmtNum, money, monthRange, sortableTable, guardStaffPage} from './portal.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      // A contractor is redirected off the admin pages. RLS already makes
+      // every one of them a page of nulls, which is the real lock -- this is
+      // so it reads as "not yours" rather than "broken" (D137).
+      await guardStaffPage(auth.profile);
+      renderShell('brands.html', auth.profile);
+
+      if (!isStaff(auth.profile)) {
+        // Convenience only. The lock is RLS: brand_retainer and rate_card are
+        // staff-only, so a brand login reading these views gets its own rows
+        // with the money blank. Saying so is friendlier than a page of dashes.
+        render(document.getElementById('list'), { empty: {
+          title: 'Staff only',
+          body: 'This page shows every brand side by side and is not part of your portal.' } });
+      } else {
+
+      /* Three reads.
+         REVENUE COMES FROM v_brand_month_revenue, NOT v_brand_money. The latter
+         is activity charge only, and the retainer is roughly two-thirds of what
+         iHospitality sells ($110,850 of $167,580) — a "revenue" column sourced
+         from v_brand_money would understate every brand by that much and can
+         flip the sign of margin. */
+      const [brands, revenue, venueRows] = await Promise.all([
+        db.from('brands').select('id, name, slug, is_active').order('name'),
+        db.from('v_brand_month_revenue').select('*'),
+        db.from('v_brand_venue_counts').select('brand_id'),
+      ]);
+
+      const el = document.getElementById('list');
+      const bad = brands.error || revenue.error || venueRows.error;
+      if (bad) {
+        render(el, { error: bad });
+      } else {
+        const byName = new Map((brands.data || []).map(b => [b.name, b]));
+
+        // Accounts are all-time on purpose — a brand's account list is not a
+        // property of the months on screen, and the column says so below.
+        const accounts = {};
+        for (const v of venueRows.data || []) accounts[v.brand_id] = (accounts[v.brand_id] || 0) + 1;
+
+        const months = [...new Set((revenue.data || []).map(r => r.month))].sort().reverse();
+        let rows = [];
+
+        const scope = document.getElementById('f-scope');
+        scope.addEventListener('change', paint);
+
+        monthRange('f-from', 'f-to', months, (from, to) => {
+          const inRange = (revenue.data || []).filter(r =>
+            !from || (r.month >= from && r.month <= to));
+
+          const agg = {};
+          for (const r of inRange) {
+            const a = agg[r.brand_name] ||= {
+              brand_name: r.brand_name, revenue: 0, retainer: 0, activity_charge: 0,
+              contractor_cost: 0, margin: 0, activities: 0, unpriced: 0,
+              uncosted: 0, last: null,
+            };
+            a.revenue         += Number(r.revenue || 0);
+            a.retainer        += Number(r.retainer || 0);
+            a.activity_charge += Number(r.activity_charge || 0);
+            a.contractor_cost += Number(r.contractor_cost || 0);
+            a.margin          += Number(r.margin || 0);
+            a.activities      += Number(r.activities || 0);
+            a.unpriced        += Number(r.unpriced_activities || 0);
+            // Carried BESIDE margin, never subtracted from it. The cost behind
+            // this charge is unknown, not zero, and guessing it would be the
+            // same mistake in the other direction.
+            a.uncosted        += Number(r.uncosted_charge || 0);
+            if (!a.last || r.month > a.last) a.last = r.month;
+          }
+
+          // A brand with no rows in the window still exists and should be
+          // listed at zero rather than vanishing without explanation.
+          for (const b of brands.data || []) agg[b.name] ||= {
+            brand_name: b.name, revenue: 0, retainer: 0, activity_charge: 0,
+            contractor_cost: 0, margin: 0, activities: 0, unpriced: 0,
+            uncosted: 0, last: null,
+          };
+
+          rows = Object.values(agg).map(a => ({
+            ...a,
+            slug: byName.get(a.brand_name)?.slug || null,
+            is_active: byName.get(a.brand_name)?.is_active ?? true,
+            accounts: accounts[byName.get(a.brand_name)?.id] || 0,
+          }));
+          paint();
+        });
+
+        function paint() {
+          const show = scope.value === 'all' ? rows : rows.filter(r => r.is_active);
+          document.getElementById('count').textContent =
+            `${fmtNum(show.length)} brand${show.length === 1 ? '' : 's'}`;
+
+          const total = show.reduce((t, r) => ({
+            revenue: t.revenue + r.revenue,
+            retainer: t.retainer + r.retainer,
+            cost: t.cost + r.contractor_cost,
+            margin: t.margin + r.margin,
+            activities: t.activities + r.activities,
+          }), { revenue: 0, retainer: 0, cost: 0, margin: 0, activities: 0 });
+
+          const stats = document.getElementById('stats');
+          stats.className = 'stat-grid';
+          stats.innerHTML = `
+            <div class="stat-card">
+              <span class="num">${money(total.revenue)}</span>
+              <span class="lbl">Revenue</span>
+              <span class="meta">retainer ${money(total.retainer)} of it</span>
+            </div>
+            <div class="stat-card">
+              <span class="num">${money(total.cost)}</span>
+              <span class="lbl">Contractor cost</span>
+              <span class="meta">per-activity pay only</span>
+            </div>
+            <div class="stat-card">
+              <span class="num${total.margin < 0 ? ' neg' : ''}">${money(total.margin)}</span>
+              <span class="lbl">Margin</span>
+              <span class="meta">before base pay</span>
+            </div>
+            <div class="stat-card">
+              <span class="num">${fmtNum(total.activities)}</span>
+              <span class="lbl">Activities</span>
+              <span class="meta">in the months chosen</span>
+            </div>`;
+
+          sortableTable(el, show, [
+            { head: 'Brand', always: true, cls: 'venue',
+              get: r => esc(r.brand_name) + (r.is_active ? '' : ' <span class="pill pill-lost">Retired</span>'),
+              sortValue: r => r.brand_name },
+            { head: 'Revenue', cls: 'num', value: r => r.revenue, get: r => money(r.revenue), sortValue: r => r.revenue },
+            { head: 'Retainer', cls: 'num', value: r => r.retainer, get: r => money(r.retainer), sortValue: r => r.retainer },
+            { head: 'Activity charge', cls: 'num', value: r => r.activity_charge, get: r => money(r.activity_charge), sortValue: r => r.activity_charge },
+            { head: 'Contractor cost', cls: 'num', value: r => r.contractor_cost, get: r => money(r.contractor_cost), sortValue: r => r.contractor_cost },
+            { head: 'Margin', cls: 'num', value: r => r.margin, sortValue: r => r.margin,
+              get: r => `<span class="${r.margin < 0 ? 'neg' : ''}">${money(r.margin)}</span>` },
+            { head: 'Activities', cls: 'num', value: r => r.activities, get: r => fmtNum(r.activities), sortValue: r => r.activities },
+            { head: 'Unpriced', cls: 'num', value: r => r.unpriced, sortValue: r => r.unpriced,
+              get: r => r.unpriced ? `<span class="pill pill-dormant">${fmtNum(r.unpriced)}</span>` : '<span class="muted">—</span>' },
+            // The size of margin's blind spot, next to margin. The two flags
+            // lie in opposite directions: unpriced UNDERSTATES revenue,
+            // uncosted OVERSTATES margin.
+            { head: 'Uncosted', cls: 'num', value: r => r.uncosted, sortValue: r => r.uncosted,
+              get: r => r.uncosted ? `<span class="pill pill-dormant">${money(r.uncosted)}</span>` : '<span class="muted">—</span>' },
+            { head: 'Accounts', cls: 'num', value: r => r.accounts, get: r => fmtNum(r.accounts), sortValue: r => r.accounts },
+            { head: 'Last month', cls: 'nowrap', value: r => r.last, sortValue: r => r.last || '',
+              get: r => r.last ? esc(r.last) : '<span class="muted">—</span>' },
+          ], {
+            sort: 'Revenue', dir: 'desc',
+            onRowClick: (r) => { if (r.slug) location.href = `brand.html?slug=${encodeURIComponent(r.slug)}`; },
+          });
+        }
+
+        document.getElementById('foot').innerHTML =
+          'Revenue includes the retainer and is taken from <code>v_brand_month_revenue</code>. ' +
+          'Margin is before contractor base pay, which is a company cost and is deliberately ' +
+          'not attributed to any brand. <strong>Accounts is all-time</strong>, not the months chosen. ' +
+          'The two flags lean opposite ways: <strong>unpriced</strong> is work with no rate line at ' +
+          'all, so it UNDERSTATES revenue; <strong>uncosted</strong> is charge with no pay rate behind ' +
+          'it, so it OVERSTATES margin. Uncosted is shown beside margin rather than taken off it — ' +
+          'the cost is unknown, not zero.';
+      }
+      }
+    }
+  </script>
+</body>
+</html>

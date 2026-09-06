@@ -1,0 +1,2308 @@
+# HANDOFF - start here
+
+Written at the close of **6 Sep 2026**, local session with a live database.
+Earlier sessions are kept below, newest first, each marked superseded.
+
+## THE FLASH IS NOW SOMETHING THE PORTAL READS, AND JULY AND AUGUST ARE IN.
+
+The session began as a data-integrity audit and turned into the reorder pipeline.
+Four PRs merged (#11 to #14), all deployed. Six decisions recorded, D165 to D170.
+
+### The audit found one live bug, and the database was otherwise clean
+
+**The web portal was silently showing 80% of the data.** PostgREST caps a
+response at 1,000 rows and the cap cannot be raised from the client: a plain
+select on `v_activity_money` answers `Content-Range: 0-999/1255`, and it still
+answers `0-999` with an explicit `limit=2000`. Four pages read a growing view
+unbounded and summed it in the browser, so `business.html`, `pay.html`,
+`rate-card.html` and `activity.html` were each totalling 1,000 of 1,255
+activities with no error anywhere. `selectAll()` in `portal.js` pages until a
+short page comes back. **D165.**
+
+The Streamlit admin was never affected because it reaches Postgres through
+psycopg, which is why the two surfaces disagreed and **the portal was always the
+low one** - it read as a reconciliation gap rather than a bug, and that is how it
+survived.
+
+Everything else checked clean: zero duplicate keys, zero orphan rows, zero view
+fan-out, and the two overlap constraints the static read flagged as the top risk
+(`brand_retainer_no_overlap`, `contractor_pay_no_overlap`) **do** exist on
+Supabase. That was a false alarm.
+
+⚠️ **Three in-repo comments were stale and are corrected**: `5_Venues.py` said
+seventeen venue names were exact duplicates (it is zero, they were merged),
+`schema.sql` said 97 venue-less activities (it is 114), and `pg_class` row
+estimates in this database are stale enough to mis-diagnose a fan-out that is
+not there. **Use `count(*)`, never the estimate.**
+
+### `closed` was a decision that had never been implemented
+
+D159 and CLAUDE.md both said `venue_grading.lifecycle` held four values. It held
+two. `closed` was missing from the CHECK constraint and from the picker, and in
+438 graded venues had never once been set because it could not be. Worse,
+lifecycle was editable in exactly ONE place - the grid on "Compare against
+HubSpot", which lists only venues the export does not mention - so any venue with
+a Record ID had no route to a lifecycle at all.
+
+Both fixed. "Edit a venue" now carries the control. The Wildflower in Baldwin
+Park is closed, the first real use.
+
+### A billing roll-up is not an activity
+
+The dashboard read 1,255 and the Activity page read 1,246 with nothing
+explaining the gap. The nine rows between them are Dame Mas `monthly_commission`,
+which came off the invoices, carry no deal id and no venue, and hold **all** of
+Dame Mas's revenue for Jul 2025 to Mar 2026. `activity_types.is_rollup` takes
+them out of every count and leaves every money figure untouched. **D166.**
+
+### The flash pipeline
+
+`distributor`, `venue_distributor_account`, `distributor_account_rejection`,
+hanging off the **distributor** rather than the brand because the customer number
+is the account's liquor licence. One mapping serves every brand. **D168.**
+
+Many-to-many both ways and both are real: Hampton bills on and off premise under
+two numbers, Spirits2U under three, and Aku Aku shares a licence with Stardust
+Lounge. So reconciliation compares at the **match group**, a connected component
+of the venue/number graph, summing both sides.
+
+`case_return` at case equivalent **-1.0**, so a return nets by itself without a
+negative quantity. **D169.** The claim tab is an editable grid, not a picker.
+**D170.**
+
+### What is in the database now
+
+| | |
+|---|---|
+| Activities | 1,303 (1,294 excluding billing roll-ups) |
+| Venues | 453 |
+| Distributor mappings / rejections | 116 / 17 |
+| Activities created from the flash | 46 |
+| July 2026, 44 North | 24 rows, 40 cases |
+| August 2026, 44 North | 22 rows, 30 cases |
+
+July reconciles exactly: the portal reads what the flash reads.
+
+---
+
+## ⚠️ THE CONTRACTOR IS NOT SET WHEN A FLASH ACTIVITY IS CREATED. FIX THIS FIRST.
+
+**This is the one thing the operator asked for that is not built.** He caught it
+after doing both months: *"one thing I forgot is we need to assign a contractor
+to them, that should have been an option."*
+
+The Flash page writes `activities` and nothing else, so all 46 rows landed with
+no `activity_contractor`. He assigned every one by hand afterwards, which is a
+second pass the page should have made unnecessary.
+
+**What to build:** a Contractor column on the add grid in tab 2, defaulting to
+the venue's owning contractor from `venue_grading.owner_contractor_id` where one
+exists, editable per row, written to `activity_contractor` in the same
+transaction as the activity. `activity_contractor`'s primary key is
+`activity_id` alone, so one contractor per activity and an upsert cannot fan out.
+
+⚠️ **CONTRACTORS ARE PAID ON ACTIVITIES, SO A MISSING ONE IS MISSING PAY**
+(D135/D139). Blank means NOT RECORDED, never "nobody". 186 activities still
+carry no contractor.
+
+### The pay is modelled even when nobody draws it
+
+Operator ruling, 6 Sep 2026: *"Even though phil doesnt take a the pay we need to
+model it for accuracy when we hire someone to fill that position. But some of
+those are mine and Eric and we get paid."*
+
+So the pay rate stands on every reorder whether or not the person invoices for
+it. The consequence is visible and intended:
+
+| From the 46 flash rows | Charge | Pay | Margin |
+|---|---|---|---|
+| Case Reorder (44 rows) | $0.00 | $335.00 | **-$335.00** |
+| Case Sale (2 rows) | $150.00 | $75.00 | +$75.00 |
+
+44 North's `recurring case` is carded at **$0.00 charge and $5.00 pay** (D118),
+so every reorder we record makes the activity margin worse while the retainer
+carries the month. **Do not "fix" that**, and do not read the negative as an
+error. Phil owns 41 of the 46; Nicholas owns 2.
+
+---
+
+## What the audit found and nobody has acted on yet
+
+None of these are bugs in the pipeline. They are rows to rule on.
+
+1. **39 HubSpot deals staged and never promoted**, 9 of them older than Aug 2026
+   and reaching back to Nov 2025, including billable case sales. Invisible to
+   every revenue and depletion figure until promoted.
+2. **13 activities whose quantity disagrees with HubSpot with no hand-edit
+   recorded.** Wodka 2025-12-16 reads 12 in HubSpot and 1 in the portal; Blue Run
+   the same date reads 6 and 1. One date differs by a month, which moves revenue
+   between reporting months. Possibly bottle-to-case conversion, but nothing says
+   which number is authoritative.
+3. **7 `mileage` rows are flagged `is_expense = false`**, so they price as
+   revenue ($1,243.90 across 5 brands) instead of as the pass-through D91 says
+   they are.
+4. **2 Dame Mas `staff training` rows carry a percentage rate and a NULL
+   amount**, so they charge `charge_pct * COALESCE(amount, 0)` = **$0.00** while
+   looking priced. This is D98's fourth failure mode.
+5. **46 activities are `unpriced`.** 28 of them because `source_activity_type` is
+   blank while `activity_type_id` is set correctly, mostly Starr Rum and Heavens
+   Door. The rate card keys on the raw string (D74), so they can never price.
+6. **19 activities are filed under the `iHospitality` brand** but are client work
+   ("44North Tasting American Liquor"). That brand has no rate card, so they
+   price at $0.
+7. **`invoice_recap` holds `Barmen 1873 + Coors Whiskey + Five Trail`**, a
+   combined payer matching no row in `brands`. 9 months, $19,887.66, joins to
+   nothing.
+8. **22 activities have neither `hubspot_deal_id` nor `external_ref`** and so
+   have no duplicate protection at all.
+9. **8 groups of same brand/venue/date/type/amount.** Seven carry **two different
+   HubSpot deal ids**, so they are double entry in HubSpot, faithfully synced.
+   Not a pipeline defect.
+
+### Query-shape traps that are not biting yet
+
+- `1_Analysis.py:517` groups a venue aggregate by `v.name`, not `venue_id`. Safe
+  only because there are currently zero duplicate venue names, and it violates
+  D129.
+- The Analysis page's five tabs use **three different row populations** - Money
+  and Mix take everything, Venues and Cities inner-join venues and drop the 114
+  venue-less rows, Every-activity left-joins. Same filter, three counts, nothing
+  on screen says why.
+- `v_city_summary` inner-joins venues and silently drops those 114.
+- `my-pay.html`, `venues.html`, `index.html`, `my-venues.html` and `brands.html`
+  still read unbounded. Correct today only because those views are under 1,000
+  rows; `v_my_activity_pay` is at 773 for Phil King and breaks first.
+- `3_Account_sold.py:201` rewrites `source_activity_type`, which moves money on
+  one click with no preview and no `hand_edited_at`, against D93/D74.
+- `8_Retainer.py:80-99` hardcodes reconciliation targets bounded at `2026-07`,
+  now two months stale.
+
+---
+
+## Still open from before, unchanged
+
+1. **The scorecard's placements metrics.** Still no placement state. Flash PODS
+   is `#UNAVAILABLE` for 224 of 342 customers.
+2. **Territory on the scorecard.** Needs City added to the 2026 brand-file import.
+3. **Backfill 2025 on the scorecard.** Jan to Jun, so the month dropdown stops
+   lying on every month but July. Needs last year's flash per month.
+4. **The year-to-date scorecard view**, asked for after the monthly one works.
+5. **SMTP**, the **test logins**, **cost to serve** (D139), **pay start dates**
+   (D128), **Dame Mas commission months**, **reconciliation 64 of 83**, **V2/V3**.
+
+**`closed` accounts is DONE** and comes off this list. **The D159 collision is
+RESOLVED**: the staging correction overlay is now D167, and `closed` keeps D159.
+
+---
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D165 to D170** in
+> `docs/DECISIONS.md`. For the flash also read `docs/FLASH_ACCOUNT_MATCHING.md`.
+>
+> **Confirm you are running locally** before anything else:
+> `ls ../../../Hubspot/portal_seed` (three levels up from the website repo).
+>
+> **Start with the contractor column on the Flash page.** It is the one thing
+> the operator asked for that is not built, and he had to assign 46 rows by hand
+> without it. Default it from `venue_grading.owner_contractor_id`, make it
+> editable per row, write `activity_contractor` in the same transaction.
+>
+> Then ask which of these he wants:
+>
+> **A - the 39 staged deals**, 9 of them older than August and including case
+> sales. They are invisible to every revenue figure until promoted.
+>
+> **B - the 13 quantity disagreements** with HubSpot. Needs his ruling on which
+> number is authoritative before anything is changed.
+>
+> **C - the 7 mileage rows** booked as revenue rather than as the pass-through
+> they are.
+>
+> **D - Wodka and Dame Mas through the flash.** The mapping already serves every
+> brand, so their flashes need no new plumbing, only their customer numbers
+> claimed on tab 3.
+>
+> **E - the scorecard backfill**, still the biggest open item.
+>
+> ⚠️ **VERIFY THE DATA WITH HIM BEFORE BUILDING.** Operator, 2 Sep: *"building
+> doesnt make sense if the data is wrong."*
+>
+> ⚠️ **Do not fuzzy-match his accounts.** Propose, never adopt (D163). The
+> matcher offered Universal Studios for "University Wine and Spirit" and Secrets
+> Hideaway for Hideaway Bar, which are different premises.
+>
+> ⚠️ **Rule in the table, not in a picker beside it** (D170). He works down long
+> lists and a per-row dropdown is a round trip each.
+>
+> **Keep responses short.** He has ADHD and asked directly. Bullets, not prose.
+>
+> Whichever: the billing is the truth (D56), no hardcoded business data (D60), a
+> reimbursement never earns (D78), reclassifying must not move money (D93/D112),
+> lifecycle is not the account status (D157/D86), an import must never erase a
+> venue (D158), and **contractors are paid on activities so a blank one is
+> missing pay** (D135/D139).
+
+---
+
+## ⚠️ SUPERSEDED - the 2 Sep 2026 local session.
+
+
+Written at the close of **2 Sep 2026**, local session. An earlier 2 Sep session
+ran in the cloud with no database and no `portal_seed`; its notes are kept below
+under **THE EARLIER 2 SEP SESSION**.
+
+## THE JULY SCORECARD IS BUILT AND LIVE IN THE BRAND'S GOOGLE SHEET.
+
+Nothing was deployed and **no build credit was spent.** The work is in the
+operator's Google Sheets, in `Invoicing/`, and in these documents.
+
+### ⚠️ THE HEADLINE NUMBER MOVED FIVE TIMES AND CHANGED SIGN
+
+| After | Jul 2026 | Jul 2025 | Change |
+|---|---|---|---|
+| 2026-active accounts only | 32 | 24 | +33.3% |
+| including lapsed accounts | 35 | 31 | +12.9% |
+| three renamed accounts found | 35 | 37 | -5.4% |
+| Good Pour Gainesville | 35 | 38 | -7.9% |
+| Jellyfish, Golden Ox, Breeze | 37 | 39 | -5.1% |
+| every case sale in both masters reconciled | **38** | **41** | **-7.3%** |
+
+**It began as growth and ended as a decline.** Florida was -17.9%, so the account
+base still beat the market by 10 points, which is the honest story. Every single
+correction came from the operator recognising an account, not from better code.
+Read **D163** before touching any of this.
+
+### What exists now
+
+| | |
+|---|---|
+| `Invoicing/flash_match.py` | 106 ruled pairs, 2 chains, 17 rejections. Raises on an ambiguous name |
+| `docs/FLASH_ACCOUNT_MATCHING.md` | the reasoning, the traps, the monthly routine |
+| `44 North/ACCOUNT_MAP_44North.csv` | the lookup copy. Open this one to check an account |
+| `Invoicing/build_scorecard_v2.py` | builds the scorecard tab. Verified on July and June |
+| Brand Google Sheet | `SCORECARD` tab live, month dropdown in `B3` |
+
+**July reads:** 38 cases against 41, -7.3%. Florida 110 against 134, -17.9%.
+23 accounts bought against 22. 27 services, 23 covered by the retainer.
+$2,055.18 billed. All computed, none typed.
+
+### ⚠️ JUNE READS +212.5% AND IT IS FICTION
+
+Only **July 2025** has been reconciled. The 2025 master holds billed case sales
+and **no reorders**, because reorders were not being logged last year. June 2025
+has 8 cases in it, so June 2026 prints +212.5%.
+
+**Every month before July needs the same backfill**, which needs last year's flash
+for each month. Until then the dropdown is honest for July only.
+
+### Three things the operator caught that the code did not
+
+1. **Lapsed accounts.** *"if a venue ordered last year and didnt reorder this year
+   thats a negative change."* Seven accounts, 9 cases, all hidden. D162.
+2. **Reorders are not activities.** A draft wrote qty-0 rows inventing visits to
+   accounts nobody had been to, and put last year's cases in this year's report.
+   D161.
+3. **The Market Summary month label is a date.** It displays "Jul 2026" and holds
+   `7/1/2026`. Two MATCH attempts failed before he spotted it. D164.
+
+### Still open, unchanged
+
+1. **`closed` accounts (D159 on this branch).** SQL written, not applied.
+2. **The scorecard's placements metrics.** Still no placement state. Flash PODS is
+   `#UNAVAILABLE` for 224 of 342 customers.
+3. **Territory on the scorecard.** Needs City added to the 2026 brand-file import.
+4. **The 42 deals in the review queue** from the 31 Aug pull.
+5. **SMTP**, the **test logins**, **cost to serve** (D139), **pay start dates**
+   (D128), **Dame Mas commission months**, **reconciliation 64 of 83**, **V2/V3**.
+
+### ⚠️ D159 IS USED TWICE
+
+`main` has D159 as the staging correction overlay. This branch has D159 as
+`closed` accounts and D160 as the scorecard findings, because the cloud session
+branched from a `main` that never received the 1 Sep commits. **Renumber before
+merging.** Today's entries are D161–D164 and do not collide.
+
+---
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D161–D164 plus D159–D160** in
+> `docs/DECISIONS.md`. For the scorecard also read
+> `docs/FLASH_ACCOUNT_MATCHING.md`.
+>
+> **Confirm you are running locally** before anything else: `ls ../../../Hubspot/portal_seed`
+> (three levels up from the website repo, not two).
+>
+> **Ask me which I want before starting.**
+>
+> **A — backfill 2025.** Jan–Jun, so the dropdown stops lying on every month but
+> July. Needs last year's flash per month. This is the biggest open item.
+>
+> **B — territory on the scorecard.** Add City to the 2026 brand-file import,
+> then the territory block can be built. Two buckets, Central Florida and Palm
+> Beach, plus Other for the west coast accounts.
+>
+> **C — the year-to-date view.** The operator asked for it after the monthly one
+> works. `docs/FLASH_ACCOUNT_MATCHING.md` has what it needs.
+>
+> **D — `closed` accounts (D159)**, **E — the 42 deals**, **F — the reconciliation**.
+>
+> ⚠️ **VERIFY THE DATA WITH HIM BEFORE BUILDING.** Operator, 2 Sep: *"building
+> doesnt make sense if the data is wrong."* Three rebuilds happened before that
+> was learned. Surface the mapping, wait for a ruling, then build.
+>
+> ⚠️ **Do not fuzzy-match his accounts.** Propose, never adopt. D163.
+>
+> **Keep responses short.** He has ADHD and asked directly. Bullets, not prose.
+>
+> Whichever: the billing is the truth (D56), no hardcoded business data (D60),
+> base pay is never allocated to a brand in a view (D67), a reimbursement never
+> earns (D78), reclassifying must not move money (D93/D112), **lifecycle is not
+> the account status** (D157/D86), and **an import must never erase a venue**
+> (D158).
+
+---
+
+## ⚠️ SUPERSEDED — THE EARLIER 2 SEP SESSION, run in the cloud with no database.
+
+
+## TWO THREADS OPENED, NEITHER BUILT. THIS SESSION HAD NO DATABASE.
+
+⚠️ **READ THIS BEFORE TRUSTING ANYTHING BELOW.** This session ran as a *Claude
+Code on the web* session — a cloud container that clones the website repo from
+GitHub and nothing else. It had **no `portal_seed`, no `DATABASE_URL`, no
+Supabase, no Streamlit and no access to the operator's laptop.** So:
+
+- **Nothing was verified against live data.** No row counts, no impersonation
+  checks, no `verify_live.py`. Every number below comes from the committed docs
+  or from a Google Sheet, and both are named at each figure.
+- **Nothing in `portal_seed` was touched**, because it was not reachable. It is
+  not on GitHub either — the account holds `iHospitality`, `liquor-untappd`,
+  `cocktail-lab-live`, `ai-cocktail-lab`, `Karolyn`, `resolution-tracker` and
+  some old forks. It is local-only.
+- **The website repo was changed only in `docs/`.** No deploy, no build credit.
+
+The operator has since set up a local session. **That is where the work
+continues.** The cause was `Stop-Service CoworkVMService -Force` before a
+reinstall of the Claude desktop app; with that service stopped the session had
+nowhere local to run.
+
+### What changed in the repo today
+
+| | |
+|---|---|
+| `docs/DECISIONS.md` | **D159** (`closed` accounts) and **D160** (the scorecard findings) |
+| `docs/BRAND_SCORECARD_SPEC.md` | The report spec, moved into the repo so it is durable and 404'd |
+| `docs/SCORECARD_IMPLEMENTATION.md` | The implementation plan, same |
+| `docs/HANDOFF.md` | This |
+
+Nothing else. No code, no schema, no portal page.
+
+---
+
+## THREAD 1 — `closed` ACCOUNTS (D159). SQL WRITTEN, NOT APPLIED.
+
+Operator: *"I just want a way to say this account closed down. So it doesn't
+keep showing up under venues but we keep a record of it."*
+
+`venue_grading.lifecycle` gains a **fourth** value. It does **not** replace
+`retired`, and ⚠️ **the 20 Fresh Market stores stay `retired`** — the operator
+was explicit. `retired` is our decision and reverses; `closed` is a fact about
+the world and does not.
+
+Expect `prospect` 104 / `retired` 20 / `closed` 0 / null 314, 441 total, before
+and after — this migration reclassifies nothing.
+
+```sql
+begin;
+
+-- What the constraint is called right now. An inline `lifecycle text check (...)`
+-- gets the default name; anything else and this prints it so the drop below can
+-- be corrected rather than silently doing nothing.
+select conname, pg_get_constraintdef(oid) as def
+  from pg_constraint
+ where conrelid = 'public.venue_grading'::regclass
+   and contype  = 'c'
+   and pg_get_constraintdef(oid) ilike '%lifecycle%';
+
+alter table public.venue_grading
+  drop constraint if exists venue_grading_lifecycle_check;
+
+alter table public.venue_grading
+  add constraint venue_grading_lifecycle_check
+  check (lifecycle is null or lifecycle in ('prospect', 'retired', 'closed'));
+
+-- A check that cannot fail proves nothing (D114): assert BOTH directions.
+do $$
+begin
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.venue_grading'::regclass
+                    and conname  = 'venue_grading_lifecycle_check') then
+    raise exception 'the constraint is not there -- the drop removed one and added none';
+  end if;
+  if pg_get_constraintdef((select oid from pg_constraint
+                            where conrelid = 'public.venue_grading'::regclass
+                              and conname  = 'venue_grading_lifecycle_check')) not ilike '%closed%' then
+    raise exception 'the constraint exists but does not admit closed';
+  end if;
+end $$;
+
+savepoint p;
+update public.venue_grading set lifecycle = 'closed'
+ where venue_id = (select venue_id from public.venue_grading limit 1);
+rollback to savepoint p;
+
+do $$
+begin
+  begin
+    update public.venue_grading set lifecycle = 'shut'
+     where venue_id = (select venue_id from public.venue_grading limit 1);
+    raise exception 'a junk lifecycle was accepted -- the CHECK is not doing anything';
+  exception when check_violation then null;
+  end;
+end $$;
+
+select coalesce(lifecycle, '(active)') as lifecycle, count(*)
+  from public.venue_grading group by 1 order by 1;
+
+commit;
+```
+
+**Restate it as an `ALTER` in `db/schema.sql` too** — D91: a CHECK declared
+inside `create table if not exists` passes every test and never exists on
+Supabase.
+
+### Still to build for thread 1
+
+1. **The Streamlit control.** Set `lifecycle` on any venue from the Venues page,
+   not only through the Compare-against-HubSpot import flow. `create_portal_user.py`
+   is the pattern to copy — one implementation, the CLI and the page both call it
+   (D141). Watch the three traps that page has already been bitten by: never
+   `st.stop()` after `st.tabs()` (D89), never `disabled=` inside `st.form` (D92),
+   and a writing button's `key` must interpolate its target (D103).
+2. ⚠️ **Decide what "stops showing up under venues" means** — it is **two
+   surfaces**. The admin page is a filter and free; the portal's *All accounts*
+   and *My accounts* read `v_venue_performance`, which is a view change plus a
+   website deploy. **Check first whether `retired` currently drops out of the
+   portal list.** If it does not, Fresh Market is still showing there and both
+   should be handled in one pass.
+3. **Does `closed` need a date?** `venue_grading` may already carry an
+   `updated_at` that answers it. If not, a `lifecycle_set_on` is cheap now and
+   expensive to reconstruct later.
+
+---
+
+## THREAD 2 — THE BRAND SCORECARD (D160). MOCKUP BUILT, NOTHING PLUMBED.
+
+Two new documents in `docs/` hold the design: the **spec** (what the report
+says, in what order) and the **implementation plan** (what changes upstream).
+Read D160 before either — it records what happened when the spec met real data.
+
+**A working mockup exists**, built from the real July 2026 44 North billing
+sheet (*Test 2026 44N Activity Report*, shared to Drive 2 Sep):
+<https://claude.ai/code/artifact/1c3c7c0e-4620-43db-86fe-a64e33054c26>
+⚠️ It has **no wake subscription** — the artifact service refused one for that
+session — so republishing it elsewhere will not notify anybody. Re-read it before
+editing.
+
+### The three findings that matter
+
+1. **`uncharged_value` computes to $0.00.** The spec's strongest idea. July's
+   free work is 16 account visits, 7 drink developments and 1 market favor, all
+   carded at $0.00 for 44 North. The rate card records what a brand is CHARGED;
+   **a list price is a different field and does not exist anywhere.**
+2. ⚠️ **Rates do not transfer between brands** — operator ruling: *"This isn't
+   Heaven's Door, all brands are charged differently."* So D119's $20 account
+   visit **cannot** value 44 North's, and "take the max across brands" is the
+   same mistake as a formula. Every list rate is a pricing decision, made once,
+   in an editable table (D60).
+3. **The charged half ties exactly.** Re-pricing all 29 July rows off the
+   sheet's own rate table returns **$535.00**, matching the invoiced commission
+   to the cent. $1,450.00 retainer + $535.00 + $70.18 = **$2,055.18**. The row
+   data reproduces the billing; only the free half is unpriced.
+
+### Blocked until someone builds or decides
+
+- **A placements table.** Two of the four headline metrics — *live placements*
+  and *accounts retained* — cannot be computed without placement STATE. ⚠️ Not
+  `brand_venue_status`: it is advance-only (D86) and can never retreat. And do
+  not substitute repeat visits for retention — July shares 5 accounts with June,
+  which would print "5 of 28" on a client document while measuring the route.
+- **List rates.** See finding 2. Nobody can derive these; the operator sets them.
+- **Territory.** The plan says it is derivable from a city column; **the activity
+  log has no city column.** It needs an account-to-territory lookup, which the
+  portal has. ⚠️ **Check whether it is two territories or three** — Cocoa Beach,
+  Melbourne and Kissimmee are neither Orlando metro nor Palm Beach. And keep one
+  vocabulary: the enum is `central_florida` / `palm_beach_county`.
+- **`new_doors`, defined twice**, giving 2 (first orders) and 18 (first touch).
+  The sheet starts in January so "first ever" is unanswerable from it; the portal
+  goes back to June 2025.
+
+### Direction, settled today
+
+**The portal is the target and the sheet is the stopgap** (operator's choice).
+And **all editing happens in the Streamlit admin — the portal only reads**,
+which is D61 restated by the person who owns the consequence.
+
+### One correction to carry forward
+
+⚠️ The first mockup printed **"43 percent of your state volume"** from D118's
+291-of-681 cases. **D118's own first line says "nothing agreed, nothing changed
+in the portal."** An unagreed figure either carries its warning onto the page or
+stays off it. Rescoping the market summary to serviced accounts is right and is
+what the operator asked for — but the cost is the **year-over-year comparison**,
+because 291 exists for Jan–Jul 2026 only with no prior-year equivalent.
+
+### And fix the old report's arithmetic regardless
+
+Four percentages in the market summary do not match the TY and LY cells beside
+them: Jan accounts sold reads −11% and is **−25.8%**; Mar off-premise reads −64%
+and is **−55.6%**; Jun total cases reads −22% and is **−11.3%**; and Jan
+accounts sold's Diff cell reads **139**, which is 56+83 added instead of
+subtracted. **June is the expensive one — an 11 percent decline was reported to
+the brand as 22 percent.** That is live in a sheet a client can open.
+
+---
+
+## Still open from before, unchanged
+
+1. **The 42 deals in the review queue** from the 31 Aug pull. Untouched.
+2. **The three operator rulings** — `Maggie McFly` vs `Maggie McFly PSL`, the two
+   `Breakthru Beverage` Day Buy-Outs, `Winn Dixie #2273`/`#2288`.
+3. **SMTP is still Supabase's built-in mailer**, rate-limited per address.
+4. **The test logins are still active** — `test-bluerun@example.com`,
+   `test-wodka@example.com`, `44ntest@test.com`.
+5. **Cost to serve's premise changed** (D139) and nobody has decided. Read D116.
+6. **The three real pay start dates** (D128).
+7. **Dame Mas's nine commission months.**
+8. **The reconciliation, still 64 of 83.** Start with Heaven's Door.
+9. **V2/V3 of the contractor portal.** V3 reopens D61; read `docs/DATA_ACCESS_TIERS.md`.
+
+---
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D159–D160 plus D157–D158** in
+> `docs/DECISIONS.md`. For the scorecard also read
+> `docs/BRAND_SCORECARD_SPEC.md` and `docs/SCORECARD_IMPLEMENTATION.md`.
+>
+> **You should be running LOCALLY.** Confirm it before anything else — if you
+> cannot `ls ../../Hubspot/portal_seed`, stop and say so, because the last
+> session could not and half of this is unbuildable without it.
+>
+> **Ask me which I want before starting.**
+>
+> **A — `closed` accounts (D159).** The SQL is written and in this document.
+> Apply it, restate it as an `ALTER` in `db/schema.sql`, then build the control
+> on the Venues page. **Decide the second surface first** — whether a `closed`
+> venue also drops out of the portal's account lists, and whether `retired`
+> already does.
+>
+> **B — the scorecard's data model (D160).** The placements table is the one
+> genuinely new structure and it unblocks two of the four headline metrics.
+> Same schema session as A. ⚠️ Not `brand_venue_status` — advance-only (D86).
+>
+> **C — list rates.** A pricing decision only the operator can make, brand by
+> brand, in a table he can edit (D60). Rates **do not transfer between brands**.
+> Until this exists the scorecard's strongest figure reads $0.00.
+>
+> **D — the 42 deals**, still sitting in the review queue from 31 Aug.
+>
+> **E — the reconciliation**, still 64 of 83, starting with Heaven's Door.
+>
+> Whichever: the billing is the truth (D56), no hardcoded business data (D60),
+> base pay is never allocated to a brand in a view (D67), a reimbursement never
+> earns (D78), reclassifying must not move money (D93/D112), **lifecycle is not
+> the account status** (D157/D86), and **an import must never erase a venue**
+> (D158).
+>
+> **Before calling it done:** open every page AND every tab, and type into
+> anything that takes input (D79/D89/D92). **Open it as the role the change was
+> NOT about** (D154). **Take before-and-after row counts around any import**
+> (D158). And where a figure carries "nothing agreed" in its own decision entry,
+> it does not go on a client-facing page without that warning attached (D160).
+
+---
+
+## ⚠️ SUPERSEDED — the 31 Aug opening. Kept for the 42 deals and D157–D158.
+
+## THE VENUE LIST IS THE ACCOUNT UNIVERSE NOW, AND THE SYNC HAS A BUTTON.
+
+**Nothing was deployed and no build credit was spent.** Every change is in
+`Hubspot/portal_seed/`, which is a separate repo and is not served. The website
+repo was untouched apart from these documents.
+
+### What changed today
+
+| | |
+|---|---|
+| Venues | **340 → 441.** 108 created from a HubSpot company export, each carrying its Record ID, each marked `prospect` |
+| Lifecycle | `venue_grading.lifecycle` — `prospect` (104), `retired` (20), null = active (314). D157 |
+| Fresh Market | 20 stores `retired`. History kept, off the call list — all 20 are Aspen Green and nothing else |
+| Six non-venues | 44° North Vodka, Dame Mas Tequila, Tequila Dame Más, Breakthru Beverage, Mexcor, Southern Glazer — deleted, their **17 activities kept** with no venue |
+| Venues page | Sixth tab: **Compare against HubSpot** — upload an export, see the four buckets, create / dismiss / bind / retire |
+| Review and edit | **Pull new deals from HubSpot**, above the queue it fills. Preview, then apply |
+| `sync_hubspot.py` | Split into `build_filters` / `fetch_rows` / `summarise` / `apply`-returns-a-dict, so the CLI and the page run the same code |
+| Tests | 153 → 165 pytest, plus a source checker that fails on the real pre-fix `promote.py` |
+
+**Money did not move: $37,963.93 charge, $24,370.90 cost, 1,238 activities,
+identical before and after and asserted before every commit.**
+
+### The premise was wrong, and checking it is what made the day useful
+
+The operator asked for this believing an earlier cleanup had deleted venues.
+**It had not.** Both merge backups are in `Hubspot/`: seventeen rows deleted, not
+one carrying a single activity, and every one of the seventeen names still
+resolves to a surviving venue. There were no leftover duplicates either.
+
+The gap ran the other way — **a HubSpot company only becomes a venue when it
+lands on a DEAL**, so 108 places we know had never had a row. Read D157 before
+touching the venue list.
+
+### ⚠️ D158 IS THE ONE TO READ FIRST
+
+**An import could erase a venue, and did.** Deleting the `Secrets Resort` company
+in HubSpot dropped the association on three deals; `promote()` carried that
+through as a bare assignment and **three real activities silently lost their
+venue** on a run that reported only success. Fixed — `venue_id` is now
+`coalesce`d in both branches, so the sync can set or change a venue and can no
+longer remove one — and proved by re-running the identical sync.
+
+⚠️ **The same line has been there since D64, so earlier CLI runs hit it too.**
+52 staged deals carry no venue name and **not one is attached to an activity that
+still has a venue**. Worth auditing the 114 venue-less activities before assuming
+they were always that way.
+
+### 42 deals are waiting in the review queue, right now
+
+The pull ran for real: staged deals 1,066 → 1,108, **42 in state `new`** —
+44 North 15, Wodka 14, Dame Mas 10, Aspen Green 3, and 41 of the 42 are August
+2026. **`activities` is unchanged at 1,238**, so nothing bypassed the staging
+zone. They are the month-end job, sitting on Review and edit.
+
+### Three things needing the operator, none blocking
+
+1. **`Maggie McFly` vs `Maggie McFly PSL`.** The sync recreated the first from a
+   live deal; the second holds one activity. Same city, almost certainly one
+   place — but that is a ruling, not a guess (D81). Bind or merge it.
+2. **Two `Breakthru Beverage` Day Buy-Outs** (2025-09-06) are billed work at a
+   real address, not a meeting — the "Day Buy Out Split" `lib.canary()` cites.
+   They lost their venue with the other fifteen. Worth a second look.
+3. **`Winn Dixie #2273` and `#2288`** appeared from live deals and are not in the
+   company export. The operator mentioned Winn-Dixie; these are the first two.
+
+### Still open from before, unchanged
+
+1. **SMTP is still Supabase's built-in mailer**, rate-limited per address.
+2. **The test logins are still active** — `test-bluerun@example.com`,
+   `test-wodka@example.com`, and `44ntest@test.com`.
+3. **Cost to serve's premise has changed** (D139) and switching it to real
+   attribution is a decision nobody has made. Read D116 first.
+4. **The three real pay start dates** (D128).
+5. **Dame Mas's nine commission months** — needs the distributor's per-venue
+   depletion reports for Jul 2025 – Mar 2026.
+6. **V2 and V3 of the contractor portal.** V3 reopens D61; read
+   `docs/DATA_ACCESS_TIERS.md` first.
+7. **The reconciliation, still 64 of 83.** Start with Heaven's Door.
+8. **`docs/DATA_ACCESS_TIERS.md`** — written 28 Aug, nothing in it decided.
+
+---
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D157–D158 plus D137–D156** in
+> `docs/DECISIONS.md`.
+>
+> The portal is LIVE and three people use it. **Ask me which I want before
+> starting.**
+>
+> ⚠️ **Build credits are rationed.** Prove what you can in node, verify against
+> production data on `localhost:8123`, and spend ONE build. Yesterday's work
+> spent none — it was all in `portal_seed`, which is not deployed.
+>
+> **A — clear the 42.** They are sitting in the review queue from the 31 Aug
+> pull, 41 of them August 2026. Promote what is right, fix what is not. Note
+> **4 are `recurring case`** — reorders actually being recorded, which D118 said
+> almost never happens — and **one has a NULL `source_activity_type`**, which is
+> D111's trap where the rate card cannot price real work.
+>
+> **B — audit the venue-less activities.** 114 of them, and D158 says some may
+> have lost a venue they once had rather than never having one. The evidence is
+> that 52 staged deals carry no venue name and none of them still points at a
+> venue. Money is not at stake; attribution is.
+>
+> **C — the reconciliation**, still 64 of 83. Start with **Heaven's Door**: its
+> commission ties exactly in both checked months, so the whole difference is that
+> it bills **account visits at $20** inside the consulting block where the rate
+> card prices `account visit` at $0.00 for all eight brands, plus a "Smoke Tops"
+> line. Confirm on the other invoices before changing a rate — editing one
+> **restates history** (D91).
+>
+> **D — Cost to serve on real attribution** (D139), or **E — V2/V3 of the
+> contractor portal**. Both unchanged from 28 Aug.
+>
+> Whichever: the billing is the truth (D56), no hardcoded business data (D60),
+> base pay is never allocated to a brand in a view (D67), a reimbursement never
+> earns (D78), reclassifying must not move money unless moving it is the point
+> (D93/D112), and **lifecycle is not the account status** (D157/D86).
+>
+> **Before calling it done:** open every page AND every tab, and type into
+> anything that takes input (D79/D89/D92). **Open it as the role the change was
+> NOT about** (D154). **And take before-and-after row counts around any import**
+> — that is the only thing that found D158, and neither a test nor the screen
+> said a word.
+
+---
+
+## ⚠️ SUPERSEDED — the 28 Aug opening.
+
+### The 28 Aug close-out, kept
+
+Written at the close of **28 Aug 2026**.
+
+## IT IS LIVE. THE PORTAL IS ON ihospitality.vip AND PEOPLE ARE SIGNING IN.
+
+`main` was merged and deployed. Three logins are in use: **Nicholas and Phil as
+admins, Eric as the only contractor.** Eric has signed in successfully and lands
+on a populated portal — 50 venues and 147 activities attributed to him.
+
+### What went live today
+
+| | |
+|---|---|
+| The portal | `ihospitality.vip/portal` — brand, admin and contractor surfaces |
+| Internal docs | **`GALLERY_PLAN.md` was returning 200 in production this morning.** Now 404, with the rest, via `_redirects` (D133) |
+| Public site | A **Log in** link, top right and in the mobile drawer (D147) |
+| Sign-in | Self-service password reset (D144) and Google, working for **any** domain (D145, D149) |
+| PWA | Installable, blue-square icon, install control in the rail (D148) |
+| Admin | A Users page that creates, re-scopes and deactivates logins (D141, D146) |
+
+⚠️ **PRODUCTION WAS THREE WEEKS BEHIND `main` BEFORE THIS.** `origin/main` was
+still on the 27 July commit, so the deploy also shipped the `css/site.css`
+refactor for the first time. It was checked on a deploy preview before merging
+and the public site renders correctly — but that is why the homepage was the
+thing to look at, not the portal.
+
+### Verified by the operator, not just reasoned about
+
+- **A Google account with no portal login is REFUSED.** His personal Gmail was
+  turned away. That is the whole safety model — pre-created accounts plus
+  `disable_signup` — confirmed in one click.
+- **Eric signed in and his data is there.**
+- **The PWA installs**, and the icon reads as a solid blue squircle with "iH".
+
+### Also pulled today: the venue contacts (D152)
+
+344 contacts, 355 venue links, 914 notes and 273 blurbs, all **internal only**.
+You reliably get a **first name and a job title** on 88% of venues — "ask for
+Brittany, GM". You rarely get a way to reach them: email 7%, phone 9%, and
+HubSpot has **no street address at all** (0% of 330).
+
+**It is on `venue.html`** — "Ask for" and "The place" in the cards at the top,
+and the HubSpot notes in a panel above the activity list. Each contact renders
+from its own row and is never grouped by name.
+
+**The import cannot duplicate or overwrite**, and both halves were proved rather
+than asserted: three consecutive `--apply` runs leave the counts identical
+(unique constraints on the HubSpot ids make duplication structurally
+impossible), and a contact edited by a person survives the next import intact
+(`hand_edited_at`, the same rule as a hand-edited venue, D84).
+
+**And a contractor can now open an activity** (D153) — the detail, the photos,
+the internal note, who did it, and what they earned. Two policies had to agree:
+`photos_storage_select` on `storage.objects` was still `is_staff()`, so the
+gallery rendered empty rather than erroring.
+
+### Open, and none of it blocking
+
+0. ✅ **NOTHING FROM 28 AUG IS OUTSTANDING.** D154, D155 and D156 are merged and
+   live on ihospitality.vip, and the operator verified each one on his own
+   screen before it shipped. Read them before touching the portal's pages —
+   all three were the WRONG SLICE of right data, which is the failure mode this
+   codebase actually has, and none of them would have been caught by a row count
+   or by the impersonation probe.
+
+   ⚠️ **BUILD CREDITS ARE FINITE AND THE OPERATOR IS RATIONING THEM.** He hit 96%
+   of his weekly allowance on 28 Aug. Batch changes and spend ONE build: prove
+   what you can in node, verify against production data on `localhost:8123`
+   (the portal talks to the real Supabase from there, so it is not a lesser
+   test for a display change), and merge straight to `main` when the change
+   touches only `portal/` and `docs/`. Keep PR bases on `main` — retargeting one
+   onto a non-production branch stops Netlify building it at all.
+
+1. **SMTP is still Supabase's built-in mailer**, rate-limited per address. Fine
+   for three people; needs a real provider before brands rely on password reset.
+2. **The test logins are still active** — `test-bluerun@example.com` and
+   `test-wodka@example.com`, left deliberately. Revisit before brands get URLs.
+3. **Cost to serve's premise has changed** (D139). It attributes by who owns the
+   venue NOW because `activity_contractor` was blank; it is now **1,059 of 1,238
+   (86%)**. Switching the allocation to real attribution is a live decision
+   nobody has made.
+4. **The three real pay start dates** (D128). D136's "Correct a pay period"
+   previews Eric's move to April 2026 as base pay −$7,000 and company net
+   +$7,000 before saving.
+5. **Dame Mas's nine commission months** — needs the distributor's per-venue
+   depletion reports for Jul 2025 – Mar 2026. Loading them dissolves the problem
+   with no code change (D93). Detail at the bottom of this file.
+6. **V2 and V3 of the contractor portal.** V2 is the Brand section (price
+   points, sales sheets, marketing) and Training with self-testing — both are
+   live as "Coming soon" stubs. **V3 is logging**, where contractors enter their
+   own work and HubSpot stops being the input, and where **D61's read-only
+   guarantee has to be reopened deliberately** rather than by accident.
+7. **The reconciliation, still 64 of 83.** Untouched for two days. Start with
+   Heaven's Door — see the section further down.
+8. **`docs/DATA_ACCESS_TIERS.md`** — written 28 Aug from a late conversation, and
+   **nothing in it is decided.** Where a thing is allowed to happen, sorted by
+   reads / routine writes / dangerous writes rather than by "Streamlit versus the
+   website". **Read it before item 6's V3**, because V3 is what forces D61 open
+   and the gate pattern should be settled before then, not improvised. It also
+   answers "can brands run their own reports" — yes, and it needs no new
+   architecture, because RLS already does the part other products buy a vendor
+   for.
+
+### Two things to know before debugging anything on a phone
+
+**CONFIRM THE PHONE HAS THE DEPLOY FIRST** (D150). Two reports came in from a
+phone; one was a real bug and one was entirely a stale cache, and both cost a
+round of investigation. The portal is a PWA with a service worker that caches
+the shell by design, so this failure mode is permanent, not incidental.
+
+**AND CHECK YOUR OWN TOOLING BEFORE BLAMING A SETTING** (D151).
+`check_auth_settings.py` reported a broken redirect that was entirely its own
+bug, and the operator changed Supabase settings twice chasing it. Check the
+endpoint the APPLICATION calls, not a convenient admin equivalent.
+
+---
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, and **D137–D156** in `docs/DECISIONS.md`.
+>
+> The portal is LIVE and three people use it. Nothing below is urgent, so **ask
+> me which I want before starting.**
+>
+> ⚠️ **Build credits are rationed.** Prove what you can in node, verify against
+> production data on `localhost:8123`, and spend ONE build.
+>
+> **A — the reconciliation**, still 64 of 83 and untouched since 25 Aug. Start
+> with **Heaven's Door**: its commission ties exactly in both checked months, so
+> the whole difference is that it bills **account visits at $20** inside the
+> consulting block where every other brand reads "no charge" and the rate card
+> prices `account visit` at $0.00 for all eight brands — plus a "Smoke Tops"
+> line. Confirm on the other invoices before changing a rate, because editing
+> one **restates history** (D91).
+>
+> **B — Cost to serve, on real attribution** (D139). It splits base pay by who
+> owns the venue NOW because `activity_contractor` was empty. It is 86% filled
+> from the HubSpot deal owner now. Whether to switch is a decision, not a task:
+> read D116 first, and note the page's weaknesses are on it on purpose.
+>
+> **C — V2 of the contractor portal.** The Brand section (price points, sales
+> sheets, marketing material) and Training with self-testing. Both are live as
+> "Coming soon" stubs, so the shape is already visible to Eric.
+>
+> **D — V3, logging.** The big one. Contractors enter their own work and HubSpot
+> stops being the input — the direction D84 already points. **It reopens D61**,
+> the read-only-by-construction guarantee, and that has to be a deliberate
+> decision rather than a side effect. **Read `docs/DATA_ACCESS_TIERS.md` first**;
+> nothing in it is decided, and the gate pattern should be settled before V3
+> rather than improvised during it.
+>
+> Whichever: the billing is the truth (D56), no hardcoded business data (D60),
+> base pay is never allocated to a brand in a view (D67), a reimbursement never
+> earns (D78), and reclassifying must not move money unless moving it is the
+> point (D93/D112).
+>
+> **Before calling it done — and this is the part that keeps failing:**
+> open every page AND every tab, and type into anything that takes input
+> (D79/D89/D92). **Open it as the role the change was NOT about** (D154) — a
+> guard that says "not you" can only be exercised by the role it lets through.
+> **`node --check` is not evidence** for a runtime fault; run the page module per
+> role with a control that fails on the old code. And **check the phone has the
+> deploy before debugging anything reported from one** (D150).
+
+
+## ⚠️ SUPERSEDED — the 25 Aug opening. The five pages were committed on 26 Aug.
+
+**25 Aug was a BUILD session, not a reconciliation one.** The admin side of the
+web portal exists. **Nothing in the database changed, no invoice work was done,
+and the reconciliation still stands at 64 of 83** — every item in the numbered
+list below is exactly where the 24 Aug session left it.
+
+**THE WORK IS UNCOMMITTED.** `git status` shows five modified and three new
+files in `portal/`. The branch is `portal-v1`, 54 commits ahead of
+`origin/portal-v1`, nothing behind.
+
+**THE RENDERING IS UNVERIFIED, AND THAT IS THE ONE THING LEFT.** The operator
+was running remotely from a phone and could not open a browser; he asked to hold
+until he is back at the machine. He also asked whether a test login could be
+created and deleted afterwards — it cannot, and it turned out not to be needed
+for anything except rendering (D125).
+
+**So the first job of the next session is not a decision, it is a look:**
+
+```bash
+cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Website/ihospitality-website_3_3_26/ihospitality"
+python -m http.server 8123        # then open /portal/login.html and SIGN IN
+```
+
+Open **`brands.html`**, **`brand.html`**, **`activity-detail.html`**,
+**`photos.html`** and **`activity.html`**, click a brand → a row → an activity →
+a photo → back to the activity, change the month range and watch the numbers
+move, and resize to a phone width to work the drawer. **D79 exists because this
+is the check that finds things** — it has caught a broken front page, three
+broken admin pages, a tab blank since the day it was written, and four money
+fields that could never be enabled.
+
+### What was built (D120–D125)
+
+| File | Change |
+|---|---|
+| `portal/portal.js` | Sidebar `renderShell()`; `isStaff()`, `money()`, `param()`, `monthRange()`; `requireAuth()` preserves the query string |
+| `portal/portal.css` | `.portal-sidebar` + drawer breakpoints, photo captions, detail fact grid, flag callouts |
+| `portal/brands.html` | **NEW** — every brand over a month range, click through |
+| `portal/brand.html` | **NEW** — one brand: stats, activity-type breakdown, full log |
+| `portal/activity-detail.html` | **NEW** — one activity, its pricing, its photos, its flags in words |
+| `portal/photos.html` | Bounded paging, grouping toggle, per-tile captions, lightbox → activity |
+| `portal/login.html` | Allowlist fixed and extended |
+| `portal/activity.html` | Rows open the detail page |
+| `css/site.css` | **Untouched** — shared with the public site |
+
+**No schema change. No new role. No Python change. No build step.**
+
+### Four things to know before touching any of it
+
+1. **THERE IS NO ADMIN ROLE, AND CREATING ONE WOULD FAIL SILENTLY** (D120).
+   `is_staff()` tests the literal string `'staff'`; `profile_role_enum` has two
+   values. A third would return **zero rows with no error** from every
+   staff-gated table, on a page that renders perfectly. Both admin logins stay
+   `staff`; "Admin" is a label. The contractor role is a real enum change plus
+   ~15 policies — its own session.
+2. **`css/site.css` IS SHARED WITH THE PUBLIC SITE** (D121). The rail is
+   portal-only class names in `portal.css`. Do not move portal chrome into the
+   shared file; it would redesign the marketing site.
+3. **EVERY NEW PORTAL PAGE GOES IN `login.html`'s `ALLOWED` LIST** (D124). A page
+   left out is not blocked — it is silently redirected to the dashboard after a
+   successful sign-in. `business.html` had never been in it, since the day it was
+   written.
+4. **THE GALLERY IS BOUNDED ON PURPOSE** (D122). Postgres orders and slices, the
+   filters are server-side, and the dropdowns come from three small tables. Do
+   not "simplify" it back to loading every photo — the operator asked for this
+   explicitly: *"photos will increase as time goes on so I don't want to do
+   something that could become load bearing."*
+
+### What IS verified, so it does not get re-done
+
+**Isolation, proved in Postgres by impersonation and rollback** (D125) — better
+than clicking, because it probes every staff table at once:
+
+| probe | service_role | test-bluerun | test-wodka | phil |
+|---|---|---|---|---|
+| activities | 1236 | 119 | 205 | 1236 |
+| brands | 12 | 1 | 1 | 12 |
+| photos | 412 | 46 | 45 | 412 |
+| priced money rows | 1185 | **0** | **0** | 1185 |
+| rate_card / contractor_pay / venue_grading / invoice_recap / brand_retainer | 253 / 3 / 339 / 56 / 13 | **0** | **0** | full |
+
+`is_superuser=off` asserted, and impersonated counts asserted to DIFFER from the
+baseline — otherwise the check could not fail (D114). **The brand-user break
+attempt in the plan is DONE and does not need repeating in a browser.**
+
+**The numbers tie to the Streamlit admin to the cent.** 44 North,
+2025-09..2026-08: activity charge **$9,197.10**, contractor cost **$4,992.10**,
+330 activities, uncosted **$315.00**, revenue **$26,597.10**, margin
+**$21,605.00**. All **14 activity types** agree on count, accounts, units,
+charge and cost.
+
+Also confirmed: every column the pages select exists (8 relations, 53 columns);
+`slugify()` reproduces all 12 real slugs; gallery paging walks 412 photos over 7
+pages with 0 duplicates and 0 dropped; all 9 page modules pass `node --check`;
+the public site still renders its 76px horizontal nav with 6 links and no portal
+class leaked into `site.css`; the mobile drawer opens, scrims, locks scroll and
+closes on tap, link and Escape.
+
+**Not verified: rendering. Only rendering.**
+
+### Decided this session, so it does not get relitigated
+
+- **Salaries: one tier, both admins see everything.** Operator: *"Phil is also
+  the owner of the company so he is already well aware."*
+- **Analytics stay LIVE — no push/snapshot pipeline** (D123). Everything asked
+  for is already a view. **Cost to serve can be computed in the BROWSER** rather
+  than promoted into a view, which keeps D116's page-only rule intact. Deferred,
+  and note the cost: a second implementation of the allocation that can drift
+  from the pandas one, and it must carry its four render-time caveats or the
+  grid silently flatters and penalises brands.
+- **"Only clean data, not staged" is already true** — the whole `staging` schema
+  is revoked from `anon` and `authenticated`. The one exception is venue
+  ATTRIBUTES, written directly by `apply()` (D83).
+- **The "site is slow" report was DYNADOT's, and it was measured, not dismissed**
+  (D123). It cannot have been about the portal — every portal page is behind a
+  login and `noindex`, so no external scanner reaches it. The PUBLIC site is
+  structurally fine (6 requests / 636 KB on `index.html`, 24 of 26 images lazy).
+  **Two real items, neither done and neither urgent:** `Hero.jpg` at 401 KB is
+  the homepage LCP image (WebP/AVIF cuts it 60–70%), and the Google Fonts
+  stylesheet is **render-blocking from a third-party origin** — self-hosting
+  `woff2` + `@font-face` in `css/site.css` removes it with no build step.
+
+### 26 Aug — the 44 North reorder question (D126–D128), NOTHING WRITTEN
+
+**Read D126 before quoting any 44 North margin.** The operator asked whether to
+move 44 North closer to the Wodka model. Three findings, none of them written to
+the database:
+
+1. **44 North's margin is overstated RIGHT NOW, not in future.** ⚠️ operator:
+   *"we have started paying on reorders for 44 North… when we brought Eric on…
+   he came on in March."* The portal holds **one** `recurring case` row in the
+   brand's entire history. Corrected, 44 North goes from 47% to **~27–34%**
+   since March, and from 4th-best activity margin to **6th**. It looked best
+   because its largest cost is not in the system.
+2. **Do not copy the Wodka model flat** — a flat 10% would charge $25.20 to
+   place a case that pays $25.00, recreating Wodka's initial-case loss at
+   44 North. Keep the placement fee and add ~10% on reorders.
+3. **All three contractors share one pay start date — 2025-06-01, the portal's
+   own horizon** (D128). If Eric really started March 2026 that is **$6,300 of
+   base pay he was never paid**, and it contaminates the Cost to serve
+   allocation. **Ask for the three real start dates.**
+
+**The depletion matching is half done and the sheet is with the operator**:
+`Ihospitality/44North_depletion_rulings_2026-08-26.csv`, keyed on the
+distributor's account number. **194 of ~223 cases are accounted for**; 120 rows
+carry cases and are undecided, 167 are zeroes. Six rulings are recorded in D127
+— including that the sheet lists **anyone who ordered in 2 years**, which means
+**152 of our 44 North venues have not bought in two years** (a D117 grading
+input, not a billing one).
+
+**Nine ruled-ours accounts are not venues yet** and must be created before their
+cases can be loaded. **Stardust Lounge is the portal's "Aku Aku"** — rename or
+alias it or the match breaks again every month.
+
+### Still to build on the admin side (core came first, by the operator's call)
+
+**Rate card page.** `rate_card` has no view and no brand name column — needs a
+client-side join to `brands` or a new `v_rate_card`. It is a READ-ONLY page, so
+its job is to *explain* that editing a rate restates history (D91), not to cause
+it.
+
+**Salaries page.** `v_contractor_month_cost` is ready. Note `monthly_equivalent`
+is an **annualised spread** — exact for semimonthly and monthly, an average for
+weekly and biweekly. Label it, or it reads as a bank figure.
+
+**Analytics page**, per D123 above.
+
+**The contractor role**, which was the operator's third surface and has not been
+started. Enum change, `is_staff()`, ~15 policies. Read D120 first: the failure
+direction is helpful (an unknown role sees less), but a contractor must NOT be
+`staff` or they read every brand's rates and every colleague's pay.
+
+### One thing the new pages make visible
+
+**46 activities carrying $9,882.28 have no venue**, and `brand.html` shows them
+as "Account —". Mostly known and deliberate: Dame Mas's 9 rows at $3,307.28 are
+the month-level commission from D93, and about $3,030 is the synthetic
+`Invoice-derived` rows of open item 4. **Not new damage — newly visible.**
+
+---
+
+## THE NEXT PROMPT
+
+Paste this to pick up exactly where we stopped:
+
+> Read `CLAUDE.md`, `HANDOFF.md`, and **D120–D125 plus D119 and D108–D115** in
+> `DECISIONS.md`.
+>
+> **There are two separate tracks and they do not touch each other. Ask which
+> one I want before starting.**
+>
+> **TRACK A — finish the admin portal.** Five pages are built and UNCOMMITTED,
+> and nobody has opened them in a browser. Start the static server, sign in, and
+> open `brands.html`, `brand.html`, `activity-detail.html`, `photos.html` and
+> `activity.html`; click brand → row → activity → photo → back; change the month
+> range; resize to a phone and work the drawer. Fix what it finds, then commit.
+> **Isolation and the arithmetic are already proved (D125) — do not redo them.**
+> Then the rate card page, the salaries page, the analytics page, and after
+> those the contractor role. Before writing any of it: there is **no admin
+> role** and creating one fails silently (D120); `css/site.css` is shared with
+> the public site (D121); every new page goes in `login.html`'s `ALLOWED` list
+> (D124); the gallery is bounded on purpose (D122).
+>
+> **TRACK B — finish the reconciliation, unchanged from 24 Aug.** It stands at
+> **64 of 83** and the Coors pool ties 9 of 9. Eight rows are genuinely open and
+> eleven must not move. **Start with HEAVEN'S DOOR** — the biggest open gap, the
+> best understood, and the brand with **$16,361.08 outstanding across five
+> unpaid invoices**. Its commission ties EXACTLY in both checked months (280 and
+> 965), so the whole difference is that it bills **ACCOUNT VISITS at $20** inside
+> the consulting block, where every other brand's invoice reads "no charge" and
+> the rate card prices `account visit` at **$0.00 for all eight brands** — plus a
+> "Smoke Tops" line. Confirm on the other three invoices before changing a rate,
+> because editing a rate **restates history** (D91).
+>
+> **Whichever track, five things outrank convenience:**
+> 1. **Never run `parse_invoices.py --brand "<x>" --apply` for a per-unit
+>    brand** — the guard only recognises percentage-priced months and will
+>    duplicate the whole brand (D108). Use `load_pool_recap.py` or write
+>    `invoice_recap` directly.
+> 2. **`quantity = 0` is how a row says "this happened and was not billed"**
+>    (D119). Reach for it before considering a deletion. **Never delete real
+>    work to make a month tie.**
+> 3. **Four things on an invoice are not work** and each faked a gap: the
+>    early-payment discount, a card/ACH fee, a balance carried forward, and a
+>    goods invoice (no commission, no retainer, and **sales tax**). An ACTIVITY
+>    DATE equal to the issue date says nothing about when the work happened.
+> 4. **Do not touch Wodka's $25 `1st case sale` pay.** It is correct; the old
+>    item A was withdrawn and would have cost $915.
+> 5. **The 63 synthetic `Invoice-derived` rows are not all wrong** (D108). The
+>    test is whether the work already exists elsewhere in the portal, and 44
+>    North's June 2025 ties at exactly 0.00 while holding $660 of them.
+>
+> **Still unanswered and worth asking early: what did Phil actually agree to?**
+> The conversation happened and he agreed with the operator's position, but the
+> specifics were never written down — and they are the missing input for
+> **D117** (venue grading and the routed week) and **D118** (the 44 North fee
+> model). Both are designed and neither is agreed. Do not hand anyone a grading
+> sheet before reading D117, and when you do, send the **128 venues that have
+> ever sold**, not all 260.
+>
+> Standing rules: the billing is the truth (D56), no hardcoded business data
+> (D60), the brand portal stays read-only by construction (D61), base pay is
+> never allocated to a brand in a view (D67), a reimbursement never earns (D78),
+> and reclassifying must not move money unless moving it is the point
+> (D93/D112).
+>
+> Before calling a session done: **open every page AND every tab in a browser,
+> and type into anything that takes input** (D79/D89/D92). SQL can prove the
+> numbers and prove the isolation; only a browser proves the page renders.
+
+---
+
+## The reconciliation state, unchanged from 24 Aug
+
+Everything from here down is the 24 Aug handoff and **none of it was advanced on
+25 Aug.**
+
+Written at the close of **24 Aug 2026**, after a THIRD session that day.
+
+**THE THIRD SESSION CLOSED THE COORS POOL — 9 of 9 months tie — AND TOOK THE
+WHOLE RECONCILIATION FROM 49 TO 64 OF 83.** It was open item 2, described there
+as "one query change". The query change was real, but it was not the finding.
+**See D119.**
+
+**THE RECONCILIATION FINISHED THE DAY AT 64 OF 83, from 49.** The Coors pool
+ties 9 of 9. Of the nineteen rows still differing, **eight are protected and
+three are explained** — so the genuinely open list is **eight rows**, every one
+with its cause already found. They are item 1 below.
+
+**FOUR MORE THINGS TURNED OUT TO BE ON THE INVOICE BUT NOT WORK**, which is the
+same mistake as the discount, in new costumes:
+
+  * **a goods invoice** — no commission, no retainer, and SALES TAX. 3159 and
+    3178 are barrels shipped to the brand, not a month of work, and folding
+    them into one made **$1,304.56** of phantom gaps.
+  * **a balance carried forward** — Wodka's 3200 re-bills $90 already counted
+    in an earlier month.
+  * **an ACTIVITY DATE equal to the issue date** — 3203 reads "7/8/2026", the
+    day it was typed. It put $455 in the wrong month.
+  * and the **early-payment discount and card fees** above.
+
+**TAX IS WHAT TELLS GOODS FROM SERVICES, and that test is load-bearing.**
+Invoice 3203 also has no commission and no retainer, but it is two tasting
+events — real field work, separately invoiced, and logged. Operator: *"Dame Mas
+has us charge for activities separately but they are logged."* Untaxed, so it
+stays in its month.
+
+
+**Three things from it outrank everything else here:**
+
+1. **AN EARLY-PAYMENT DISCOUNT AND A CARD FEE ARE NOT WORK.** The reconciliation
+   compared the invoice TOTAL, but `TOTAL = SUBTOTAL − DISCOUNT + TAX`. Every
+   Coors invoice carries a discount, and those nine discounts *were* the
+   **−$81.09** D115 recorded as a gap. Both scripts now compare
+   **`SUBTOTAL − expenses − payment fees`**, discount excluded. That one change
+   fixed **seven** months and broke none — including **Wodka's "$106.03 of card
+   fees"** and **Dame Mas's $112.51**, both of which had been carried as open
+   gaps and were never gaps at all.
+
+2. **`quantity = 0` IS THE HOUSE WAY TO SAY "THIS HAPPENED AND WAS NOT BILLED".**
+   ⚠️ operator ruling: *"If it is in the workbook it's to be there, but if it
+   isn't on the invoice then it wasn't billed. The invoices are the dues —
+   whatever it says is true, so I want the portal to copy that."* Since D65 the
+   quantity is the multiplier, so zero keeps the row, its venue, its photo and
+   its HubSpot deal while contributing nothing. **Reach for it before
+   considering a deletion** — it satisfies D85 and D107 at once and is
+   reversible. 44 North already had two such rows; nobody had noticed they were
+   the pattern.
+
+3. **WODKA'S $25 CASE PAY IS CORRECT — the old item A would have cost $915.**
+   *"Wodka reorder is $5, initial is $25."* Lowering it to $5 would have cut
+   real contractor pay. The −$915 is the **charge** side and is the operator's
+   decision, not a data fault. **A brand falling through to the shared
+   `(all brands)` pay line is a fact to check, not a fault to fix** — which
+   inverts what D94 seemed to teach.
+
+**Also ruled: only data back to the portal.** QuickBooks holds 16 Coors invoices
+going back to Dec 2024; the portal's activity starts 2025-06-06. The six older
+ones — **$17,036.02** — are not a gap and are not to be chased.
+`check_invoice_totals.py` reads the horizon from `min(activity_date)`.
+
+**The Phil conversation happened and he agreed with the operator's position;
+changes are coming.** What exactly was agreed has NOT been written down yet, and
+it is the missing input for D117 (grading) and D118 (the 44 North fee model).
+**Ask for the specifics before acting on either.**
+
+Then read **D108–D115** (the first session of that day) — **D108 matters most:
+63 synthetic `Invoice-derived` rows exist across nine brands, $7,035, and THEY
+ARE NOT ALL WRONG.** There is a test, and bulk-deleting them breaks months that
+currently tie. One of them was resolved this session and it is a good worked
+example: the Feb 2026 barrel row claimed *"the portal held 0"* and was written
+without looking at the adjacent month, where the real row sat.
+
+**The single most dangerous command in this project is unchanged:**
+`python parse_invoices.py --brand "<anything but Dame Mas>" --apply`. Its
+double-count guard only recognises PERCENTAGE-priced months, so for a per-unit
+brand it duplicates the whole brand — $11,667.10 for 44 North, $5,652.10 for
+Blue Run, $2,990 for Wodka (D108). **Use `load_pool_recap.py`, or write the rows
+directly.**
+
+## The one-paragraph version
+
+21 Aug took the portal from modelling a tenth of the business to reconciling
+against the invoices (**D65–D77**). 22 Aug did two things. **D78** applied the
+mileage/expenses ruling D67 had recorded and left sitting: itemised expenses are
+now excluded from revenue and margin **by construction** rather than by luck,
+and the missing-cost blind spot behind mileage turned out to be **$6,568.90
+across 37 activities and 12 types**, all of which was inflating margin
+invisibly. **D79** came from opening all nine admin pages in a browser, which
+found **four broken pages** — including the app's own front page, broken since
+D73, and Review and edit, broken by a comment warning about the very bug it
+caused. **Revenue is unchanged at $116,752.** The margin figure is still not
+quotable: base pay covers one person, and $6,568.90 of charge has no cost behind
+it.
+
+23 Aug **built D86**, which had been ruled and left sitting. The account list
+now moves past `placed`: **21 pairs read `reordering`** and **360 of 689 read
+`dormant`**, derived rather than stored so a visited account comes back to life
+by itself. It moved no money — 1,255 activities and $39,201.65 of activity
+charge unchanged. **D87 is what the plan missed**: three of the four stat cards
+on `venues.html` counted the displayed status, so adding dormancy would have cut
+"Stocking your brand" from 218 to 116 and turned a card labelled "Quiet 90+
+days" into one that counted 91-to-180 only — falling as the situation got worse,
+on a page that rendered perfectly. The account list now **displays the effective
+status and counts the stored one**.
+
+
+**Later on 23 Aug**, three things. **D97**: the operator ruled that Mullets
+Sports Bar and the cigar lounge are ONE premises, reversing the hold D95 put on
+it — so it was a RENAME of the single existing row, done through the admin so
+`hand_edited_at` defends it (D84). The last three Dame Mas sales are in:
+**1,262 → 1,265 activities, 339 → 340 venues, and not one cent moved**. The
+loader gained `--assign`, which is how an operator ruling reaches a matcher that
+is correctly refusing to guess (D81/D60).
+
+**D98 is the one that matters.** The operator reclassified a Gleneagle row to a
+bottle sale and found he could not enter what it was worth. There was nothing
+to enter it into: **`amount` was readable nowhere and editable nowhere**, and a
+percentage-priced row with no amount **charges $0.00 while looking perfectly
+priced** — not `unpriced`, shows a `10%` rate, charge reads zero. It has cost
+**$21.08 of June commission**, and the Health canary is the only thing that ever
+saw it. `amount` is now on Review and edit, and the preview prices percentage
+rows off it. The same field unblocks the five expense rows behind
+`reimbursements` reading $0.00.
+
+**D99**: the `st.stop()`-after-`st.tabs()` checker, proven by flagging **line
+265 of the real pre-fix `5_Venues.py`** while all three older checkers call that
+file clean. **118 → 134 tests.**
+
+**Verified in a browser this session:** all nine admin pages, every tab panel
+carrying content, the Rate card's four money fields **typed into** and confirmed
+to enable on picking a basis (D92's fix, working), the venue rename done through
+the UI, and — **at last, while logged in as staff** — `business.html` and
+`venues.html`. Both were correct: venues.html reads 692/221/471/151 exactly, and
+counting the displayed status would have shown **117** stocking instead of 221,
+so D87's fix is doing its job on live data. `business.html` reads
+**−$1,265.00 across 66 activities**, not the −$1,295.00/58 this file predicted —
+the figure had moved with the operator's own later rate entries, and it ties to
+`v_activity_money` brand for brand.
+
+
+**Later on 23 Aug, the invoices.** The operator asked whether the portal ties to
+the invoices before running an analysis on them, and the answer was that the
+question could not be asked: **the invoice parser only ever worked for Dame
+Mas** (D106). It discarded 26 of 91 pages because a continuation page carries no
+`INVOICE` header; it read "September 11" as the year 2011; "Dec 2025" and
+"Septrmber 2025" returned no month at all; and the item table was DOUBLE-COUNTING
+because six of seven brands bill on a nested layout where each parent charge is
+followed by a breakdown of itself. **Invoices tying to their own stated subtotal
+went from 17 of 64 to 64 of 64.**
+
+Then **D107**, the check the operator asked for: invoice TOTAL against the
+portal, brand by month. **38 of 83 tie to the cent; Starr Rum ties on all
+seven.** The result is SAVED AS DATA at
+`portal_seed/reconciliation/invoice_vs_portal_2026-08-23.csv` — **do not
+re-derive it.**
+
+**Nothing in the portal was changed for any of that**, deliberately: the
+remaining $7,289 is four different problems and three of them must not be
+closed. Open item 1 says which.
+
+
+**24 Aug was the day the portal started getting corrected**, and it went four
+brands deep. **Brand-months tying went 38 → 49 of 83.** The headline gap reads
++$7,424.27 and that number is misleading: **$5,525 of it is August 2026**,
+which is current-month work billed in arrears and correct as it stands. The real
+gap is **$1,899.27**.
+
+**44 North** finished at 13 of 15 — the two that remain are the operator's own
+held June (a case he pulled off the invoice, where the portal edit never saved)
+and August. Three `invoice_recap` transcription slips are still open.
+
+**Wodka went from −$2,856.03 to six of eight months tying exactly.** The cause
+was never a rate: a **$500/month `Expense Spend` line** the portal did not model
+at all (D109), now riding on the retainer at $1,725 from Jan 2026. Then
+December's phantom 22 cases, ten synthetic rows, and five venue quantities from
+the operator's own workbook. What is left is $106.03 of card-processing fees and
+one tap cocktail billed a month late that the invoice itself explains.
+
+**Starr Rum tied 7 of 7 before and still does — but it now ties on real work.**
+63 of its 84 activities had NO `source_activity_type`, so the rate card could
+not price them and sixteen placeholder rows were carrying the money. 46 rows
+classified, 16 deleted, **brand total unmoved to the cent** (D111).
+
+**Blue Run reached 8 of 9**, and its biggest single fault was a `tasting event`
+at quantity **6** — $800 on one row (D113). Its synthetic rows were checked and
+KEPT: unlike Wodka's they stand in for barrels and half cases genuinely missing.
+
+**Wodka, Starr Rum and Blue Run are now in `invoice_recap`** — 21 months
+between them, every row proved against its own stated subtotal AND against
+QuickBooks. **The Coors pool cannot be loaded** and that is a structural
+blocker, not an oversight: see D114 and open item 2.
+
+**Two operator rulings this session are rules, not facts**: `account sold` is
+decided by what the invoice bills, never by the label (D112); and the workbook
+decides ACTIVITY while QuickBooks decides TOTALS, because barrels were never
+entered in the workbooks at all (D110).
+
+---
+
+## Later on 24 Aug — the business analysis
+
+**Nothing in the database changed and no invoice work was done.** One page was
+added to the admin; everything else is analysis, two documents, and three
+decisions. Open items 1–7 are untouched.
+
+**D118 is the finding worth waking up for.** Matching 44 North's distributor
+depletion sheet against the portal's venues: **291 cases moved at accounts we
+service between Jan and Jul 2026, and 63 were billed.** Not a recording failure
+— reorders reach the venue through the distributor's own rep with no
+iHospitality visit, so there has never been anything to log. The rate card makes
+it structural: `recurring case` charges **$0.00 and pays $5.00**, so a reorder
+costs five dollars and earns nothing. **One reorder has been recorded in the
+entire history of 44 North.** Moving to 10 percent of every case takes 44 North
+from $464/month of case revenue to about $1,048.
+
+Two more from the same pass, neither needing a client conversation:
+**51 tap/keg activities are logged as Market Favor, Account Visit or Drink
+Development — all rate-carded at $0.00 — when a `tap cocktail` line exists at
+$200.** And **Wodka's case sales lose $15 each** ($610 charged against $1,525
+paid, −$915) because Wodka has no pay rate of its own and falls through to the
+shared `(all brands)` $25.00 line. Same shape as D94.
+
+**D116 is the only thing built.** The Analysis page has a new **Cost to serve**
+tab: each contractor's base pay pushed down onto brands by their own share of
+activities, with the period and brand list already driven by the page's
+filters. It is an ALLOCATION and lives in the page, in no view — D67 still
+governs the database, and every other margin figure is unchanged. The most
+useful thing it says: **44 North's $1,450 retainer does not cover the $1,510 of
+payroll on that account, and Dame Mas's $750 does not cover its $858.**
+
+**D117 is designed and NOT agreed.** Grading, cadence, caps and a four-day
+routed week. The constraint that drives all of it: **Phil owns 260 venues, does
+62 visits a month, and 260 venues at the CHEAPEST cadence would cost 130.** He
+is 2× over capacity even if everything is graded D, and 132 of his 260 have
+never bought anything. So grading is mostly about deciding what stops being
+visited on a schedule.
+
+**Two documents were produced and are the reference for both**, in
+`Ihospitality/`: `iHospitality_Rate_Talking_Points.docx` (the fee conversation
+with Phil, opening with the fact that Phil is underpaid by $15–20k and how the
+three changes fund it) and `iHospitality_Field_Routes_Phil.docx` (every venue
+by route day).
+
+**The Phil conversation had not happened when this was written.** Nothing here
+is agreed. If it went ahead, what he said is the missing input for D117 and
+D118 both.
+
+**One number to be careful with.** Dame Mas reads **−$11** fully loaded on a
+six-month window pooled, **+$18** on the same window allocated month by month
+(which the tab does, and which is more correct), and **+$368** on Jun–Jul alone
+— because its activity fell by a third and the allocation rewards neglect. The
+honest word for Dame Mas is **break-even**, never "loses money".
+
+---
+
+---
+
+## THE 24 AUG PROMPT — superseded by the one at the top
+
+**Kept for its METHOD**, which is still the current one for Track B: QuickBooks
+totals → PDF parse → operator workbook → only then write `invoice_recap` → then
+diff the portal's activity against the workbook, venue by venue. Ignore its
+"start here" framing; the top of this file supersedes it.
+
+Paste this to pick up exactly where we stopped:
+
+> Read `CLAUDE.md`, `HANDOFF.md`, and **D119 plus D108–D115** in `DECISIONS.md`.
+> The reconciliation stands at **64 of 83** and the Coors pool ties 9 of 9.
+>
+> **Before anything else, know five things.**
+> 1. **Never run `parse_invoices.py --brand "<x>" --apply` for a per-unit
+>    brand** — the guard only recognises percentage-priced months and will
+>    duplicate the whole brand (D108). Use `load_pool_recap.py` or write
+>    `invoice_recap` directly.
+> 2. **`quantity = 0` is how a row says "this happened and was not billed"**
+>    (D119). Reach for it before considering a deletion; it keeps the row, its
+>    photo and its deal, and satisfies D85 and D107 at once. **Never delete
+>    real work to make a month tie.**
+> 3. **Four things on an invoice are not work** and each one faked a gap: the
+>    early-payment discount, a card/ACH fee, a balance carried forward, and a
+>    goods invoice (no commission, no retainer, and **sales tax**). An
+>    ACTIVITY DATE equal to the issue date says nothing about when the work
+>    happened.
+> 4. **Do not touch Wodka's $25 `1st case sale` pay.** It is correct; the old
+>    handoff item A was withdrawn and would have cost $915.
+> 5. **The 63 synthetic `Invoice-derived` rows are not all wrong** (D108).
+>    There is a test — does the work already exist elsewhere in the portal? —
+>    and 44 North's June 2025 ties at exactly 0.00 while holding $660 of them.
+>
+> **Start with HEAVEN'S DOOR.** It is the biggest open gap, the best
+> understood, and the brand with **$16,361.08 outstanding across five unpaid
+> invoices**. Its commission ties EXACTLY in both checked months (280 and 965),
+> so the whole difference is that **it bills ACCOUNT VISITS at $20** inside the
+> consulting block — where every other brand's invoice reads "no charge" and
+> the rate card prices `account visit` at **$0.00 for all eight brands** — plus
+> a "Smoke Tops" line. Confirm on the other three invoices before changing a
+> rate, because editing a rate **restates history** (D91).
+>
+> **Then the remaining six open rows**, all listed with their causes in item 1:
+> Blue Run's Black Hawk 10L barrel (three operator calls first, item 3), Dame
+> Mas's $300 "KPIs" line, 44 North's held June, Aspen Green's 79 cases against
+> 75 billed, and two months with no invoice at all — check QuickBooks for an
+> Aspen Green July before assuming it is another D71 month.
+>
+> **Eleven rows must NOT move:** August 2026 for four brands (arrears,
+> $5,525), Aspen Green Feb–May (D71, $2,165), Wodka's ±$150 April/May pair
+> (invoice 3195 explains it in writing), and Dame Mas June's $0.20 of invoice
+> rounding. And nothing before 2025-06, the portal's own horizon.
+>
+> **The method, which has worked six times running:**
+> 1. Pull the brand's invoices from QuickBooks (`qbo_sales_get_invoices`) — its
+>    totals are complete even though its service lines come back blank (D70),
+>    and it is the only independent proof no invoice was missed.
+> 2. Check them against the PDF parse. Every invoice must tie to its own stated
+>    subtotal or the parser is broken — fix the parser, never the numbers (D93).
+> 3. Check both against the operator's EOM workbook (`Ihospitality/EOM
+>    reports/`). **The workbook decides ACTIVITY; QuickBooks decides TOTALS** —
+>    barrels were never entered in the workbooks (D110), and the Coors workbook
+>    was missing a whole month's commission too (D119). **There is no Aspen
+>    Green workbook at all.**
+> 4. Only when all three agree, write `invoice_recap`.
+> 5. Then diff the portal's activity against the workbook, venue by venue.
+>
+> **What that diff keeps finding**, in descending order of money: a wrong
+> QUANTITY on a real row (D113); a case sale filed as an account visit or the
+> reverse (D112); a NULL `source_activity_type` so the rate card cannot price
+> real work (D111); a brand whose rate line is $0.00 where the invoice charged
+> real money (D119 — Barmen's barrel prep, and now Heaven's Door's visits); and
+> a synthetic row duplicating something already on file (D108).
+>
+> **Corrections go on the rows already there** — the operator's own words:
+> *"I would rather change what's in the portal than create a new thing. If
+> there is an account sold but it should be an account visit, just change it.
+> Do not create an account visit."* Where the invoice bills work the portal
+> never received, **create it**. Where a corrected row was a venue's only
+> depletion, walk `brand_venue_status` back by hand — the trigger only advances
+> (D86). Note the HubSpot deal id in the row's note; HubSpot still holds the old
+> figure and a promote could revert the fix.
+>
+> **Still unanswered and worth asking early: what did Phil actually agree to?**
+> The conversation happened and he agreed with the operator's position, but the
+> specifics were never written down — and they are the missing input for
+> **D117** (venue grading and the routed week) and **D118** (the 44 North fee
+> model). Both are designed and neither is agreed. Do not hand anyone a grading
+> sheet before reading D117, and when you do, send the **128 venues that have
+> ever sold**, not all 260.
+>
+> Standing rules that outrank convenience: the billing is the truth (D56), no
+> hardcoded business data (D60), the brand portal stays read-only by
+> construction (D61), base pay is never allocated to a brand in a view (D67),
+> a reimbursement never earns (D78), and reclassifying must not move money
+> unless moving it is the point (D93/D112).
+>
+> Before calling a session done: **open every admin page AND every tab in a
+> browser, and type into anything that takes input** (D79/D89/D92).
+
+---
+
+## Run it
+
+**Double-click `Hubspot/portal_seed/start-admin.cmd`.** That is the whole
+procedure — it `cd`s to its own folder first, which is what keeps the admin on
+loopback (D63/D81), so it is safe from a Desktop shortcut or the Start menu.
+Leave its console window open; closing it stops the server.
+
+```bash
+# or by hand — from portal_seed AND NOWHERE ELSE
+cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Hubspot/portal_seed"
+python -m streamlit run admin/app.py          # http://127.0.0.1:8501
+
+# the invoices against the portal, line by line
+python reconcile_invoices.py
+```
+
+**Launch the admin from `portal_seed/` and nowhere else** (D63). It has no
+login; its access control is that it binds to loopback, and Streamlit resolves
+`.streamlit/config.toml` against the *working directory*. From the wrong
+directory that setting silently vanishes and the app publishes every brand's
+rate card — and every contractor's pay — to whatever network you are on.
+`lib._require_loopback()` refuses to render if that happens, but do not rely on
+being saved by it.
+
+```bash
+# the public site + brand portal
+cd "C:/Users/nicho/OneDrive/Documents/Ihospitality/Website/ihospitality-website_3_3_26/ihospitality"
+python -m http.server 8123                    # portal at /portal/login.html
+```
+
+---
+
+## Where things stand
+
+**Committed, both repos clean.**
+
+| repo | branch | latest |
+|---|---|---|
+| website (`…/ihospitality/`) | `portal-v1` | `git log` — unpushed vs `origin/portal-v1` |
+| `Hubspot/portal_seed/` | `main` | local only, no remote by design |
+
+Later that day: **venue grading and ownership** (D88) — an A/B/C/D grade and an
+owning contractor per venue, staff-only, in their own table because a column on
+`venues` is a column a brand can read. Editable grid plus a CSV round trip
+keyed on the venue id. And **D89**: adding that tab revealed that `st.stop()`
+inside the merge tab had been killing the whole script run on every page load,
+so **"Edit a venue" had rendered blank since the day it was written** — clean
+console, no exception, page looked perfect.
+
+And **D90**, from the operator asking why Aspen Green looked wrong: it is
+charged $5.00 per case and pays $5.00 per case, so it earns exactly nothing —
+against $60 for four other brands. Worse, the Rate card page now measures the
+whole family: **51 activities charged $2,040.00 against $3,335.00 of pay, a
+margin of MINUS $1,295.00**, led by Wodka's `1st case sale` at −$1,140.
+Clicking a brand-month on the Analysis page now opens every row behind it.
+
+Then **D91**: the rate table edits in place, showing what each edit does to
+money already recorded before it saves. **Mileage now pays out in full** — eight
+lines, charge unchanged, contractor cost +$1,243.90, uncosted charge down to
+**$5,325.00**. And the two `rate_card` one-basis CHECK constraints turned out to
+have **never existed on Supabase** — declared inside `create table if not
+exists`, real in every test, absent on live.
+
+And **D92**, reported as "the cursor turns into a red null sign": the four money
+fields on "Add a rate" were disabled by a radio **inside `st.form`**, and a form
+does not rerun until submit — so they could never be enabled, by any sequence of
+actions, since the day they were written. Fixed by dropping the form. The class
+is now a static check, confirmed to fail on the pre-fix file.
+
+Finally **D93 — Dame Mas is reconciled end to end.** The canary reads **13
+months tying, 0 billed-but-missing, 0 drifted**, against 4 and 3 that morning.
+$3,307.28 of missing commission is booked from the invoice PDFs, and 46 of the
+50 `account sold` rows are classified from the workbook notes without moving a
+cent.
+
+**D88–D89** added venue grading and ownership (staff-only, in its own table
+because a column on `venues` is a column a brand can read) — and found that
+`st.stop()` inside a tab had been rendering "Edit a venue" blank since the day
+it was written. **D90–D92** came from the operator reading the Analysis page:
+Aspen Green earns nothing because it is charged $5.00 a case and paid $5.00 a
+case, **51 activities are priced at a loss (−$1,295)**, the rate table is now
+editable with a money-impact preview, and the four money fields on "Add a rate"
+could never be enabled by anyone.
+
+**D93–D95 reconciled Dame Mas end to end.** The Health canary reads **13 months
+tying, 0 billed-but-missing, 0 drifted** — it read 4 and 3 that morning.
+$3,307.28 of commission was booked from the invoice PDFs, 46 of the 50
+`account sold` rows were classified from the operator's own workbook notes
+without moving a cent, and nine sales the workbook had and HubSpot never did
+were created.
+
+And **D94** closed the loop on it: Dame Mas had no per-case rate of its own, so
+the shared `(all brands)` $25.00 pay line was inventing **$325.00 of contractor
+cost against no charge**. Its placements now carry explicit 0.00 / 0.00 lines,
+which also stops 56 deliberately-free rows reading as a fault — **Dame Mas
+unpriced 63 → 7, portal-wide 152 → 96**. Nine missing sales created; three held
+back where the venue was too close to call.
+
+**Session ended at the operator's call**, with three Dame Mas rows deliberately
+unwritten (item 1) and one question outstanding (item 5). Nothing is half-done
+in the database: every script here is idempotent and was re-run to prove it.
+
+**Verified at close (23 Aug):** **118 pytest** (103 + 15 new source checks) ·
+offline suite green **through both idempotency passes**, now nine files ·
+0 grants to `anon`, 0 write grants to `authenticated`, 0 grants of any kind to
+`anon` on `venue_grading` · 1,255 activities and $39,201.65 activity charge
+unchanged by D86 · both account views agreeing status-for-status across all 689
+pairs · `venue_grading`'s write path driven against live and rolled back,
+including clearing a field back to empty · **all nine admin pages AND every tab
+on them opened in a browser** — which is how D89 was found.
+
+**Not covered by any test, and it bit twice today:** control flow in the admin.
+`test_admin_sql.py` now catches three source faults — including D92's — but it
+still passes on the version where a whole tab renders blank (D89), because
+`st.stop()` after `st.tabs()` is not checked. **That is the obvious next
+checker to write**, and it is about twenty lines: the shape is already in
+`widgets_disabled_inside_a_form`.
+
+**NOT verified: the logged-in `venues.html` and `business.html`.** It is behind a brand login and
+there was no session to hand, so the corrected stat cards were not seen
+rendering. The module parses and redirects with no console errors and the view
+columns are confirmed present — but D79 is explicit that this is not the same
+evidence as opening the page. **Open both once you are logged in.** On
+`venues.html` the four numbers at the top are what changed; on `business.html`
+it is the new **"Priced at or below cost"** card and column (D96), which should
+read **−$1,295.00 across 58 activities**, with Wodka at −$1,140 and Aspen Green
+at $0.00 across 23 activities that earn exactly nothing.
+
+**The money:**
+
+| | 21 Aug | now |
+|---|---|---|
+| activity charge | $39,202 | $39,202 |
+| retainer | $79,650 | $79,650 |
+| revenue | $116,752 | **$116,752** |
+| contractor cost (per-activity) | $21,466 | **$26,891** |
+| contractor base pay | — | $10,500 (one person) |
+| activity charge | $39,202 | **$42,509** (D93) |
+| **charge with no cost behind it** | $6,569 | **$3,225** ⚠️ |
+| **charged at or below what it pays** | — | **−$1,295** ⚠️ (D90) |
+| unpriced activities, portal-wide | 152 | **96** (D94) |
+| reimbursements (pass-through) | — | $0.00 (none entered) |
+
+Margin is **not** quotable. Two known reasons, both now measured rather than
+suspected: base pay covers one contractor, and $6,569 of charge has no pay rate.
+
+---
+
+## Open work, most useful first
+
+### NEW — from the second session on 24 Aug (D116–D118)
+
+Lettered so nothing below has to be renumbered. **The numbered list after these
+is the first session's and none of it was advanced.**
+
+**A. ~~FIX WODKA'S CASE SALE PAY RATE~~ — WITHDRAWN, AND DOING IT WOULD HAVE
+COST $915.** ✅ operator-ruled 24 Aug 2026. This item said to add a Wodka
+`1st case sale` pay row at $5.00. **Do not.** The operator: *"Wodka reorder is
+$5, initial is $25."* The $25.00 arriving through the shared `(all brands)` line
+is CORRECT, and lowering it would have cut real contractor pay. The −$915 is
+real but it is the **charge** side — Wodka pays $25 to place a first case and
+bills $10 for it — which is a priced decision for the operator, not a data
+fault (D60). See the D118 correction at the end of `DECISIONS.md`. **The general
+rule this leaves: a brand falling through to the shared pay line is a fact to
+check, not a fault to fix.**
+
+**B. STOP GIVING AWAY TAP AND KEG WORK BY CLASSIFICATION** (D118). 51 tap/keg
+activities are logged as **Market Favor (26), Account Visit (19), Drink
+Development (5)** — all rate-carded at $0.00 — against 9 billed as tap work.
+There is a `tap cocktail` line at **$200** for 44 North, $150 for Wodka. This is
+a classification rule for three people, not a rate change: *if it involves
+building, batching or servicing a tap, it is a tap cocktail or tap maintenance
+line, never a favour.* Reclassifying moves money on purpose here, so D93's rule
+does not apply — but check each row before changing it.
+
+**C. THE PHIL CONVERSATION, and it gates D117 and D118 both.** The talking
+points are written (`Ihospitality/iHospitality_Rate_Talking_Points.docx`) and
+open with the fact that **Phil takes $32,188 against a $50–65k market rate**,
+and that the three changes on the table fund about $14,232/year of that. Until
+it happens, the grading scheme is a proposal and the 44 North fee model is a
+proposal. **What he says is the missing input for both.**
+
+**D. VERIFY THE $21/BOTTLE REFERENCE PRICE** before it reaches a contract
+(D118). It is the operator's conservative estimate and the whole 10 percent
+model rests on it — **every dollar is worth about $12/month**. Take it from an
+invoice or the depletion report, never from a per-bottle average (D101).
+
+**E. POPULATE `venues.market`.** **186 of 187 44 North venues have a NULL
+market**, so D117's routes had to be clustered by city string and nothing can be
+filtered to `central_florida` / `palm_beach_county` at all. It also means the
+route design silently includes Pensacola, Jacksonville and Miami venues. Two
+markets only, and the enum already enforces the vocabulary.
+
+**F. Decide whether the ONE unowned venue matters** (D116). 339 of 340 venues
+have an owning contractor. The one that does not drops out of every allocation
+on the Cost to serve tab without comment.
+
+---
+
+
+1. **FINISH THE RECONCILIATION — 64 of 83, and EIGHT rows are genuinely open.**
+
+   **DO NOT RE-DERIVE THE ANALYSIS.** The state is saved at
+   `portal_seed/reconciliation/invoice_vs_portal_2026-08-24b.csv`, one row per
+   brand-month, with a README saying what is settled. Refresh it:
+
+   ```bash
+   cd Hubspot/portal_seed
+   python check_invoice_totals.py                              # the summary
+   python check_invoice_totals.py --brand "Heavens Door"       # one brand
+   ```
+
+   **OPERATOR RULING (D107, sharpened 24 Aug):** the portal is not live, the
+   invoices are sent and paid, so **where they differ the invoice is right and
+   the portal gets corrected** — and **without creating duplicate deals**.
+   Where the invoice bills work the portal never received, **create it**. Where
+   the workbook has it but the invoice never billed it, **set quantity to 0**
+   (D119) — the row, its venue, its photo and its deal survive and the money is
+   zero. **Never delete real work to make a month tie.**
+
+   **NINETEEN ROWS DIFFER. ELEVEN OF THEM SHOULD NOT MOVE:**
+   - **August 2026 for four brands, $5,525** — arrears, billed a month behind.
+   - **Aspen Green Feb–May 2026, $2,165** — `uninvoiced` on purpose (D71).
+   - **Wodka April +$150 / May −$150** — a timing pair that nets zero, and
+     **invoice 3195 explains it in writing**: *"New Cocktail on tap From April
+     but not on previous invoice."*
+   - **Dame Mas June +$0.20** — the invoice rounds $275.20 of mileage and staff
+     training to a flat $275.00. That is the whole of it.
+
+   (Starr Rum's deliberately unbilled Nov–Dec 2025, the third protected
+   category, does not appear at all — Starr Rum ties 4 of 4.)
+
+   **THE EIGHT THAT ARE OPEN, causes already found — start at the top:**
+
+   | Brand / month | Gap | Cause |
+   |---|---|---|
+   | **Heaven's Door** 2025-06, 2025-07 | −$539.50, −$310 | **It bills ACCOUNT VISITS at $20** inside the consulting block, where every other brand's invoice says "no charge" — and the rate card prices `account visit` at **$0.00 for all eight brands**. Its commission ties EXACTLY in both months (280, 965), so the visits and a "Smoke Tops" line are the whole difference. **Biggest and best understood — do this first.** |
+   | **Blue Run** 2026-01 | −$205 | A `CWC 10L Barrel` for **Black Hawk Bistro** — a venue, so a placed barrel and real activity, unlike 3159's shipment to the brand. Three operator calls stacked: the venue on file is **Black Hawk Social**, there is **no `cwc 10l barrel` activity type at all**, and Barmen's rate says $150 against this invoice's $205. |
+   | **Dame Mas** 2025-07 | −$300 | A **`KPIs`** line — a service charge with no venue and no portal counterpart. Closer to a retainer add-on than an activity; needs a ruling on where it lives. |
+   | **44 North** 2026-06 | +$50 | The operator's held June: the portal edit never saved and the recap says 2,200 where the invoice says 2,150. See item 6. |
+   | **Aspen Green** 2026-06 | +$20 | The portal holds **79 cases** against 75 billed — four extra as `1st case sale`. **There is no Aspen Green workbook** to arbitrate, and item 12 says investigate, do not delete to make it tie. |
+   | **Blue Run** 2026-03 | +$160 | A tasting event in a month with **no invoice at all** — Blue Run's invoices stop at 2026-02. |
+   | **Aspen Green** 2026-07 | +$1,720 | **No invoice in the PDFs**, while 44 North and Dame Mas both have July ones. Either a later extension of D71 or a missing invoice — check QuickBooks before assuming. |
+
+   **THE METHOD, which has now worked six times running:** QuickBooks totals →
+   PDF parse → operator workbook → only then write `invoice_recap` → then diff
+   the portal's activity against the workbook venue by venue.
+
+   **ONE QUESTION STILL OPEN:** invoice **3210, $1,235.33, Jul 2026, billed to
+   "Chris Nicolas"** — which brand? One row in `brand_billing_name` once he says.
+
+   Still open, same field as ever: **`Executive Cigar`, 31 Jul 2026, amount
+   $210.80 should be $210.75** (D101), and **the five `is_expense` rows** carry
+   a NULL amount, which is why `reimbursements` reads $0.00 against $2,456.20 of
+   expense lines (D78/D98). Both are Review and edit.
+
+2. **~~TEACH `canary()` TO POOL BRANDS~~ — DONE, AND THE POOL TIES 9 OF 9.**
+   ✅ 24 Aug 2026 (third session). See **D119**.
+
+   `canary()` now derives a pool **label** for every brand and applies it to
+   both sides of the comparison; `admin/app.py` selects on it. Nine months are
+   loaded under `Barmen 1873 + Coors Whiskey + Five Trail` by the new
+   `load_pool_recap.py` — **never `parse_invoices.py --apply`** for a per-unit
+   brand (D108). **Every other brand's numbers are unchanged.**
+
+   The −$81.09 the pool was recorded as owing was **nine early-payment
+   discounts** and never a gap. Both scripts now compare
+   `SUBTOTAL − expenses − payment fees`, with the discount excluded entirely.
+   That alone fixed seven months, three of which were long-standing handoff
+   items: Wodka's "$106.03 of card fees" and Dame Mas's $112.51 ACH fee.
+
+   **`verify_live.py` now asserts that each brand resolves to exactly ONE pool
+   label.** The join is on the brand, so two labels would double-count its
+   activity silently. It holds today only because the two billing names
+   reaching those three brands name the same three.
+
+3. **DECIDE THE BARRELS — and the question is now much sharper.**
+   ⚠️ operator ruled 24 Aug: *"the barrels were never entered, that was done
+   separately."*
+
+   **THERE ARE TWO KINDS AND THEY ARE NOT THE SAME THING** (D119). Telling them
+   apart is the whole of this item:
+
+   - **A barrel SHIPPED TO THE BRAND is goods.** Invoices 3159 (Blue Run,
+     $584.56) and 3178 (Coors, $720.00) carry no commission, no retainer and
+     SALES TAX, and 3178 says *"Fred Fisher requested barrels"* with a UPS
+     tracking number where a work month should be. The portal correctly holds
+     nothing for either. `check_invoice_totals.py` now keeps them out of a work
+     month and lists them separately. **Nothing to do unless you want them
+     modelled somewhere.**
+   - **A barrel PLACED AT A VENUE is activity.** Invoice 3187's two 5L went to
+     Executive Cigar and Copper Shaker and ARE portal rows. Invoice 3177's
+     `CWC 10L Barrel` went to **Black Hawk Bistro** and is NOT.
+
+   **Blue Run 2026-01 is −$205 for exactly that missing barrel**, and it needs
+   three answers before anyone writes it:
+   - the venue on file is **Black Hawk Social**, not "Black Hawk Bistro" — same
+     premises? (`_resolve_venue` must not guess, D81/D97.)
+   - there is **no `cwc 10l barrel` activity type at all** — only `5l_barrel`,
+     `barrel_prep`, `barrel_prep_charge` and `single_barrel_sale`.
+   - Barmen's `cwc 10l barrel` rate says **$150**; Blue Run's invoice bills
+     **$205**. Blue Run has no rate line of its own.
+
+   All three are operator data (D60), which is why the session stopped here
+   rather than inventing them.
+
+4. **Resolve the remaining 26 synthetic rows** (D108). $3,030 across 44 North
+   ($860), Five Trail ($930), Heaven's Door ($1,245), Aspen Green ($995) and
+   Dame Mas ($0). **Test each against the brand's workbook — do not bulk-delete.**
+   44 North's June 2025 ties at exactly 0.00 and holds $660 of them.
+   ```sql
+   select b.name, a.activity_date, a.source_activity_type, a.quantity
+     from activities a join brands b on b.id = a.brand_id
+    where a.notes like 'Invoice-derived.%' order by 1, 2;
+   ```
+
+5. **Fix the `parse_invoices.py` double-count guard** (D108). It asks
+   `charge_pct is not null`, which only recognises the Dame Mas percentage
+   model; it should ask whether the month already carries ANY billable charge.
+   Until then the `--apply` path is a loaded gun for every per-unit brand.
+
+6. **Finish 44 North's `invoice_recap`.** Sept is corrected; three left, all
+   verified against the PDFs: **2025-10 expenses 302.44 → 259.30** (the last
+   line counted twice), **2026-01 expenses 174.48 → 174.18**, and **2025-06 is
+   missing entirely** (invoice 3117: 1,450 / 870.00 / 308.77 / 2,628.77). Plus
+   his held **Jun 2026**, where the portal edit never saved and the recap still
+   says 2,200 where the invoice says 2,150 — both wrong the same way, which is
+   why that month reads green.
+
+7. **Tick `bottle_reorder` as a reorder** on the Activity types page. There are
+   now FIVE Dame Mas `bottle_reorder` rows (D93) on top of the 11 pairs it was
+   worth, and every one of those accounts demonstrably bought again while still
+   reading `placed`.
+
+8. **Contractors — DONE, and the base pay figure moved with it.** Three people
+   are on file (Phil $619 weekly, Nick $375 semimonthly, Eric $350
+   semimonthly = **$4,132.33/month**), and 339 of 340 venues now have an owning
+   contractor. **Base pay is no longer understated.** What is still missing is a
+   pay row for anyone hired next, and note that the ONE unowned venue silently
+   drops out of every allocation on the Cost to serve tab (D116).
+
+9. **GRADE THE VENUES — owners are done, grades are not** (D88, and now D117).
+   339 of 339 rows in `venue_grading` carry an owning contractor; **not one
+   carries a grade.**
+   Grid or CSV — download, edit in Excel, upload, confirm the diff. A blank
+   grade means not graded yet; nothing reads it as a bad grade.
+
+   **D117 designed the whole scheme and it is NOT agreed with Phil.** Read it
+   before handing anyone a spreadsheet. The four things that will otherwise be
+   got wrong: cap A as a **share of capacity, never a flat number** (ten A's is
+   71 percent of Phil); **A is a campaign, not a status**; a **90-day floor on
+   every venue that has ever bought** is what makes the arithmetic fit at all;
+   and a B graded on potential **must drop to D after 90 days without a sale**,
+   or the grade and its cost persist for ever.
+
+   **Do not send Phil 260 rows.** Send the **128 that have ever sold** — he will
+   grade 260 rows as C and you will learn nothing. The other 132 have never
+   bought and the answer for them is already known.
+10. **Enter the remaining pay rates and the 5 expense amounts** (D78).
+   **Mileage is DONE** (D91), **Dame Mas is DONE** (D93/D94), and on 23 Aug the
+   operator entered `aspen green fresh market incentive` and `single barrel
+   sale` himself — together those took uncosted from $6,568.90 to **$3,225.00**.
+   What is left: `5l barrel` ($1,395), `tap cocktail` ($700), `promo specialist`
+   ($240), `day buy-out split` ($230), `barrel prep` ($200), `tap w/2 cases`
+   ($200), `tap maintenance` ($100), `tasting event split` ($100), `half case
+   sale` ($60). Where work is deliberately free, give it an explicit **0.00 rate
+   line rather than no line** (D94), so it stops reading as a gap.
+
+   **ONE QUESTION FOR THE OPERATOR, from his own entry:** he set
+   `aspen green fresh market incentive` to **charge $100.00 and pay $100.00**,
+   so it now earns nothing across 9 activities and sits in the "priced at or
+   below what it pays" list beside mileage. That is right if it is a
+   pass-through like mileage (D91) and wrong if the pay was meant to be lower.
+   **Nothing in the data can tell which** — ask him. What is left is
+   led by `5l barrel` ($1,395), `single barrel sale` ($1,000) and
+   `aspen green fresh market incentive` ($900). Not a fault — unfinished. Both
+   are operator data by D60.
+11. **DECIDE THE PRICES THAT LOSE MONEY** (D90). Measured and listed on the Rate
+   card page: **58 activities charged $3,283.90 against $4,578.90 of pay —
+   minus $1,295.00.** The loss is unchanged by the mileage ruling, which is the
+   point: mileage passes through at exactly zero.
+   - **Mileage: $0.00 margin, 7 activities, DELIBERATE** (D91). Nothing to do.
+     It is in the list because it belongs there, not because it is wrong.
+   - **Wodka `1st case sale`: charged $10.00, paid $25.00, 33 activities,
+     −$1,140.** The charge is on Wodka's own line; the pay comes from the shared
+     `(all brands)` line. The single biggest item.
+   - **Aspen Green `1st case sale` and `recurring case`: $5.00 charged, $5.00
+     paid, 14 activities, $0.00.** Four brands charge $60 for the same work.
+     This is why every Aspen Green month reads a flat zero margin.
+   - **Dame Mas `staff training`: $0.00 charged, $50.00 paid, −$150.** May be
+     correct — n/c work still costs.
+   - **44 North `recurring case`: −$5.00. Known and deliberate**, on no invoice
+     by design. Nothing to do.
+
+   Not all of it is wrong, and none of it is mine to decide (D60).
+12. **Portal exceeds the invoices** on account visits (257) and `1st case sale`
+   (117). Investigate — do not delete to make it tie.
+13. **Chase Heaven's Door — $16,361.08 outstanding**, invoices 3099, 3106, 3111,
+   3114, 3119 (work months Mar–Jul 2025, none paid).
+14. **$2,000 of Aspen Green Zelle money has no QuickBooks sale at all** — not an
+   invoice, not a sale. A bookkeeping question outside this system.
+15. **Load `invoice_recap` for THE REMAINING BRANDS.** Done: Dame Mas (13),
+   44 North (13), **Wodka (8)**, **Starr Rum (4)**, **Blue Run (9)** — 47 months
+   on file, every row proved against its own stated subtotal AND QuickBooks.
+   **Left: Aspen Green, Heaven's Door, Barmen 1873, Five Trail, iHospitality.**
+   The last two are the Coors pool and are BLOCKED by item 2, not merely
+   undone. **Write the rows directly — do NOT use `parse_invoices.py --apply`
+   for a per-unit brand** (D108). The $455 Dame Mas tasting invoice (3203) is
+   still in neither the workbook nor the portal.
+16. **Widen the Health canary further.** It now reads `commission + billable +
+   mileage`, all coalesced (D114) — `billable` was missing and 44 North Sept
+   2025 was the row that proved it. Still ignores `total`, still **cannot pool
+   brands** (item 2), and **its invoice side is still hand-typed**, which is the
+   circularity that produced a false green and a false red on one brand in one
+   morning. The real repair is to source it from the parsed PDFs.
+17. **Run the sync for real.** Never run with the staging code. Use `--month` on
+   one month and watch the review queue. **Check afterwards that no venue came
+   back**: the merges of 22 Aug depend on `venue_hubspot_alias` being consulted
+   by the pre-load loop (D82), and that path has never run against live HubSpot.
+18. **The Meg O'Malley's drink list** — HubSpot deal `51628024207` says quantity
+   6; it should be **1**. **This is the fourth known instance of D113**, and the
+   other three were each worth real money: Pourhouse Lounge 12 ($120),
+   Debauchery 3 ($30), Executive Cigar 6 ($800). All four are real activities
+   with real deals; the quantity multiplies (D65) and nothing about the row
+   looks wrong. **Worth a sweep** — anything whose quantity is far above its
+   neighbours at the same venue deserves a look at the operator's workbook.
+19. **Fill the activity-type property on HubSpot deals**, or rows keep arriving
+    unclassified (D76).
+20. **Ten months of Dame Mas billing nothing.** Jun 2025 – Mar 2026 show $0
+    activity charge against real contractor cost.
+21. **`QB_RETAINER_LAST_MONTH` in `8_Retainer.py` is a hand-maintained date.**
+    It bounds the QuickBooks comparison at the last invoiced work month (D79).
+    It needs bumping when a new month is invoiced, alongside `QB_RETAINER_TOTAL`
+    and `QB_RETAINER_MONTHS` — or, better, derived from `invoice_recap` once
+    item 8 lands.
+22. **Fix `Crown Lounge`'s city** — it reads "Locals Eatery & Bar", a venue name
+    in the city column, straight from HubSpot. Editing it in the admin now
+    STICKS (D84); it did not before today.
+23. **THE LAYOUT — the operator has asked three times and we never got to it.**
+    He wants to change the site's layout and wanted to talk it through rather
+    than be handed a design. **Ask these before building anything:**
+    - **Which surface?** The public marketing site (`index.html`, gallery) or
+      the brand portal (`portal/`, the five logged-in pages)? They are very
+      different jobs.
+    - **What is prompting it** — something hard to find, something that looks
+      dated, phone rendering, or showing it to someone specific soon? That
+      answer usually matters more than the layout itself.
+    - **How far does it go** — a re-skin inside the current structure, a
+      re-think of what lives on which page, or a new page?
+
+    The binding constraint to name up front: **no build step, no npm** (locked).
+    Plain static HTML with shared tokens in `css/site.css`, page-specific CSS
+    inline AFTER the link so pages can override. That rules out reaching for a
+    framework; it rules out very little visually.
+
+24. **Phase 3 proper**, password reset (D18), deleting the two test logins, and
+    merging PR #1 when the portal should go live.
+
+---
+
+## Things that will bite you if you don't know them
+
+- **`parse_invoices.py --apply` DUPLICATES ANY PER-UNIT BRAND** (D108). The
+  double-count guard is `select month from v_activity_money where brand_name = %s
+  and charge_pct is not null` — it recognises a month as already-priced ONLY when
+  the pricing is a PERCENTAGE, which is the Dame Mas model it was written for.
+  Every other brand is priced per unit, `charge_pct` is NULL on every row, and
+  the guard reports "none". Its dry run will tell you, in as many words, that
+  **$11,667.10 of 44 North commission is "not currently in the portal"** when all
+  of it is. Write `invoice_recap` directly.
+- **A CHECK WHOSE TWO SIDES SHARE A SOURCE CANNOT FAIL** (D114). The Health
+  page compares the portal against `invoice_recap`, which is typed by hand. On
+  44 North it showed **June 2026 green while the invoice says $2,150** (both
+  sides said $2,200) and **September red on a month that ties to the cent**
+  (typed $610.00 against an invoice of $912.10). If a page and a tool disagree,
+  ask which one reads the document.
+- **DO NOT BULK-DELETE THE `Invoice-derived` ROWS** (D108). 63 of them, $7,035,
+  nine brands. Wodka's ten were duplicates. **Blue Run's are load-bearing and 44
+  North's June 2025 ties at exactly 0.00 while holding $660 of them.** The test
+  is whether the work exists elsewhere in the portal, and only the operator's
+  workbook can answer it.
+- **A QUANTITY IS MONEY, AND A WRONG ONE LOOKS ORDINARY** (D113). Four found:
+  Pourhouse Lounge 12, Debauchery 3, Executive Cigar 6, Meg O'Malley's 6 —
+  $1,110 between them. Every one a real activity with a real HubSpot deal.
+  **The type and the quantity go wrong together**; two of the four were also
+  case sales filed as account visits.
+- **MONEY ON A VENUE-LESS ROW IS A SYMPTOM, USUALLY OF A NULL
+  `source_activity_type`** (D111). Starr Rum tied 7 of 7 while 63 of its 84
+  activities priced at $0.00, because the rate card keys on that column (D74)
+  and it was empty. Classify the real rows first, prove the brand total does not
+  move, and only then remove the placeholders.
+- **THE WORKBOOK IS NOT THE BILLING** (D110). Barrels were never entered in the
+  EOM workbooks at all. Blue Run's disagrees with QuickBooks on **6 of 14**
+  invoices and omits one entirely; Starr Rum's carries a November row for an
+  invoice that does not exist; the Coors workbook books **$69.56 of Blue Run's
+  barrel shipping to the wrong brand**. Use it for what happened, never for what
+  was billed.
+- **THE COORS POOL CANNOT GO INTO `invoice_recap`** (D114). That table is keyed
+  on one brand; those invoices belong to three, and both billing names are
+  deliberately unmapped. Loading them anywhere fabricates a ~$19,000 gap on a
+  pool that ties to −$81.09. Fix `canary()` first.
+- **SOME GAPS ARE BILLING, NOT WORK, AND SHOULD STAY** (D115). Card and
+  processing fees, early-payment discounts, balances carried to the next
+  invoice, and work billed a month late. Four of the Coors pool's nine months
+  differ from the portal by **exactly their discount and nothing else**. Wodka's
+  April/May pair is ±$150 for ever because invoice 3195 says so in its own line
+  description — **moving that row would date a real activity wrongly**.
+- **NEVER `disabled=<another widget>` INSIDE `st.form`** (D92). A form does not
+  rerun until submit, so that expression keeps the value it had at the start of
+  the run and the widget can never be enabled by clicking. It made the Rate
+  card's four money fields unusable from the day they were written. Drop the
+  form, use live widgets in a fragment. Checked by `test_admin_sql.py` now.
+- **OPEN THE PAGES, EVERY TAB — AND TYPE IN THEM.** D79: open every page. D89:
+  open every tab. **D92: opening a page is not USING it.** Three faults now have
+  been invisible to everything except a person interacting with the thing, and
+  D92 survived me opening that exact page twice in one session while working
+  directly above it.
+- **OPEN THE PAGES — AND EVERY TAB ON THEM. In a browser, every session.**
+  D89 is why the rule grew: `st.stop()` halts the WHOLE script run, not the tab
+  it sits in, and one inside the Venues merge tab had been killing "Edit a
+  venue" since it was written. The page opened fine and reported 336 venues.
+  Never `st.stop()` after `st.tabs()` — use `else:`. Nothing automated caught
+  it and nothing automated could: the fault is control flow, not SQL, so
+  `test_admin_sql.py` passes on the broken version.
+- **A venue's grade and owner are STAFF ONLY and are not on `venues`** (D88).
+  They live in `venue_grading` because `venues_select` lets a brand read any
+  venue row it relates to and the grant is table-wide — a column there is a
+  column a brand can `select *`. Do not "simplify" them onto the venue.
+- **`hubspot_owner_id` is NOT in `DEAL_PROPERTIES`**, so who created a deal is
+  not in this database at all — not even in the stored `payload`, because
+  HubSpot returns only the properties you ask for. Any ownership-from-HubSpot
+  work starts with a sync change.
+- **OPEN THE PAGES. Every one, in a browser, every session.** This is now the
+  highest-yield check in the project and it is not covered by anything else.
+  D74, D76 and D77 were found by the operator using a page; D79 found four more
+  in twenty minutes, two of them a month old, on the two pages the next session
+  was going to work in. **The admin's own front page had been raising an
+  exception since D73 while the handoff recorded the canary as verified** — it
+  had been verified by querying it, never by opening the app. Those are not the
+  same evidence.
+- **NEVER SAVE A PDF INTO THE WEBSITE REPO.** Its root IS the Netlify publish
+  directory, so a committed PDF is served at `ihospitality.vip/<name>`. Twelve
+  months of client invoices sat there untracked on 21 Aug. `*.pdf` is gitignored
+  now; the invoices live at `Hubspot/Invoice_year.pdf` and
+  `Hubspot/Invoice_June_july25.pdf`.
+- **A literal `%` in a query that passes params breaks the page, and a comment
+  counts** (D79). `lib.query`'s `params or None` only rescues the no-params
+  case. Spell the word out. `test_admin_sql.py` checks this now.
+- **Two `$` in one Streamlit markdown string renders as LaTeX** (D79). One is
+  fine, which is why it is easy to miss. Use a raw f-string and escape them.
+  Same test file.
+- **`create table if not exists` DOES NOTHING ON LIVE, including its
+  CONSTRAINTS** (D91). Two `rate_card` CHECK constraints were declared inside
+  one and had never existed on Supabase, while being real in every offline test
+  run — so the suite could not have caught it and did not. Anything added to a
+  table that already exists — column, default, or constraint — must be restated
+  as an `ALTER`. Seventh instance of D62.
+- **Editing a rate in the table RESTATES HISTORY** (D91). Sometimes that is
+  exactly right: a rate that was always wrong should be corrected everywhere. A
+  price CHANGE is a new row with a later `effective_from` instead. The grid
+  previews the money impact before saving, by applying the edit and asking
+  `v_activity_money` in a rolled-back transaction — do not replace that with
+  arithmetic in Python.
+- **Mileage pays out 100 percent and its $0.00 margin is CORRECT** (D91). Its
+  pay rate is set from its charge rate so they cannot drift. Do not read it as
+  a missing pay rate, and do not hide it from the at-cost list.
+- **CHECK PRICES AGAINST `v_activity_money`, NEVER AGAINST `rate_card` ROWS**
+  (D90). The charge and the pay for the same work need not sit on the same row —
+  a brand line can set the charge while `(all brands)` sets the pay. A check
+  that compared columns within a `rate_card` row found two lines worth $0 and
+  **missed 33 Wodka activities worth −$1,140, the largest instance of the exact
+  thing it was written to find.** The view already resolves the precedence the
+  way the billing does; re-implementing it is a second pricing implementation.
+- **Charge ≤ pay is a THIRD failure mode and has no flag on the activity**
+  (D90). `unpriced` and `uncosted` both mean data is missing. This one means the
+  data is present and says we work at or below cost. It cannot be flagged on the
+  row because it is not a fault — it is a price.
+- **A reimbursement earns nothing, and that is enforced in the view, not in the
+  data** (D78). Do not "simplify" the `is_expense` branch out of
+  `v_activity_money` — it is first in both CASE expressions so that no rate-card
+  line can reach it, and `04_money_test.sql` will fail if it goes.
+- **`uncosted` deliberately requires a non-zero charge.** Without that it flags
+  718 rows instead of 37, because every `n/c` type prices at zero and has no pay
+  line either. A warning nobody acts on is worse than none.
+- **The QuickBooks API blanks invoice service lines; the PDFs do not** (D70). A
+  $3,503 invoice returns four empty line objects and a subtotal, in a
+  single-invoice fetch as much as a bulk one. Invoice *totals* are complete.
+  Use `reconcile_invoices.py`; do not spend a session rediscovering this.
+- **Billed in arrears.** The invoice naming a work month is issued the month
+  after; `ACTIVITY DATE` states the work month, so no inference is needed.
+  `invoice_recap.month` is already work-month based — **do not shift it**. This
+  is also why the current work month can never tie to QuickBooks (D79).
+- **Aspen Green Feb–May 2026 is `source='uninvoiced'`** and correctly does NOT
+  tie to QuickBooks (D71). Deleting it would delete $2,000 of real revenue —
+  nearly done once already.
+- **44 North `recurring case` is paid but never charged**, so it is on no
+  invoice by design. Another expected non-match.
+- **Nothing in the admin auto-saves.** Both grids need the Save button beneath
+  them, and a refresh discards unsaved edits (D77).
+- **The column that moves money is `source_activity_type`, not the type label**
+  (D74). The rate card is keyed on the raw string.
+- **Base pay is never allocated to a brand** (D67).
+- **Coors Whiskey is a billing name covering Five Trail AND Barmen 1873.**
+  `reconcile_invoices.py` pools them; without that, every line on both sides
+  reads as a discrepancy. **Gin Lane 1751 ($6,661) is not in the portal at all.**
+- **Scope starts June 2025**, where the HubSpot data starts.
+- **THE STAGING ZONE COVERS DEALS, NOT VENUES OR BRANDS** (D83). `apply()`
+  upserts brands and venues DIRECTLY, before the staging zone is reached — no
+  review queue, no `hand_edited_at`, no conflict state. D64 is intact; its
+  scope is narrower than its name suggests.
+- **The account status is TWO LAYERS and they are easy to confuse** (D86/D87).
+  STORED by the trigger: non-depletion → `pitched`, depletion → `placed`,
+  reorder → `reordering`, off `is_depletion` and `is_reorder`. It only ever
+  advances. DERIVED at read time: `dormant` is 180 days quiet, computed in
+  `account_status_effective()` and **never stored**, so a visited account
+  un-dormants itself. Do not move it into the table and do not give it the
+  trigger's advance-only logic.
+- **DISPLAY `status`, COUNT `status_stored`** (D87). This is the one that will
+  catch you. Dormancy layers OVER the stored value, so any count or filter
+  written against the displayed status silently loses every account that has
+  gone quiet — 102 stocking pairs on the day it landed, out of the number brands
+  care about most. Both account views carry `status_stored` for exactly this.
+- **The reorder branch is FIRST in the trigger, on purpose.** Every reorder type
+  is also a depletion, so the other order sets `placed` and stops there for
+  ever — and `placed` looks entirely plausible for an account that reordered, so
+  nothing about the data would tell you.
+- **"The Wildflower" (Baldwin Park) and "Wildflower Sanford" are DIFFERENT
+  BARS**, 40 miles apart with different HubSpot ids (D86). The Baldwin Park row
+  reads `pitched` correctly — one drink list, no depletion. Do not merge them.
+- **Deleting an activity DESTROYS its photos** — `photos.activity_id` is
+  `ON DELETE CASCADE` (D85). The Duplicates page refuses for that reason and
+  now offers **Move photos to the row I am keeping** first. Move goes through
+  `move_activity_photos()`, never a bare UPDATE: a partial unique index on
+  `(activity_id, content_hash)` collides whenever both rows hold the same
+  image, which is the NORMAL case — 18 duplicate pairs carry photos.
+- **A pair can be marked "not a duplicate"** (D85). `case_sale` and
+  `tap_placement` are both depletions, so genuinely different work shows up as
+  a suspected duplicate. Dismissals are listed with their reason and reversible.
+- **THE PORTAL IS THE SOURCE OF RECORD NOW; HubSpot is an input** (D84). A
+  venue edited in the admin is stamped `hand_edited_at` and the sync refuses to
+  overwrite its city, filing what HubSpot wanted into
+  `staging.hubspot_venue_proposal` for the Venues page to resolve. This
+  reverses D59 for venue attributes — do not "fix it in HubSpot" for those any
+  more. `venues.city` was the ONLY field the sync could overwrite; brands were
+  never overwritable at all.
+- **Merging a venue that has a `hubspot_company_id` MUST record the alias**
+  (D82), or the next sync inserts the duplicate straight back — it pre-loads
+  venues by company id and creates one for any id it does not recognise.
+  `merge_venue()` handles it; do not merge venues with hand-written SQL.
+- **An activity type with 0 activities is a MERGE that worked, not lost data**
+  (D80). `merge_activity_type()` retires the source rather than deleting it, so
+  a future sync of the old raw string cannot recreate what you just merged away.
+  The Activity types page lists them separately and traces each to its survivor.
+- **Reconciliation and classification are different axes** (D80). The
+  reconciliation writes nothing; classification maps HubSpot's raw string to a
+  type. A row can reconcile perfectly and still be unclassified.
+- **`activities.notes` is on the classification grid now, and is still
+  internal** (D80). Safe only because the admin is staff-only. Do not copy that
+  query into anything a brand login can reach.
+- **A constraint or control that has never been exercised looks exactly like one
+  that works (D62).** Five instances on 21 Aug, and D78's expense exclusion was
+  a sixth — it was working only because nothing had tested it.
+- **Local Postgres is not Supabase, in both directions (D6).** On 21 Aug local
+  was the stricter one and caught a fresh-install bug live could not show.
+- **`market` is deliberately unused.** All venues carry NULL on purpose.
+
+---
+
+## Not yet tested by anything automatic
+
+- The landing loop in `sync_hubspot.py.apply()`, and the sync against live
+  HubSpot with the staging code. That run is the real first test.
+- **No end-to-end SAVE is covered by a test.** `test_admin_sql.py` checks the
+  admin's *source* for two render-time faults and `04_money_test.sql` checks the
+  money views, but nothing drives a form and asserts the row changed. Every save
+  bug so far has been found by a person clicking the button.
+- `reconcile_invoices.py` has no test; its expected non-matches live in code and
+  comments, not assertions.
+- The first real sync will likely re-promote the backfilled rows as state
+  `auto`. Expected and harmless — none are hand-edited.
+
+---
+
+## ⚠️ OPEN, 26 Aug 2026 — DAME MAS'S NINE COMMISSION MONTHS
+
+**Parked deliberately, not forgotten.** The operator asked for it to be hidden
+for now and picked up next session: *"Hide it for now. We will come back to
+that. Put it in the notes for our next session."*
+
+### What is actually wrong
+
+Nothing double-counts — that was checked and it is clean. The two pricing models
+are **mutually exclusive by month**:
+
+| | sale rows | what they charge | commission row |
+|---|---|---|---|
+| Jul 2025 – Mar 2026 | 58 | **$0.00** | $3,307.28 across 9 rows |
+| Apr 2026 → | 25 | **carries its own 10%** | none |
+
+From April 2026 the model is exactly what the operator described: *"We do get
+paid on case sales and bottle sales, just a percentage not a fixed price."*
+$16,577.30 of gross over 100 bottles — **$165.77 a bottle**, which sits properly
+between the $123.00 Reposado and the $210.75 Extra Añejo — charged at exactly
+10.0%.
+
+**The nine older months are a DATA GAP, not a pricing decision.** No per-venue
+depletion exists for them, so the invoice was billed off the distributor's whole
+monthly report and the portal books one row per month (D93). The individual
+sales are zeroed so the same money is not counted twice.
+
+### The number that settles what can and cannot be done
+
+| Jul 2025 – Mar 2026 | |
+|---|---|
+| gross the commission was billed on | **$33,072.75** |
+| bottles logged in the portal | **84** |
+| implied price per logged bottle | $393.72 — **not a price anyone has ever charged** |
+| 84 bottles even at the DEAREST SKU | $17,703 = **at most 54% of the gross** |
+
+**So the commission row is not a duplicate of those 84 sales — it covers roughly
+twice as much product.** Most of the difference is reorders that reached venues
+through the distributor's rep with no visit and nothing to log, which is D118's
+structure exactly.
+
+**DO NOT SPREAD THE COMMISSION ACROSS THE LOGGED SALES.** It would invent a
+per-bottle price *and* a per-venue attribution, pinning reorders at unvisited
+venues onto the handful that happened to be visited. D101 already bans inferring
+a unit price from a blended average, and the arithmetic above is why.
+
+### The real fix, for next session
+
+**Get Dame Mas's per-venue depletion reports for Jul 2025 – Mar 2026 from the
+distributor.** Loading them removes the problem on its own: D93's guard skips
+any month that already carries percentage-priced rows, so the commission row
+stops and every bottle sale picks up its own 10% — the model the operator
+expects. Nothing in the code needs changing for that to happen.
+
+### What was done in the meantime
+
+**The commission rows are hidden from the activity LISTS only** —
+`activity.html`, `brand.html` and `index.html` filter
+`activity_type_code = 'monthly_commission'` **in Postgres, before any limit**
+(client-side filtering would have broken the dashboard's `.limit(10)`, the same
+fault D122 describes for the gallery).
+
+**THE MONEY IS UNTOUCHED and this must stay true.** Dame Mas over the portal's
+default window still reads revenue **$14,036.78**, retainer $9,000.00, activity
+charge **$5,036.78** — of which **$2,576.63 is the hidden rows**. Revenue and
+margin come from `v_activity_money` and `v_brand_month_revenue`, which do not
+filter. If a future change makes those figures move, the filter has leaked out
+of the list and into the money.
+
+**Also removed: the "Value" column** on `activity.html` and `brand.html`. It
+read `activities.amount` — the gross the PRODUCT sold for — under a header that
+said "Value", and was blank on **1,166 of 1,238 rows (94%)** because only
+percentage-priced work has an amount at all. Operator: *"I don't like what it
+adds. I think instead if we saw how much we charged or how much we made that
+would be more useful, but we will make that decision another day."*
+**That decision is also open.** Note that a brand login reads **NULL** for
+charge and cost — `rate_card` is staff-only and `v_activity_money` is
+`security_invoker` — so showing a brand what it was charged is a schema and
+disclosure decision, not a column change. `brand.html` is staff-only and already
+shows Charge.
