@@ -3,7 +3,7 @@
 Written at the close of **6 Sep 2026**, local session with a live database.
 Earlier sessions are kept below, newest first, each marked superseded.
 
-## THE FLASH IS NOW SOMETHING THE PORTAL READS, AND JULY AND AUGUST ARE IN.
+## THE FLASH IS NOW SOMETHING THE PORTAL READS, AND JUNE TO AUGUST ARE IN.
 
 The session began as a data-integrity audit and turned into the reorder pipeline.
 Four PRs merged (#11 to #14), all deployed. Six decisions recorded, D165 to D170.
@@ -74,14 +74,47 @@ negative quantity. **D169.** The claim tab is an editable grid, not a picker.
 
 | | |
 |---|---|
-| Activities | 1,303 (1,294 excluding billing roll-ups) |
-| Venues | 453 |
-| Distributor mappings / rejections | 116 / 17 |
-| Activities created from the flash | 46 |
-| July 2026, 44 North | 24 rows, 40 cases |
-| August 2026, 44 North | 22 rows, 30 cases |
+| Activities (excluding billing roll-ups) | 1,331 |
+| Venues | 452 |
+| Distributor mappings / rejections | 125 / 17 |
+| Activities created from the flash | 64 |
+| 44 North cases, June / July / August | 49 / 44 / 37 |
 
-July reconciles exactly: the portal reads what the flash reads.
+Against **one** reorder in 44 North's entire history before the flash was read.
+
+---
+
+## Later the same evening
+
+**A page per contractor (D172).** `contractor.html?id=`, reached by clicking a
+name on the pay page. Activities, billed to brands, owed to them, and the
+difference, over a month range. It gates itself: the view joins `contractors`,
+whose RLS is `is_staff()`, so a contractor reading it gets zero rows. The roster
+above it shows CURRENT people only and says how many are hidden.
+
+⚠️ **A negative difference is often correct.** Eric's March billed $10.00 and
+owed $25.00. Reorders are carded $0.00 charge and $5.00 pay (D118) and the pay
+is modelled even where nobody draws it (D171).
+
+**Three faults in the flash import, found by using it (D173).** The default was
+backwards, the grid threw away every type change, and a re-import could not
+correct a type. All three fixed, and the default is now measured against all
+three real flash files rather than asserted.
+
+⚠️ **The one that cost the most time was not a code fault**: the import ran at
+23:10 and the first fix landed at 23:11, so the operator was testing a fix that
+did not exist yet, on an admin started before it. **Restart the admin after any
+page change.**
+
+**Secrets Resort merged into Secrets Hideaway (D174).** They were one property
+under two rows, and only one carried the customer number, so June held 6 cases
+against a flash of 3. That is a pattern, not an incident: any venue holding
+cases without a customer number is invisible to the reconciliation and its cases
+get proposed a second time.
+
+**Also done:** `.gitignore` now blocks `proposals/`, `*.docx` and `*.xlsx` from
+a repo whose root is the publish directory. Local `main` was reset to origin and
+both repos cleaned to three branches each.
 
 ---
 
@@ -130,9 +163,9 @@ error. Phil owns 41 of the 46; Nicholas owns 2.
 
 None of these are bugs in the pipeline. They are rows to rule on.
 
-1. **39 HubSpot deals staged and never promoted**, 9 of them older than Aug 2026
-   and reaching back to Nov 2025, including billable case sales. Invisible to
-   every revenue and depletion figure until promoted.
+1. **19 HubSpot deals staged and never promoted** (was 39; the operator worked
+   the queue down). Invisible to every revenue and depletion figure until
+   promoted.
 2. **13 activities whose quantity disagrees with HubSpot with no hand-edit
    recorded.** Wodka 2025-12-16 reads 12 in HubSpot and 1 in the portal; Blue Run
    the same date reads 6 and 1. One date differs by a month, which moves revenue
@@ -210,8 +243,8 @@ RESOLVED**: the staging correction overlay is now D167, and `closed` keeps D159.
 >
 > Then ask which of these he wants:
 >
-> **A - the 39 staged deals**, 9 of them older than August and including case
-> sales. They are invisible to every revenue figure until promoted.
+> **A - the 19 staged deals** still awaiting a decision. They are invisible to
+> every revenue figure until promoted.
 >
 > **B - the 13 quantity disagreements** with HubSpot. Needs his ruling on which
 > number is authoritative before anything is changed.
