@@ -7192,3 +7192,120 @@ A footnote on method: an ad-hoc check of the same numbers written as
 one Dame Mas row has a NULL `source_activity_type` and `NULL <> 'x'` is NULL,
 not true. The flag test has no such hole. **Prefer a flag to a string
 comparison, and never filter on a nullable column with `<>`.**
+
+---
+
+**D167 — FIX IT BEFORE IT LANDS. A CORRECTION SITS BESIDE THE STAGED DEAL, NEVER
+INSIDE IT, BECAUSE EDITING HUBSPOT'S ROW DESTROYS THE ZONE IT EDITS.**
+Asked for by the operator, 1 Sep 2026, on being shown that the queue was
+read-only: *"so I thought the idea was to have a staging and landing area. I
+would want to fix it before it gets to the landing not put it in landing with
+clean data before it needs fixing."*
+
+**HE WAS READING THE DESIGN'S OWN WORDS BACK AT IT.** Section 8 of `schema.sql`
+says the point is to *"separate the LANDING ZONE from the CLEAN ZONE"*, and
+`promote.py`'s docstring said the opposite just as plainly: *"WHAT PROMOTION IS
+NOT. It does not clean anything… Cleaning is what the operator does in the admin
+grid, afterwards."* Staging was built as a faithful mirror of HubSpot with a
+yes/no decision, and the cleaning step landed on the other side of the line from
+where the name puts it. The gap was between the two documents, not in his head.
+
+**THE OBVIOUS FIX IS A TRAP, AND IT IS THE WHOLE REASON THIS TABLE EXISTS.**
+Making the columns of `staging.hubspot_deals` editable is the smaller change and
+destroys the zone in three ways at once:
+
+  * `content_hash` is maintained by a BEFORE INSERT OR UPDATE trigger, so an
+    edit recomputes the hash **from the edit**. The row then reads `in_sync`
+    with a value HubSpot never sent and the change-detection baseline is gone.
+  * `apply()` upserts every typed column **unconditionally**, so the next pull
+    overwrites the edit.
+  * And nothing would ask. `conflict` requires `hand_edited_at`, which lives on
+    the ACTIVITY; an unpromoted row has none, so it resolves to `new` again
+    carrying HubSpot's values with the correction simply gone.
+
+That is **D64's original bug re-created one table earlier**, and it would
+present a month later as "my fix didn't stick", on rows nobody is looking at.
+
+So the ruling lives in `staging.hubspot_deal_correction`, keyed on the deal,
+and `promote()` lays it over with `coalesce`. HubSpot's testimony stays
+byte-exact and keeps hashing to the same thing. **Same shape as
+`venue_hubspot_alias` (D81)**: override an import without editing the import.
+
+**THE VENUE IS A `venue_id`, NOT A NAME**, and getting this wrong would have
+been invisible. `_resolve_venue()` prefers the HubSpot company id over the name,
+so a correction supplying a NAME while HubSpot still supplied an ID would be
+silently ignored — the id would win and the row would land at the venue the
+correction was written to move it off. A uuid cannot be reinterpreted. It also
+means a correction can only point at a venue that already exists, which is
+right: creating one from a name is `_resolve_venue`'s job and guessing is D81's.
+
+**`based_on_hash` RECORDS THE VALUE, NOT THE FACT** — the same rule as
+`promoted_hash` and `rejected_hash`. A correction made about facts HubSpot has
+since changed is a DISAGREEMENT, so `v_review_queue` raises it as a `conflict`
+rather than letting the sync re-apply a ruling somebody made about a different
+deal. `promote()` re-bases it, because promoting IS re-affirming the correction
+against what is in front of you; without that, a corrected row would ask for
+ever and the queue would become noise people scroll past (D64).
+
+**ONLY FIELDS THAT ACTUALLY DIFFER become a correction.** Writing every field
+would turn "I changed the type" into a ruling that also pins the date and the
+quantity, and a later HubSpot fix to one of those would be overridden for ever
+by a value nobody chose.
+
+**NULL MEANS "NO CORRECTION", AND THAT HAS A COST WORTH STATING**: a correction
+cannot express "set this to nothing". Clearing a venue stays a human action
+taken after promotion — which is what D158 already requires of the sync.
+
+**PROMOTE-THEN-FIX IS NOT WRONG, AND ITS REAL COST IS NOT WHAT IT LOOKS LIKE.**
+The brand seeing a wrong row for a few minutes is not the problem.
+`sync_brand_venue_status()` is: it fires on insert AND on `activity_type_id`
+update, and **only ever advances**. Correcting upward (visit → sale) re-fires
+and advances correctly; correcting **downward** hits `else
+brand_venue_status.status` and leaves the account permanently `placed`, with
+nothing to fix it later (D86/D113). Checked against the 41 waiting deals before
+recommending anything: every correction in that batch was upward or neutral, so
+nothing was at stake in the queue while the design was decided.
+
+**⚠️ `resolve_activity_type()` IS A WRITER, AND IT LOOKS LIKE A READ.** A query
+written to LIST the rate card's vocabulary called it to resolve each string and
+**created nine `activity_types` rows** — it creates and flags anything
+unrecognised, which is the behaviour `promote()` wants and a report never does.
+Nine junk types, nine aliases, zero activities, all removed. Nine rate-card
+strings price but do not classify (`well program` $175, `program (custom)` $198,
+`hourly labor` $25, `disc case sale`, `case incentive`, `bottle incentive`,
+`market favors`, `barrel prep pk`, `promo specialist lead`), which is why they
+were resolvable at all — that is D111's shape and still open.
+
+**ALSO FIXED, FOUND BY READING RATHER THAN BY FAILING**: `st.stop()` on an empty
+grid halted the WHOLE script run, so any brand/month with nothing promoted lost
+the bottle calculator AND "Add a missing activity" — which is exactly what a
+person wants when a month is empty. `else:` now. **Same trap as D89**, in the
+same file, four days after D89 was written down.
+
+**PROVED IN PRODUCTION THE SAME AFTERNOON, ON THE OPERATOR'S OWN RULING.**
+Wildflower Sanford arrived from HubSpot as `market favors n/c` at **$0.00**; he
+ruled it **`tap maintenance`** and it landed at **$50.00**. That is the whole
+feature in one row — the type was the point and the money followed — and it is
+the only kind of proof that counts here, because the ten rolled-back checks
+could only ever show the mechanism, never that a person could reach it. He
+cleared 41 → 25 of the queue the same afternoon with it, charge $37,963.93 →
+$38,558.93.
+
+⚠️ **A CORRECTION RE-APPLIES ON EVERY PROMOTE, WHICH IS THE POINT AND ALSO THE
+THING TO REMEMBER.** The Wildflower correction is still on file after promotion.
+That is what stops a later re-sync quietly restoring HubSpot's `market favors
+n/c` — but it also means a correction is a standing instruction, not a one-time
+edit. Removing it is a button on the row.
+
+**AND THE LESSON THAT COST THE MOST TODAY: DO NOT INFER THE OPERATOR'S RULING.**
+The Wildflower deal titled *"New 44N Sangria on tap build"* was read as
+`tap cocktail` from its title. The operator: *"wildflower is not a tap
+placement. It was miscategorized thats what prompted this entire discussion."*
+He ruled it **`tap maintenance`** — which is `is_depletion = false`, where all
+three tap PLACEMENT strings are depletions and would have advanced the account
+to `placed`. Servicing a tap is not product moving. A confident inference from a
+deal title is exactly the guess D81 forbids the matcher from making, and the
+same rule applies to whoever is holding the keyboard.
+
+**Numbered D167, not D159.** This was written on 1 Sep 2026 and sat unpushed on a local `main` while a session that had branched from before it took D159 for the `closed` lifecycle ruling on 2 Sep, then ran on through D166. Two different decisions carried one number for five days. The work itself shipped regardless: `staging.hubspot_deal_correction` is live and holds a row, and `db/test/12_correction_test.sql` passes. Only the record was missing.
+
