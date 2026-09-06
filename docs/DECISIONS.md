@@ -7120,3 +7120,33 @@ Three more traps, all found by testing rather than reading:
 
 A `QUERY` spills into the cells to its right and cannot spill into merged ones,
 so it runs off-screen in a hidden column and the visible rows read from it.
+
+---
+
+**D165 - POSTGREST CAPS A RESPONSE AT 1,000 ROWS, AND THE CLIENT CANNOT LIFT IT.**
+
+Four portal pages read a view unbounded and summed it in the browser, so once
+the view crossed 1,000 rows they were totalling part of the data with no error
+anywhere. `v_activity_money` and `v_brand_activity_log` are at 1,255, so
+`business.html`, `pay.html`, `rate-card.html` and `activity.html` were each
+working from **1,000 of 1,255 activities**.
+
+Measured, not assumed. A plain select answers `Content-Range: 0-999/1255`, and
+it still answers `0-999` with an explicit `limit=2000` and with a
+`Range: 0-1999` header. Only `offset=1000` reaches the rest. **The cap is
+server-side; a bigger limit is not a fix.**
+
+The admin never had this because it talks to Postgres through psycopg. That is
+why the two surfaces disagreed and **the portal was always the low one** - which
+reads as a reconciliation gap rather than as a bug, and is how it survived.
+
+`selectAll(build, tiebreak)` in `portal.js` pages until a short page comes back.
+It takes a FACTORY because a PostgREST builder is thenable and single-use, so
+the same object cannot be re-ranged. The tiebreak is REQUIRED, not optional: a
+`.range()` over an unordered result is not a stable page (D122), and forgetting
+the order fails silently in the same direction as the bug it fixes.
+
+⚠️ **Three more reads are correct only because they are still small** -
+`v_my_activity_pay` (773 for Phil King), and `v_venue_performance` and
+`v_brand_venue_counts` (692 each). They break silently at 1,000, and the pay one
+under-reports a contractor's own earnings when it does.

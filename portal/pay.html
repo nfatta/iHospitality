@@ -64,7 +64,8 @@
 
   <script type="module">
     import { db, requireAuth, renderShell, render, esc, isStaff,
-             fmtDate, fmtMonth, fmtNum, money, sortableTable, guardStaffPage} from './portal.js';
+             fmtDate, fmtMonth, fmtNum, money, sortableTable, guardStaffPage,
+             selectAll } from './portal.js';
 
     // How many times a year each cadence pays. EXACT for semimonthly and
     // monthly; an AVERAGE for weekly and biweekly, which land an extra time in
@@ -96,7 +97,7 @@
         db.from('contractor_pay').select(
           'contractor_id, base_pay, pay_frequency, effective_from, effective_to, note'),
         db.from('v_contractor_month_cost').select('contractor, month, monthly_equivalent'),
-        db.from('v_activity_money').select('cost, month'),
+        selectAll(() => db.from('v_activity_money').select('cost, month'), 'activity_id'),
       ]);
 
       const bad = people.error || pay.error || monthly.error || piece.error;
