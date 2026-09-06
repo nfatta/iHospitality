@@ -57,6 +57,20 @@
       <div id="piece"></div>
     </div>
 
+    <div class="panel">
+      <div class="panel-head">
+        <h2>One person, one period</h2>
+        <span class="hint">What they did, and what it earned them</span>
+      </div>
+      <div class="filters">
+        <select id="who" aria-label="Contractor"></select>
+        <input type="date" id="from" aria-label="Start date">
+        <input type="date" id="to" aria-label="End date">
+      </div>
+      <div id="person-stats"></div>
+      <div id="person"></div>
+    </div>
+
     <p class="caveat" id="foot"></p>
   </main>
 
@@ -92,15 +106,21 @@
          and authenticated and gated behind is_staff(), so this page cannot leak
          to a brand login even if every line below were wrong. Confirmed by
          impersonation: a brand user reads 0 rows from both. */
-      const [people, pay, monthly, piece] = await Promise.all([
+      const [people, pay, monthly, piece, perActivity] = await Promise.all([
         db.from('contractors').select('id, name, is_active, note').order('name'),
         db.from('contractor_pay').select(
           'contractor_id, base_pay, pay_frequency, effective_from, effective_to, note'),
         db.from('v_contractor_month_cost').select('contractor, month, monthly_equivalent'),
         selectAll(() => db.from('v_activity_money').select('cost, month'), 'activity_id'),
+        // Paged, not bounded: this view is already 1,135 rows and PostgREST
+        // caps a response at 1,000 with no error (D165).
+        selectAll(() => db.from('v_contractor_activity_pay').select(
+          'contractor, activity_date, brand_name, venue_name, activity_type, '
+          + 'quantity, pay, unpriced'), 'activity_id'),
       ]);
 
-      const bad = people.error || pay.error || monthly.error || piece.error;
+      const bad = people.error || pay.error || monthly.error || piece.error
+               || perActivity.error;
       if (bad) {
         render(el, { error: bad });
       } else {
@@ -220,6 +240,88 @@
         const pieceRows = Object.entries(pieceBy)
           .map(([month, cost]) => ({ month, cost, base: byMonth[month]?.total ?? null }))
           .sort((a, b) => b.month.localeCompare(a.month));
+        // ONE PERSON, ONE PERIOD. The base pay above answers "what is the
+        // standing cost"; this answers "what do I owe them for what they did".
+        // Both are needed and they are paid on different clocks -- Eric and
+        // Nicholas are semimonthly, Phil is weekly -- so the two are shown
+        // apart rather than added into a single figure that would be wrong for
+        // somebody.
+        //
+        // v_contractor_activity_pay gates itself: it joins `contractors`, whose
+        // RLS is is_staff(), and the view is security_invoker, so a contractor
+        // reading it gets zero rows rather than a colleague's earnings (D137).
+        // Verified by impersonation with a control: staff 1,135 rows,
+        // contractor 0, and that same contractor still reads 153 of their own
+        // through v_my_activity_pay.
+        const earned = perActivity.data || [];
+        const roster = [...new Set(earned.map(r => r.contractor))].sort();
+        const who = document.getElementById('who');
+        who.innerHTML = roster.map(p => `<option>${esc(p)}</option>`).join('');
+
+        // Default to the current month, from the DATA rather than from
+        // new Date(): the portal's months lag the calendar and an empty range
+        // on the first of a month is a bug that arrives on a date (D155).
+        const dates = earned.map(r => r.activity_date).filter(Boolean).sort();
+        const last = dates[dates.length - 1] || new Date().toISOString().slice(0, 10);
+        const from = document.getElementById('from');
+        const to = document.getElementById('to');
+        from.value = last.slice(0, 8) + '01';
+        to.value = last;
+
+        function drawPerson() {
+          const name = who.value;
+          const rows = earned.filter(r => r.contractor === name
+            && (!from.value || r.activity_date >= from.value)
+            && (!to.value || r.activity_date <= to.value));
+
+          const pay = rows.reduce((t, r) => t + Number(r.pay || 0), 0);
+          // Counts rows earning an UNKNOWN amount, which is `pay is null` --
+          // not `unpriced`. A row can be priced to the brand and still carry no
+          // pay rate, and that is the one D78 says overstates margin.
+          const nopay = rows.filter(r => r.pay == null).length;
+          document.getElementById('person-stats').className = 'stat-grid';
+          document.getElementById('person-stats').innerHTML = `
+            <div class="stat-card"><span class="num">${fmtNum(rows.length)}</span>
+              <span class="lbl">Activities</span></div>
+            <div class="stat-card"><span class="num">${money(pay)}</span>
+              <span class="lbl">Earned on the work</span>
+              <div class="meta">${nopay ? fmtNum(nopay) + ' with no pay rate' : 'all priced'}</div></div>
+            <div class="stat-card"><span class="num">${fmtNum(
+              new Set(rows.map(r => r.venue_name)).size)}</span>
+              <span class="lbl">Venues</span></div>
+            <div class="stat-card"><span class="num">${fmtNum(
+              new Set(rows.map(r => r.brand_name)).size)}</span>
+              <span class="lbl">Brands</span></div>`;
+
+          if (!rows.length) {
+            render(document.getElementById('person'), { empty: {
+              title: 'Nothing in that range',
+              body: 'Widen the dates, or pick another person.' } });
+            return;
+          }
+          sortableTable(document.getElementById('person'), rows, [
+            { head: 'Date', always: true, nowrap: true,
+              sortValue: r => r.activity_date,
+              get: r => esc(fmtDate(r.activity_date)) },
+            { head: 'Brand', get: r => esc(r.brand_name) },
+            { head: 'Venue', cls: 'venue', get: r => esc(r.venue_name) },
+            { head: 'What', get: r => esc(r.activity_type) },
+            { head: 'Qty', cls: 'num',
+              value: r => Number(r.quantity),
+              get: r => r.quantity ? fmtNum(r.quantity) : '<span class="muted">-</span>' },
+            // NULL is not zero. An unpriced row earns an unknown amount, and
+            // showing $0.00 for it is the lie portal.js's money() would tell.
+            { head: 'Earned', cls: 'num', always: true,
+              value: r => Number(r.pay || 0),
+              get: r => r.pay != null ? money(r.pay)
+                                      : '<span class="muted">no pay rate</span>' },
+          ], { sort: 'Date', dir: 'desc' });
+        }
+        who.addEventListener('change', drawPerson);
+        from.addEventListener('change', drawPerson);
+        to.addEventListener('change', drawPerson);
+        drawPerson();
+
         sortableTable(document.getElementById('piece'), pieceRows, [
           { head: 'Month', always: true, nowrap: true, get: r => esc(fmtMonth(r.month + '-01')),
             sortValue: r => r.month },
