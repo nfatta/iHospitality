@@ -7540,6 +7540,16 @@ so the operator was testing a fix that did not exist yet, on a server started
 before it. When a fix cannot be reproduced, check the clock on both before
 looking anywhere else.
 
+⚠️ **AND A RERUN DOES NOT RELOAD AN IMPORTED MODULE.** The very next change
+proved it: adding `Group.bought_before` to `flash_report.py` and calling it from
+the page raised `AttributeError: 'Group' object has no attribute
+'bought_before'` on a page whose own file was already current. Streamlit re-reads
+the PAGE on every rerun; an imported module is cached in `sys.modules` and is
+not, so the new page ran against the old class. The code on disk was correct and
+passed its tests throughout. **Restart the admin after touching anything that is
+imported** -- `flash_report`, `lib`, `promote` -- because a Rerun cannot fix it
+and the error points at the change rather than at the stale process.
+
 ---
 
 **D174 - A VENUE WITH NO CUSTOMER NUMBER IS INVISIBLE TO THE FLASH, AND ITS CASES GET PROPOSED TWICE.**
