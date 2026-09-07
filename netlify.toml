@@ -1,0 +1,25 @@
+# Netlify build settings.
+#
+# THERE IS NO BUILD. This repo is plain static HTML with no npm and no build
+# step (a locked decision), so Netlify's only job is to publish the directory.
+# The "build" still costs a minute of the account's allowance every time it
+# runs, and the allowance is finite.
+
+[build]
+  # ⚠️ EXIT 0 MEANS SKIP. Netlify inverts what a shell reader expects: the
+  # ignore command returning SUCCESS cancels the build, and returning FAILURE
+  # lets it proceed. Read that twice before editing the line below.
+  #
+  # `git diff --quiet` exits 0 when nothing differs, so this reads as: "if
+  # nothing OUTSIDE docs/ and CLAUDE.md changed, there is nothing to publish --
+  # skip." Those two paths are the internal documents, and they are force-404'd
+  # by `_redirects` anyway, so a change to them cannot alter one servable byte.
+  #
+  # Measured against a real day rather than assumed: of twelve merges on
+  # 6 Sep 2026, five were documentation only and would have skipped. It applies
+  # to deploy previews too, so a docs-only PR costs nothing at either end.
+  #
+  # ⚠️ IT FAILS SAFE. On the first build of a branch $CACHED_COMMIT_REF is
+  # unset, the command errors, and Netlify builds -- which is the right way for
+  # this to break. A rule that skipped on error would silently stop deploying.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':!docs/**' ':!CLAUDE.md'"
