@@ -107,6 +107,45 @@ puts the portal on the live domain.
 
 ---
 
+## 11 Sep 2026 (local) — Dame Mas joins the Flash page
+
+Nothing deployed; the work is in `Hubspot/portal_seed/` and is uncommitted.
+Decisions D175–D183.
+
+**Built.** A second depletion pipeline for the shape Dame Mas sends — their own
+export of the Breakthru book, which carries no customer number, counts bottles
+rather than cases, puts money on every row, and holds this month and last year
+side by side. It could not reuse `flash_month`: making `customer_no` nullable
+would dismantle the rule the 44 North and Wodka side rests on (D175). Three new
+tables, a parser, a matcher, and a four-tab body on the existing Flash page.
+
+**The operator picks the brand and uploads as before; the file decides which
+body runs.** Sniffing the header beats routing on the brand name, which would
+hand a changed file to a parser that half-understands it (D181). Checked against
+all six stored flashes: no misroutes, flash path untouched.
+
+**What it closed.** August 2026 held **4 bottles** of Dame Mas in the portal
+against **125** on the report. Reorders reach the venue through the rep with no
+visit, so nothing ever created the activity. Nine accounts are now linked,
+priced and assigned to a contractor: 34 bottles, $5,901.00, **charge $590.13,
+pay $472.08**.
+
+**The wrong turn, recorded because it cost most of the session.** The page was
+first built as a commission calculator. The rate card had been charging 10% and
+paying 8% on `bottle sale` / `bottle reorder` for a year — eighteen rows,
+$1,657.75 — so it was a second answer to a settled question, and it left the
+missing activities exactly where it found them. Replaced with the reconciler
+after the operator said *"look at how the 44N works, I want it like that"*
+(D177).
+
+⚠️ **Open, and first on the list.** The "agrees but earns nothing" check keys on
+`amount is null` and on case-typed rows that disagree on volume. Both miss the
+real case: `Seagate Beach Club` had the right bottles, the right amount, and
+charged $0.00 because `1st case sale` carries no percentage. Key it on
+`v_activity_money.charge_pct is null` instead (D178, D179).
+
+---
+
 ## 2 Sep 2026 (local) — the July scorecard, and reconciling every 44 North account
 
 Nothing deployed, no build credit spent. The work is in the operator's Google

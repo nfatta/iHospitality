@@ -1,7 +1,141 @@
 # HANDOFF - start here
 
-Written at the close of **6 Sep 2026**, local session with a live database.
+Written at the close of **11 Sep 2026**, local session with a live database.
 Earlier sessions are kept below, newest first, each marked superseded.
+
+## DAME MAS NOW GOES THROUGH THE FLASH PAGE, AND AUGUST BILLS $590.13.
+
+The task was not in the handoff: Dame Mas sends a depletion report in a format
+that is nothing like the Breakthru EOM flash 44 North and Wodka arrive as, and
+it needed to reach the portal. Nine decisions recorded, **D175 to D183**. Nothing
+committed or pushed — the repo is dirty and the work is on disk.
+
+### What it is, and why it could not reuse the flash
+
+| flash (44N, Wodka) | Dame Mas |
+|---|---|
+| customer no `700xxxxxx`, NOT NULL | **no account number at all** |
+| cases | **bottles**, plus a 9-litre equivalent |
+| MTD / LYMTD / FYTD / FLYTD | bottles, did-buys, PODs, **net price** |
+| stated total **>** sum of rows | stated total **==** sum of rows, to the cent |
+| one month per file | **this month and last year in one row** |
+
+Same distributor underneath — Breakthru — but this is the *supplier's* export of
+that book, not the distributor's. See D175.
+
+### The operator picks the brand and uploads; the FILE picks the body
+
+`11_Flash.py` sniffs the upload. A flash goes down the page as it always has; a
+supplier outlet report is handed to `depletion_page.render()`. Routing on the
+brand name was rejected — a brand that changed what it sends would be handed to
+a parser that half-understands it, and the failure would be wrong numbers rather
+than an error (D181). Verified against all six stored flashes plus the Dame Mas
+export: **no misroutes**. The flash path is untouched.
+
+### Four tabs, the same as 44 North, in bottles
+
+1. **What we recorded** — ours against the report: over, short, returns
+2. **On the report, not in the portal** — tick, pick a type, press → writes the
+   activities with `quantity` **and `amount`**, plus the contractor link
+3. **Accounts we do not hold** — link to a venue, create it, or rule it not ours
+4. **Agrees** — and it names the rows that agree and still bill nothing
+
+### The money was already solved and the first build missed it
+
+The page was first built as a **commission calculator** and that was wrong twice
+over. `rate_card` had been carrying Dame Mas `bottle sale` / `bottle reorder` at
+**charge_pct 0.1000 / pay_pct 0.0800** for a year; eighteen rows had billed
+$1,657.75 through it. And the calculator left the real problem untouched:
+**August held 4 bottles of Dame Mas in the portal against 125 on the report.**
+
+The operator's correction was *"look at how the 44N works, I want it like that"*.
+A `depletion_commission_rate` table was created, then dropped unused the same
+session. D177.
+
+### August 2026, closed out
+
+Nine accounts, all linked, all priced, all with a contractor:
+
+| | |
+|---|---|
+| Bottles | 34 |
+| Amount | $5,901.00 |
+| **Charge** | **$590.13** |
+| **Pay** | **$472.08** |
+
+($590.13 rather than $590.10 because the rate card bills row by row and each
+row rounds. That is correct.)
+
+### ⚠️ FIX THIS FIRST — the earns-nothing check is looking at the wrong thing
+
+Tab 4 flags rows that **agree on volume and bill nothing**, which is real:
+`Phyre Saloon` and `Seagate Beach Club` both matched the supplier to the bottle
+and both charged $0.00, $133.50 between them (D179). But the *diagnosis* is
+incomplete in two ways and the operator hit both:
+
+- **Tab 1's case-type warning only inspects rows that DISAGREE on volume.**
+  `Seagate` was `1st case sale` with the right bottle count (6 = 6), so it never
+  tripped the warning — and still earned nothing, because that rate card line
+  prices at zero while the 10% lives on `bottle sale` / `bottle reorder`.
+- **Amount is not the test.** A row can have the right bottles and the right
+  amount and still resolve to a rate card line with no percentage.
+
+**The test should be whether the row resolves to a percentage rate at all**, not
+whether it is case-typed and not whether `amount` is null. Query
+`v_activity_money` for `charge_pct is null and charge = 0` on depletion rows and
+name those. The operator fixed the August instance by editing the rate card so
+`case sale` reads 10%; the page still would not have told him.
+
+### What else is worth knowing
+
+- **`EXECUTIVE CIGAR SHOP & LOUNGE` is two stores.** Melbourne, and Sanford —
+  which the portal calls **`Barrel & Blend`**. Operator-confirmed. This is the
+  case that forced the address key (D176).
+- **`PESCADO SEAFOOD GRILL` scores a strong match and is NOT ours.** Name, city
+  and six logged activities all agree. It is the standing proof that the matcher
+  proposes and never adopts (D182).
+- **The contractor default concentrates a month.** Eight of the nine August rows
+  defaulted to Phil King, one to Eric Anderson, and the operator went looking for
+  the new work under Eric's login first. Working as designed, worth expecting.
+- **Tab 2 offers bottle types only.** A bottle count under `case_sale` is
+  multiplied by six — `Phyre Saloon` was entered by hand as `case_sale` qty 2 and
+  read as 12 bottles against the supplier's 2 (D178).
+- **No `bottle_return` type exists**, only `case_return` at -1 case. A negative
+  month therefore has no entry path in tab 2 and lands in tab 1 for a person.
+  Worth adding the type if returns become common.
+
+### Files
+
+New, in `Hubspot/portal_seed/`:
+
+| | |
+|---|---|
+| `depletion_report.py` | parser + `reconcile()`. Pure, no DB |
+| `depletion_match.py` | proposes venue matches. Read-only |
+| `depletion_store.py` | load, rulings, CLI. Dry run by default |
+| `depletion_page.py` | the Flash page's body for this shape. **A module, not a page** |
+| `test_depletion_*.py` | 4 files |
+
+Changed: `admin/pages/11_Flash.py` (routing block only), `db/schema.sql`
+(+3 tables, applied), `README.md`.
+
+**491 passed, 1 skipped.** `depletion_page.py` is a sibling module, so editing it
+needs a **full Streamlit restart** — this cost time twice today.
+
+### THE NEXT PROMPT
+
+> Fix the earns-nothing check in `depletion_page.py`. It currently flags
+> depletion rows whose `amount` is null, and warns separately about case-typed
+> rows that disagree on volume. Both miss the real case: a row that agrees on
+> bottles, carries an amount, and still resolves to a rate card line with no
+> percentage — `Seagate Beach Club` was `1st case sale` at $1,001.25 and charged
+> $0.00. Key the check on `v_activity_money.charge_pct is null` for depletion
+> rows instead, and drop the case-type heuristic. Then commit: the repo is dirty
+> with the whole Dame Mas build and nothing has been pushed.
+
+---
+
+## ⚠️ SUPERSEDED - the 6 Sep 2026 session.
 
 ## THE FLASH IS NOW SOMETHING THE PORTAL READS, AND JUNE TO AUGUST ARE IN.
 

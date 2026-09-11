@@ -7575,3 +7575,220 @@ invisible to the reconciliation, and its cases will be proposed again under
 whichever venue does hold the number. The Flash page's third tab has the bucket
 for it -- *our cases at a venue with no customer number* -- and it is worth
 reading BEFORE accepting anything on tab 2.
+
+
+---
+
+**D175 - THE SUPPLIER'S OUTLET REPORT IS A SECOND SHAPE OF DEPLETION DATA, AND IT GETS ITS OWN TABLES.** ✅ operator-confirmed 11 Sep 2026
+
+Dame Mas sends their own monthly export of the same Breakthru book that 44 North
+and Wodka arrive as an EOM flash. It was tempting to widen `flash_month` to hold
+both. Almost nothing carries across:
+
+| flash | this report |
+|---|---|
+| customer no (`700xxxxxx`), digits, NOT NULL | no account number at all |
+| cases | bottles, plus a 9-litre equivalent |
+| MTD / LYMTD / FYTD / FLYTD | bottles, did-buys, PODs, net price |
+| stated total **>** sum of rows | stated total **==** sum of rows, to the cent |
+| one month per file | this month **and** last year in one row |
+
+Making `flash_month.customer_no` nullable to fit this in would dismantle the one
+rule the 44 North and Wodka side rests on -- that a name is never a key -- for
+the sake of a brand that has no numbers to key on. So `depletion_month`,
+`depletion_month_total` and `depletion_account_ruling` sit beside the flash
+tables and `flash_month` is untouched.
+
+**The alternative considered and rejected:** one parameterised parser. It would
+have been two functions wearing a trenchcoat, and the shared code would have
+been the part where the two formats agree, which is the header banner.
+
+---
+
+**D176 - THE ADDRESS IS THE KEY, BECAUSE NOTHING BETTER EXISTS.** ✅ operator-confirmed 11 Sep 2026
+
+This report carries no customer number. The name is not a key and the file
+proves it: `EXECUTIVE CIGAR SHOP & LOUNGE` appears twice, Melbourne and Sanford,
+and the operator ruled **both** ours -- Sanford being the venue the portal calls
+`Barrel & Blend`. `TOTAL WINE & MORE` appears six times. A name-keyed store keeps
+one row and silently drops the rest.
+
+Address is unique across all 48 rows of August 2026 and is the only field that
+is. What it costs, stated plainly: a restated address arrives as a new outlet.
+`STE 1108` one month and `#1108` the next are two keys. That is survivable only
+because an unrecognised key is **reported** rather than quietly accepted.
+
+Normalisation is deliberately shallow -- case, whitespace, punctuation. No
+street-suffix rewriting, because `ST` is both Street and Saint and guessing which
+merges two real addresses into one.
+
+`depletion_account_ruling` is therefore this brand's `venue_distributor_account`:
+a row with a venue is a link, a row with `is_ours` false is a rejection, and no
+row at all is an open question. **The link is the ruling** -- there is no
+separate ours/not-ours flag, exactly as on the flash side.
+
+---
+
+**D177 - NO SECOND COMMISSION TABLE. THE RATE CARD ALREADY DOES IT.** ✅ operator-confirmed 11 Sep 2026
+
+A `depletion_commission_rate` table was written, applied, and then dropped
+unused within the same session. `rate_card` had been carrying Dame Mas
+`bottle sale`, `bottle reorder` and `monthly commission` at **charge_pct 0.1000
+/ pay_pct 0.0800** for a year, and `v_activity_money` resolves those as
+`charge_pct * activities.amount`. Eighteen bottle rows had already billed
+**$1,657.75** through that path before any of this was written.
+
+So the commission is not computed from `depletion_month` and never should be. The
+report's job is to reveal the depletions that never became activities, and once
+the activity exists carrying its `amount`, the money follows the same road as
+every other activity in the system.
+
+**What the first attempt got wrong, and it is worth recording.** The page was
+built as a commission calculator -- a screen showing 10% of net price at ruled
+accounts. It was wrong twice over: it answered a question the rate card had
+already been answering, and it left the actual problem exactly where it found
+it. The operator's correction was *"look at how the 44N works, I want it like
+that"*, and the four-tab reconciler that replaced it closes a real gap: August
+2026 held **4 bottles** of Dame Mas in the portal against **125** on the report.
+
+---
+
+**D178 - TAB 2 WRITES BOTTLE TYPES ONLY, BECAUSE A CASE TYPE MULTIPLIES BY SIX.** ✅ operator-confirmed 11 Sep 2026
+
+The report counts bottles, so every quantity the page writes is a bottle count.
+`bottle_sale` carries a `case_equivalent` of 1/6; `case_sale` carries 1.0. A
+bottle count written under a case type is therefore multiplied by six, and the
+arithmetic is *correct* -- only the answer is wrong, which is the kind of error
+with nothing on screen to point at.
+
+Not hypothetical. August 2026 held **Phyre Saloon as `case_sale` quantity 2**,
+entered by hand, which the page correctly read as 12 bottles against the 2 the
+supplier reported. The operator meant two bottles. Offering `Case Sale` in that
+dropdown is offering that mistake, so it is not offered.
+
+A negative month has no entry there either: there is no `bottle_return` type
+(only `case_return`, at -1 case) and writing a bottle count under it would be
+the same error with the sign flipped. Returns land in tab 1 for a person.
+
+⚠️ **AND THE UNIT IS NOT THE ONLY WAY A ROW EARNS NOTHING.** `Seagate Beach
+Club` was `1st case sale` -- right bottles (6 = 6), right amount ($1,001.25),
+and **$0.00 of charge**, because that rate card line prices at zero while the
+10% lives on `bottle sale` / `bottle reorder`. The operator fixed the rate card
+rather than the row. The page's warning currently only inspects rows that
+*disagree* on volume, so a case-typed row that happens to agree numerically
+slips through. **Amount is not the test; whether the row resolves to a
+percentage rate is.** See the handoff -- this is the first thing to fix.
+
+---
+
+**D179 - AGREEING ON VOLUME IS NOT THE SAME AS BILLING.** ✅ operator-confirmed 11 Sep 2026
+
+The rate card charges a percentage of `activities.amount`, so a row with the
+right bottle count and no amount reconciles perfectly and earns nothing. Every
+number on it is correct and there is nothing to say it is wrong.
+
+August 2026 held exactly that: `Phyre Saloon` and `Seagate Beach Club` both
+matched the supplier to the bottle and both charged **$0.00** -- $133.50 between
+them. Tab 4 now names them, shows the amount the report gives with the 10% and
+8% beside it, and offers to set it.
+
+It fills `amount` only where it is **null**, so a figure somebody entered is
+never overwritten, and only where the venue has a single depletion row that
+month. More than one and which row carries the money is a decision rather than
+arithmetic, so it is listed for Review and edit instead.
+
+---
+
+**D180 - THE MONTH IS STATED AND THEN VERIFIED, WHICH IS NOT THE FLASH'S RULE.** ✅ operator-confirmed 11 Sep 2026
+
+A flash carries only a pull date, so there the operator's word is final and
+nothing in the file can confirm it (D169). This report states its own period on
+the band row above the header -- `1 Month 8/1/2026 thru 8/31/2026` -- so the
+month is still chosen in the selector and then **checked against the file**. A
+disagreement is refused.
+
+Three refusals run before anything loads, in this order:
+
+1. the file covers the month selected
+2. two groups claiming one month agree
+3. the stated total equals the sum of the outlets
+
+**The order is not cosmetic.** Diverging groups also break the total -- the
+parser keeps the rightmost value, which then disagrees with the stated figure --
+so checking the total first reports a truncated export when the real fault is
+two windows disagreeing. The specific diagnosis has to win.
+
+That second check exists because the August 2026 file carries the current month
+**twice**: columns 5-9 and 10-14 are byte identical and both say August. The
+operator's reading is that their report simply does that, but a template with
+two configurable ranges may set them differently one day, and a parser trusting
+column position would then silently read the wrong one.
+
+**And the stated total here IS the sum**, which is the exact opposite of the
+flash (D170) and was verified rather than assumed: bottles, did-buys, PODs and
+net price all reconcile to the cent. Nine-litre equivalents are excluded from
+that check -- each row is rounded to two decimals, so 48 rows sum to 11.19
+against a stated 11.22. A check that cried wolf every month would be ignored on
+the month it mattered.
+
+---
+
+**D181 - THE FILE DECIDES WHICH PAGE BODY RUNS, NOT THE BRAND.** ✅ operator-confirmed 11 Sep 2026
+
+The operator's question was *"can I not just go to the flash section, select Dame
+Mas and upload it?"* and the answer should be yes -- one place to bring a month's
+numbers, whatever shape the supplier sends. So `11_Flash.py` sniffs the upload
+and calls `depletion_page.render()` when it is this shape.
+
+Routing on the **brand name** was the obvious alternative and is wrong: a brand
+that changed what it sends would be handed to a parser that half-understands the
+file, and the failure would be wrong numbers rather than an error.
+`depletion_report.looks_like()` wants both `Retail Accounts` and `Net Price`,
+which the flash has neither of. Verified against all six stored flashes plus the
+Dame Mas export: no misroutes.
+
+---
+
+**D182 - A STRONG SUGGESTION IS STILL A SUGGESTION, AND PESCADO IS THE PROOF.** ✅ operator-confirmed 11 Sep 2026
+
+The matcher scores an outlet on three signals -- name matches a portal venue,
+city agrees, and that venue already carries activity for **this brand** -- and
+only the combination is called strong. Name alone is not enough because
+`EXECUTIVE CIGAR` is two stores and `TOTAL WINE` is six.
+
+Activity alone is not enough either, and that is the finding worth keeping.
+`PESCADO SEAFOOD GRILL` scores strong on all three -- name, city, six logged
+activities -- and the operator has ruled it **not ours**. Work happens at
+accounts that never join the arrangement.
+
+So tab 3 pre-selects nothing. The suggestion rides in its own read-only column
+with the evidence beside it in a `Why` column, and `Action` starts blank. A
+blank writes nothing and leaves the outlet undecided -- it is **not** recorded as
+a no, because a recorded no stops the question being asked again and that is a
+different decision.
+
+Earlier the same day, offered a candidate list built by name-matching the old
+`Dame Mas 2026 - Account Sold Summary.csv`, the operator removed two of the seven
+proposed and added four that were never suggested -- a $1,006.65 swing on one
+month. That file is a log of what sold in a month, not a roster of the
+arrangement, and is **not** a source for rulings.
+
+---
+
+**D183 - THE CONTRACTOR IS DEFAULTED FROM THE VENUE AND STAYS EDITABLE.** ✅ operator-confirmed 11 Sep 2026
+
+D171 recorded that the flash must ask who did the work. For this report the
+default comes from whoever normally works that venue for the brand, which is
+reliable: **108 of the 111** Dame Mas venues with activity carry exactly one
+contractor. The other three take the one with the most rows there.
+
+Every row stays editable, because the contractor is who gets **paid 8%** and a
+silent wrong default is somebody's money. `activity_contractor`'s primary key is
+`activity_id` alone, not the pair, so the write is an upsert on the activity and
+a changed pick **moves** the pay rather than splitting it between two people.
+
+The default is not always what is wanted: of the nine August rows, eight
+defaulted to Phil King and one to Eric Anderson, and the operator looked for the
+new work under Eric's login first. That is the default behaving correctly, not a
+fault, but it is worth knowing the page will concentrate a month on whoever holds
+the venues.
