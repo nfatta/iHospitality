@@ -101,7 +101,7 @@
        the distributor's depletion report and is filled in by the office at month
        end (D98, Review and edit), not typed in the field. */
     import { db, requireAuth, renderShell, render, esc, money } from './portal.js';
-    import { newId, todayIso, errorText, getLocation, preparePhotos, venuePicker,
+    import { newId, todayIso, errorText, getLocation, warmLocation, openCamera, preparePhotos, venuePicker,
              outboxAll, outboxPut, draftGet, draftPut, draftDelete,
              flushOutbox, keepFlushing } from './field.js';
 
@@ -119,6 +119,7 @@
 
     async function start(auth) {
       document.getElementById('app').hidden = false;
+      warmLocation();
       const userId = auth.session.user.id;
       const mine = auth.profile.contractor_id;
       const $ = (id) => document.getElementById(id);
@@ -308,7 +309,12 @@
         } catch (e) { $('photo-msg').textContent = errorText(e); }
         drawPhotos(); saveDraft();
       }
-      $('take-photo').onclick = () => $('camera-input').click();
+      // The in-page camera first (Android kills the browser behind the separate
+      // Camera app); the phone's own camera app only if this one cannot open.
+      $('take-photo').onclick = async () => {
+        const opened = await openCamera((file) => addFiles([file]));
+        if (!opened) $('camera-input').click();
+      };
       $('upload-photo').onclick = () => $('library-input').click();
       $('camera-input').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };
       $('library-input').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };

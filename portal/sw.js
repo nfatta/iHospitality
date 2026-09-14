@@ -24,7 +24,7 @@
    That is why it lives here and not at the repo root.
    ============================================================ */
 
-const VERSION = 'ih-portal-v3';  // v3: field logging pages, check-in split out (14 Sep 2026)
+const VERSION = 'ih-portal-v4';  // v4: in-page camera, location fallback (14 Sep 2026)
 
 /* The shell only: markup, styles, the client, the icons. No page here
    contains data — every one of them fetches it at runtime. */

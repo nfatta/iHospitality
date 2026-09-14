@@ -59,12 +59,12 @@ export function errorText(error) {
  * goes ahead and the office sees a "no location" flag. Ten seconds is the most
  * a person standing at a bar should wait for a satellite fix.
  */
-export function getLocation() {
+export async function getLocation() {
   const device_time = new Date().toISOString();
   if (!('geolocation' in navigator)) {
-    return Promise.resolve({ status: 'unavailable', device_time });
+    return { status: 'unavailable', device_time };
   }
-  return new Promise(resolve => {
+  const once = (opts) => new Promise(resolve => {
     navigator.geolocation.getCurrentPosition(
       pos => resolve({
         status: 'ok', source: 'device', device_time,
@@ -75,7 +75,92 @@ export function getLocation() {
         status: err.code === 1 ? 'denied' : err.code === 3 ? 'timeout' : 'unavailable',
         device_time,
       }),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+      opts);
+  });
+  // GPS FIRST, THEN THE NETWORK. Found on a real phone, 14 Sep 2026: the first
+  // fix of a session timed out at 10 seconds (the check-in) while the save a
+  // minute later got 4 metres. A cold GPS is slow; the phone's network position
+  // answers in a second or two and is good to tens of metres, which is plenty to
+  // say which bar someone was in. A refusal is not retried.
+  const precise = await once({ enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+  if (precise.status === 'ok' || precise.status === 'denied') return precise;
+  const rough = await once({ enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+  return rough.status === 'ok' ? rough : precise;
+}
+
+/**
+ * Ask for location permission and start the GPS warming the moment a logging
+ * page opens, so neither the prompt nor a cold start eats into the save.
+ *
+ * NOTHING IS RECORDED HERE. The position is thrown away; the only effect is
+ * that the phone has a recent fix ready when getLocation() asks for one. Still
+ * no background tracking: it runs once, on page open, and never repeats.
+ */
+export function warmLocation() {
+  if (!('geolocation' in navigator)) return;
+  navigator.geolocation.getCurrentPosition(() => {}, () => {},
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
+}
+
+/* ---------- the camera, inside the page ----------
+   FOUND ON A REAL ANDROID PHONE, 14 Sep 2026: "Take photo" through
+   <input capture> hands the picture to the separate Camera app, Android kills
+   the backgrounded browser to free memory, and returning with the photo hits a
+   page that no longer exists ("low memory"). A viewfinder in the page keeps the
+   browser in front, so there is nothing for Android to kill.
+
+   Resolves when the person taps Done or Cancel. `onPhoto(File)` is called for
+   every shutter press. Returns false if this browser cannot open a camera here
+   (no permission, no API, no https), so the caller can fall back to <input>. */
+export async function openCamera(onPhoto) {
+  if (!navigator.mediaDevices?.getUserMedia) return false;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1440 } },
+    });
+  } catch {
+    return false;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'fx-camera';
+  overlay.innerHTML = `
+    <video playsinline autoplay muted></video>
+    <div class="fx-camera-bar">
+      <button type="button" class="fx-btn" data-done>Done</button>
+      <button type="button" class="fx-shutter" aria-label="Take photo"></button>
+      <span class="fx-camera-count" data-count>0 taken</span>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+  const video = overlay.querySelector('video');
+  video.srcObject = stream;
+
+  let taken = 0;
+  return new Promise(resolve => {
+    const close = () => {
+      stream.getTracks().forEach(t => t.stop());
+      overlay.remove();
+      document.body.style.overflow = '';
+      resolve(true);
+    };
+    overlay.querySelector('[data-done]').onclick = close;
+    overlay.querySelector('.fx-shutter').onclick = async () => {
+      if (!video.videoWidth) return;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+      if (!blob) return;
+      overlay.classList.add('fx-flash');
+      setTimeout(() => overlay.classList.remove('fx-flash'), 150);
+      taken++;
+      overlay.querySelector('[data-count]').textContent = `${taken} taken`;
+      onPhoto(new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg', lastModified: Date.now() }));
+    };
   });
 }
 
@@ -152,6 +237,11 @@ export async function preparePhotos(files) {
   let here = null;
   for (const file of files) {
     const meta = await readPhotoMeta(file);
+    // A shot from the in-page camera has no EXIF at all; it was taken this
+    // instant, so its time is the moment it was captured.
+    if (!meta.taken_at && file.name.startsWith('camera-')) {
+      meta.taken_at = new Date(file.lastModified).toISOString();
+    }
     const shrunk = await shrinkPhoto(file);
     let location;
     if (meta.lat !== null) {

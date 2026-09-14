@@ -62,7 +62,7 @@
        are different moments, and a case sale that came through the distributor
        has no visit at all. */
     import { db, requireAuth, renderShell, render, esc } from './portal.js';
-    import { newId, getLocation, venuePicker, outboxAll, outboxPut,
+    import { newId, getLocation, warmLocation, venuePicker, outboxAll, outboxPut,
              flushOutbox, keepFlushing } from './field.js';
 
     const auth = await requireAuth();
@@ -79,6 +79,7 @@
 
     async function start(auth) {
       document.getElementById('app').hidden = false;
+      warmLocation();
       const userId = auth.session.user.id;
       const mine = auth.profile.contractor_id;
       const $ = (id) => document.getElementById(id);
