@@ -109,9 +109,10 @@ from being there:
 - **Brands never see check-ins.** Stored in an internal `venue_checkin` table
   (contractor from the login, venue, times, location, note, status);
   activities carry an internal `checkin_id`.
-- **Open questions for the build:** is a check-out time (how long they were
-  there) wanted; and when two people check in at the same venue, is that one
-  shared visit or two.
+- **Arrival only, no check-out** (operator, 14 Sep 2026).
+- **Every contractor is always their own, for everything, never joint**
+  (operator, 14 Sep 2026). Two people at one venue are two check-ins and two
+  Activities; nothing is ever shared between logins.
 
 ### Two people at one event
 
