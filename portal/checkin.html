@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Check in | iHospitality Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">My work</span>
+        <h1>Check in</h1>
+        <p class="portal-sub">One tap when you walk in. Log what you did now or later.</p>
+      </div>
+    </div>
+
+    <div id="gate"></div>
+    <div id="app" hidden>
+      <div id="outbox"></div>
+
+      <section class="fx-section">
+        <h2>I’m at an account</h2>
+        <div id="ck-venue"></div>
+        <label class="fx-label" style="margin-top:0.9rem">Quick note (optional)
+          <input class="fx-input" id="ck-note" placeholder="e.g. GM out until 3">
+        </label>
+        <button class="btn-full" id="ck-go" disabled>Check in</button>
+        <p class="fx-muted" id="ck-msg" style="margin-top:0.6rem"></p>
+      </section>
+
+      <section class="fx-section" id="today-section" hidden>
+        <h2>Checked in today</h2>
+        <ul class="fx-list" id="today-list"></ul>
+        <p class="fx-muted" style="margin-top:0.6rem">
+          Log the work from <a href="log.html" style="color:inherit">Log activity</a>,
+          where these wait at the top until you do.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    /* ARRIVAL ONLY, AND ALWAYS YOUR OWN (operator rulings, 14 Sep 2026).
+       Separate from Log activity on purpose: being there and logging the work
+       are different moments, and a case sale that came through the distributor
+       has no visit at all. */
+    import { db, requireAuth, renderShell, render, esc } from './portal.js';
+    import { newId, getLocation, venuePicker, outboxAll, outboxPut,
+             flushOutbox, keepFlushing } from './field.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('checkin.html', auth.profile);
+      if (!auth.profile.contractor_id) {
+        render(document.getElementById('gate'), { empty: {
+          title: 'This login is not linked to a person in the field',
+          body: 'Checking in records who was there. Ask Nicholas to link your login to your contractor record.' } });
+      } else {
+        start(auth);
+      }
+    }
+
+    async function start(auth) {
+      document.getElementById('app').hidden = false;
+      const userId = auth.session.user.id;
+      const mine = auth.profile.contractor_id;
+      const $ = (id) => document.getElementById(id);
+
+      async function drawOutbox() {
+        const items = (await outboxAll()).filter(i => i.kind === 'checkin');
+        $('outbox').innerHTML = items.length ? `<div class="fx-banner">
+          <strong>${items.length} check-in${items.length === 1 ? '' : 's'} not sent yet</strong>,
+          saved on this phone and sending ${navigator.onLine ? 'now' : 'when you are back online'}.
+          ${items.filter(i => i.error).map(i => `<div style="margin-top:0.4rem">${esc(i.venue?.name || '')}: ${esc(i.error)}</div>`).join('')}
+        </div>` : '';
+      }
+
+      // SCOPE, not security: staff can read every check-in, and this list is
+      // "yours". RLS is what stops a contractor reading anyone else's.
+      async function drawToday() {
+        const start = new Date(); start.setHours(0, 0, 0, 0);
+        const { data } = await db.from('venue_checkin')
+          .select('checked_in_at, status, note, venues(name)')
+          .eq('contractor_id', mine).gte('checked_in_at', start.toISOString())
+          .order('checked_in_at', { ascending: false });
+        const list = data || [];
+        $('today-section').hidden = !list.length;
+        $('today-list').innerHTML = list.map(c => `<li>
+          <span><strong>${esc(c.venues?.name || 'Venue')}</strong>
+            <span class="when">${esc(new Date(c.checked_in_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</span>
+            ${c.note ? `<br><span class="fx-muted">${esc(c.note)}</span>` : ''}</span>
+          <span class="fx-lock">${esc(c.status === 'open' ? 'not logged yet' : c.status)}</span></li>`).join('');
+      }
+
+      let ckVenue = null;
+      const picker = () => venuePicker($('ck-venue'), (v) => { ckVenue = v; $('ck-go').disabled = !v; });
+      picker();
+
+      $('ck-go').onclick = async () => {
+        $('ck-go').disabled = true;
+        $('ck-msg').textContent = 'Getting your location…';
+        const location = await getLocation();
+        await outboxPut({ kind: 'checkin', id: newId(), venue: ckVenue,
+                          note: $('ck-note').value.trim(), location, created: Date.now() });
+        const name = ckVenue.name;
+        $('ck-note').value = ''; ckVenue = null; picker();
+        $('ck-msg').textContent = 'Sending…';
+        const { failed } = await flushOutbox(userId);
+        $('ck-msg').textContent = failed
+          ? `Checked in at ${name} on this phone; it will send when it can.`
+          : `Checked in at ${name}${location.status === 'ok' ? '' : ` (no location: ${location.status})`}.`;
+        drawOutbox(); drawToday();
+      };
+
+      keepFlushing(userId, () => { drawOutbox(); drawToday(); });
+      await flushOutbox(userId);
+      drawOutbox(); drawToday();
+    }
+  </script>
+</body>
+</html>

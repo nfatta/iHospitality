@@ -26,7 +26,7 @@
       <div>
         <span class="portal-eyebrow">My work</span>
         <h1>Log activity</h1>
-        <p class="portal-sub">Check in when you arrive. Log the work now or later.</p>
+        <p class="portal-sub">Log the work. Check-ins you have not logged yet wait at the top.</p>
       </div>
     </div>
 
@@ -35,39 +35,41 @@
       <div id="outbox"></div>
       <div id="pay"></div>
 
-      <section class="fx-section">
-        <h2>I’m at an account</h2>
-        <div id="ck-venue"></div>
-        <label class="fx-label">Quick note (optional)
-          <input class="fx-input" id="ck-note" placeholder="e.g. GM out until 3">
-        </label>
-        <button class="btn-full" id="ck-go" disabled>Check in</button>
-        <p class="fx-muted" id="ck-msg" style="margin-top:0.6rem"></p>
-      </section>
-
       <section class="fx-section" id="open-section" hidden>
-        <h2>Not logged yet</h2>
+        <h2>Accounts you were at, not logged yet</h2>
         <ul class="fx-list" id="open-list"></ul>
       </section>
 
       <section class="fx-section" id="form-section">
-        <h2 id="form-title">Log an activity</h2>
+        <h2>Log an activity</h2>
         <div id="from-checkin"></div>
+
+        <label class="fx-label">Activity name
+          <input class="fx-input" id="name" placeholder="e.g. Tasting at Bella Napoli">
+        </label>
 
         <p class="fx-label">Venue</p>
         <div id="venue"></div>
 
-        <div class="fx-row" style="margin-top:0.9rem">
-          <label class="fx-label">Close date (when it was done)
-            <input class="fx-input" type="date" id="close-date">
+        <label class="fx-label" style="margin-top:0.9rem">Close date (when it was done)
+          <input class="fx-input" type="date" id="close-date">
+        </label>
+
+        <p class="fx-label">Brands</p>
+        <div id="brand-chips" class="fx-row" style="margin-bottom:0.6rem"></div>
+        <select id="add-brand" class="fx-input" style="margin-bottom:0.9rem"></select>
+
+        <div class="fx-row">
+          <label class="fx-label">Activity type
+            <select id="type" class="fx-input"></select>
           </label>
-          <label class="fx-label">Name
-            <input class="fx-input" id="name" placeholder="e.g. Tasting at Bella Napoli">
+          <label class="fx-label" style="flex:0 1 120px">Quantity
+            <input class="fx-input" type="number" min="0" step="1" id="quantity" value="1">
           </label>
         </div>
+        <p class="fx-muted" id="type-msg"></p>
 
-        <div id="lines"></div>
-        <button type="button" class="fx-btn" id="add-line">+ Add another brand</button>
+        <div id="brand-notes"></div>
 
         <p class="fx-label" style="margin-top:1.25rem">Photos</p>
         <div class="fx-row">
@@ -89,7 +91,16 @@
   <footer id="shell-footer"></footer>
 
   <script type="module">
-    import { db, requireAuth, renderShell, render, esc, money, fmtDate } from './portal.js';
+    /* ONE ACTIVITY, ONE TYPE, ONE QUANTITY; EACH BRAND ONLY ADDS ITS OWN NOTES.
+       Operator, 14 Sep 2026: the activity is what was done, so a shared tasting
+       is one `tasting event split` for every brand at it, never a different
+       type per brand. The database still stores one row per brand (so money and
+       brand isolation stay per brand); this page just fills them all the same.
+
+       NO AMOUNT FIELD. The dollar value a percentage rate is taken of comes from
+       the distributor's depletion report and is filled in by the office at month
+       end (D98, Review and edit), not typed in the field. */
+    import { db, requireAuth, renderShell, render, esc, money } from './portal.js';
     import { newId, todayIso, errorText, getLocation, preparePhotos, venuePicker,
              outboxAll, outboxPut, draftGet, draftPut, draftDelete,
              flushOutbox, keepFlushing } from './field.js';
@@ -97,10 +108,7 @@
     const auth = await requireAuth();
     if (auth) {
       renderShell('log.html', auth.profile);
-
       if (!auth.profile.contractor_id) {
-        // Keyed on the contractor record, never the role (D140): the database
-        // refuses the same logins, and this says so before anyone types.
         render(document.getElementById('gate'), { empty: {
           title: 'This login is not linked to a person in the field',
           body: 'Logging work records who did it. Ask Nicholas to link your login to your contractor record.' } });
@@ -115,21 +123,22 @@
       const mine = auth.profile.contractor_id;
       const $ = (id) => document.getElementById(id);
 
-      /* ---------- brands and the activity types each one allows ---------- */
-      const { data: brands } = await db.from('brands')
+      const { data: brandRows } = await db.from('brands')
         .select('id, name').eq('is_active', true).order('name');
+      const brands = brandRows || [];
+      const brandName = (id) => brands.find(b => b.id === id)?.name || '';
+
       const typeCache = new Map();
       async function typesFor(brandId) {
         if (!typeCache.has(brandId)) {
           const { data, error } = await db.rpc('field_activity_types', { p_brand: brandId });
-          typeCache.set(brandId, error ? [] : (data || []));
+          typeCache.set(brandId, error ? [] : (data || []).map(t => t.source_activity_type));
         }
         return typeCache.get(brandId);
       }
 
       /* ---------- this month so far: the contractor's OWN pay ----------
-         Never the charge (D137). The same two sources as My pay. A line appears
-         here once it has been sent; unsent work cannot be priced yet. */
+         Never the charge (D137). Same sources as My pay. */
       async function drawPay() {
         const month = todayIso().slice(0, 7);
         const [{ data: earned }, { data: base }] = await Promise.all([
@@ -145,20 +154,46 @@
             ${basePay ? `+ ${money(basePay)} base (monthly spread)` : ''}</div></div>`;
       }
 
-      /* ---------- the outbox ---------- */
       async function drawOutbox() {
         const items = await outboxAll();
         if (!items.length) { $('outbox').innerHTML = ''; return; }
-        const blocked = items.filter(i => i.blocked);
         $('outbox').innerHTML = `<div class="fx-banner">
-          <strong>${items.length} not sent yet</strong> — saved on this phone and
+          <strong>${items.length} not sent yet</strong>, saved on this phone and
           sending ${navigator.onLine ? 'now' : 'when you are back online'}.
-          ${blocked.map(i => `<div style="margin-top:0.4rem">“${esc(i.name || i.venue?.name || 'Check-in')}”: ${esc(i.error || '')}</div>`).join('')}
+          ${items.filter(i => i.blocked).map(i => `<div style="margin-top:0.4rem">“${esc(i.name || i.venue?.name || 'Check-in')}”: ${esc(i.error || '')}</div>`).join('')}
           <div style="margin-top:0.6rem"><button class="fx-btn" id="retry">Send now</button></div></div>`;
         $('retry').onclick = async () => {
           for (const i of items) { i.blocked = false; await outboxPut(i); }
           await refresh();
         };
+      }
+
+      /* ---------- check-ins not logged yet ----------
+         The contractor_id filter is SCOPE ("yours"); RLS is the lock. */
+      let openCheckins = [];
+      async function drawOpen() {
+        const { data, error } = await db.from('venue_checkin')
+          .select('id, venue_id, checked_in_at, note, venues(name, city)')
+          .eq('contractor_id', mine).eq('status', 'open')
+          .order('checked_in_at', { ascending: false });
+        openCheckins = error ? [] : (data || []);
+        $('open-section').hidden = !openCheckins.length;
+        $('open-list').innerHTML = openCheckins.map(c => `<li>
+            <span><strong>${esc(c.venues?.name || 'Venue')}</strong>
+              <span class="when">${esc(new Date(c.checked_in_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}</span>
+              ${c.note ? `<br><span class="fx-muted">${esc(c.note)}</span>` : ''}</span>
+            <span class="fx-row" style="flex:0 0 auto">
+              <button class="fx-btn" data-log="${c.id}">Log it</button>
+              <button class="fx-btn" data-dismiss="${c.id}">Nothing to log</button></span></li>`).join('');
+        $('open-list').querySelectorAll('[data-log]').forEach(b => b.onclick = () =>
+          fromCheckin(openCheckins.find(x => x.id === b.dataset.log)));
+        $('open-list').querySelectorAll('[data-dismiss]').forEach(b => b.onclick = async () => {
+          const reason = prompt('Why was there nothing to log? (optional)');
+          if (reason === null) return;
+          const { error } = await db.rpc('field_dismiss_checkin', { p_checkin: b.dataset.dismiss, p_reason: reason });
+          if (error) alert(errorText(error));
+          drawOpen();
+        });
       }
 
       const refresh = async () => {
@@ -167,130 +202,88 @@
       };
       keepFlushing(userId, () => Promise.all([drawOutbox(), drawOpen(), drawPay()]));
 
-      /* ---------- check in ---------- */
-      let ckVenue = null;
-      venuePicker($('ck-venue'), (v) => { ckVenue = v; $('ck-go').disabled = !v; });
-      $('ck-go').onclick = async () => {
-        $('ck-go').disabled = true;
-        $('ck-msg').textContent = 'Getting your location…';
-        const location = await getLocation();
-        await outboxPut({ kind: 'checkin', id: newId(), venue: ckVenue,
-                          note: $('ck-note').value.trim(), location, created: Date.now() });
-        $('ck-note').value = '';
-        venuePicker($('ck-venue'), (v) => { ckVenue = v; $('ck-go').disabled = !v; });
-        ckVenue = null;
-        $('ck-msg').textContent = location.status === 'ok'
-          ? 'Checked in.' : 'Checked in (no location: ' + location.status + ').';
-        await refresh();
-      };
-
-      /* ---------- check-ins not logged yet ----------
-         The contractor_id filter is SCOPE, not security: staff can read every
-         check-in (is_staff), and this list is "yours". RLS is still what stops
-         a contractor reading anyone else's. */
-      async function drawOpen() {
-        const { data, error } = await db.from('venue_checkin')
-          .select('id, venue_id, checked_in_at, note, venues(name, city)')
-          .eq('contractor_id', mine).eq('status', 'open')
-          .order('checked_in_at', { ascending: false });
-        const list = error ? [] : (data || []);
-        $('open-section').hidden = !list.length;
-        $('open-list').innerHTML = list.map(c => `<li>
-            <span><strong>${esc(c.venues?.name || 'Venue')}</strong>
-              <span class="when">${esc(new Date(c.checked_in_at).toLocaleString())}</span>
-              ${c.note ? `<br><span class="fx-muted">${esc(c.note)}</span>` : ''}</span>
-            <span class="fx-row" style="flex:0 0 auto">
-              <button class="fx-btn" data-log="${c.id}">Log it</button>
-              <button class="fx-btn" data-dismiss="${c.id}">Nothing to log</button></span></li>`).join('');
-        $('open-list').querySelectorAll('[data-log]').forEach(b => b.onclick = () => {
-          const c = list.find(x => x.id === b.dataset.log);
-          fromCheckin(c);
-        });
-        $('open-list').querySelectorAll('[data-dismiss]').forEach(b => b.onclick = async () => {
-          const reason = prompt('Why was there nothing to log? (optional)') ?? null;
-          if (reason === null) return;
-          const { error } = await db.rpc('field_dismiss_checkin', { p_checkin: b.dataset.dismiss, p_reason: reason });
-          if (error) alert(errorText(error));
-          drawOpen();
-        });
-      }
-
-      /* ---------- the activity form ---------- */
-      const form = {
-        venue: null, close_date: todayIso(), name: '', checkin: null,
-        lines: [], photos: [],
-      };
+      /* ---------- the form ---------- */
+      const blank = () => ({ name: '', venue: null, close_date: todayIso(), checkin: null,
+        brands: [], activity_type: '', quantity: 1, photos: [] });
+      const form = blank();
 
       function fromCheckin(c) {
         form.checkin = { id: c.id, venue: c.venues?.name };
         form.venue = { id: c.venue_id, name: c.venues?.name, city: c.venues?.city };
         form.close_date = c.checked_in_at.slice(0, 10);
-        drawForm();
+        drawForm(); saveDraft();
         $('form-section').scrollIntoView({ behavior: 'smooth' });
       }
 
-      const addLine = () => form.lines.push({ key: newId(), brand_id: '', activity_type: '',
-        quantity: 1, amount: '', summary: '', notes: '', needs_amount: false });
-
-      async function drawLines() {
-        const el = $('lines');
-        el.innerHTML = form.lines.map((l, i) => `
-          <div class="fx-line" data-key="${l.key}">
-            <div class="fx-line-head"><span>Brand ${i + 1}</span>
-              ${form.lines.length > 1 ? `<button type="button" class="link-btn" data-remove="${l.key}">Remove</button>` : ''}</div>
-            <label class="fx-label">Brand
-              <select data-f="brand_id"><option value="">Pick a brand</option>
-                ${(brands || []).map(b => `<option value="${b.id}"${b.id === l.brand_id ? ' selected' : ''}>${esc(b.name)}</option>`).join('')}
-              </select></label>
-            <label class="fx-label">Activity type
-              <select data-f="activity_type" ${l.brand_id ? '' : 'disabled'}><option value="">${l.brand_id ? 'Pick a type' : 'Pick a brand first'}</option></select></label>
-            <div class="fx-row">
-              <label class="fx-label">Quantity<input class="fx-input" type="number" min="0" step="1" data-f="quantity" value="${esc(l.quantity)}"></label>
-              <label class="fx-label" data-amount ${l.needs_amount ? '' : 'hidden'}>Amount sold ($)<input class="fx-input" type="number" min="0" step="0.01" data-f="amount" value="${esc(l.amount)}"></label>
-            </div>
-            <label class="fx-label">What the brand sees<textarea class="fx-input" rows="2" data-f="summary">${esc(l.summary)}</textarea></label>
-            <label class="fx-label">Internal notes (never shown to the brand)<textarea class="fx-input" rows="2" data-f="notes">${esc(l.notes)}</textarea></label>
-          </div>`).join('');
-
-        for (const l of form.lines) {
-          const box = el.querySelector(`[data-key="${l.key}"]`);
-          const typeSel = box.querySelector('[data-f="activity_type"]');
-          if (l.brand_id) {
-            const types = await typesFor(l.brand_id);
-            typeSel.insertAdjacentHTML('beforeend', types.map(t =>
-              `<option value="${esc(t.source_activity_type)}"${t.source_activity_type === l.activity_type ? ' selected' : ''}>${esc(t.source_activity_type)}</option>`).join(''));
-          }
-          box.querySelectorAll('[data-f]').forEach(input => {
-            input.addEventListener('input', async () => {
-              l[input.dataset.f] = input.value;
-              if (input.dataset.f === 'brand_id') { l.activity_type = ''; l.needs_amount = false; await drawLines(); drawPhotos(); }
-              if (input.dataset.f === 'activity_type') {
-                const t = (await typesFor(l.brand_id)).find(x => x.source_activity_type === l.activity_type);
-                l.needs_amount = !!t?.needs_amount;
-                box.querySelector('[data-amount]').hidden = !l.needs_amount;
-              }
-              saveDraft();
-            });
-          });
-          const rm = box.querySelector('[data-remove]');
-          if (rm) rm.onclick = () => { form.lines = form.lines.filter(x => x.key !== l.key); drawLines(); drawPhotos(); saveDraft(); };
+      /* The type list is what EVERY chosen brand can be logged as: one type is
+         saved on every brand's row, and the database refuses a type a brand's
+         rate card does not know. */
+      async function drawTypes() {
+        const sel = $('type');
+        if (!form.brands.length) {
+          sel.innerHTML = '<option value="">Add a brand first</option>';
+          sel.disabled = true; $('type-msg').textContent = ''; return;
         }
+        const lists = await Promise.all(form.brands.map(b => typesFor(b.brand_id)));
+        const common = lists.reduce((acc, l) => acc.filter(t => l.includes(t)));
+        sel.disabled = false;
+        sel.innerHTML = `<option value="">Pick the activity type</option>` + common.map(t =>
+          `<option value="${esc(t)}"${t === form.activity_type ? ' selected' : ''}>${esc(t)}</option>`).join('');
+        if (form.activity_type && !common.includes(form.activity_type)) form.activity_type = '';
+        $('type-msg').textContent = form.brands.length > 1 && !common.length
+          ? 'These brands share no activity type. Log them separately or ask the office to add one.' : '';
       }
 
-      /* Photos: take or upload, then per photo a consent tick and, when the
-         Activity has more than one brand, which brands may see it. Visible by
-         default (operator ruling). */
+      function drawBrands() {
+        $('brand-chips').innerHTML = form.brands.map(b => `<span class="fx-chip" style="flex:0 0 auto">
+          <span>${esc(brandName(b.brand_id))}</span>
+          <button type="button" class="link-btn" data-remove="${b.brand_id}" aria-label="Remove">×</button></span>`).join('');
+        $('brand-chips').querySelectorAll('[data-remove]').forEach(x => x.onclick = () => {
+          form.brands = form.brands.filter(b => b.brand_id !== x.dataset.remove);
+          drawBrands(); saveDraft();
+        });
+        const left = brands.filter(b => !form.brands.some(f => f.brand_id === b.id));
+        $('add-brand').innerHTML = `<option value="">${form.brands.length ? '+ Add another brand' : 'Pick a brand'}</option>`
+          + left.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('');
+
+        // Notes, one pair per brand: what that brand reads, and what it never does.
+        $('brand-notes').innerHTML = form.brands.map(b => `
+          <div class="fx-line" data-brand="${b.brand_id}">
+            <div class="fx-line-head"><span>${esc(brandName(b.brand_id))}</span></div>
+            <label class="fx-label">What ${esc(brandName(b.brand_id))} sees
+              <textarea class="fx-input" rows="2" data-f="summary">${esc(b.summary)}</textarea></label>
+            <label class="fx-label">Internal notes (never shown to the brand)
+              <textarea class="fx-input" rows="2" data-f="notes">${esc(b.notes)}</textarea></label>
+          </div>`).join('');
+        $('brand-notes').querySelectorAll('[data-brand]').forEach(box => {
+          const b = form.brands.find(x => x.brand_id === box.dataset.brand);
+          box.querySelectorAll('[data-f]').forEach(t => t.oninput = () => { b[t.dataset.f] = t.value; saveDraft(); });
+        });
+
+        drawTypes(); drawPhotos();
+      }
+
+      $('add-brand').onchange = (e) => {
+        if (!e.target.value) return;
+        form.brands.push({ brand_id: e.target.value, summary: '', notes: '' });
+        drawBrands(); saveDraft();
+      };
+      $('type').onchange = (e) => { form.activity_type = e.target.value; saveDraft(); };
+      $('quantity').oninput = (e) => { form.quantity = e.target.value; saveDraft(); };
+      $('name').oninput = (e) => { form.name = e.target.value; saveDraft(); };
+      $('close-date').oninput = (e) => { form.close_date = e.target.value; saveDraft(); };
+
+      /* Photos: consent per photo, and with more than one brand, which brands
+         may see it. Visible by default (operator ruling). */
       function drawPhotos() {
-        const chosenBrands = form.lines.filter(l => l.brand_id)
-          .map(l => (brands || []).find(b => b.id === l.brand_id)).filter(Boolean);
         $('photos').innerHTML = form.photos.map(p => `
           <div class="fx-photo" data-id="${p.id}">
             <img src="${p.url}" alt="">
             <button type="button" class="fx-x" aria-label="Remove photo">×</button>
             <div class="fx-photo-opts">
               <label><input type="checkbox" data-consent ${p.consent ? 'checked' : ''}> People in it agreed</label>
-              ${chosenBrands.length > 1 ? chosenBrands.map(b => `<label><input type="checkbox" data-brand="${b.id}"
-                 ${p.hiddenFor.includes(b.id) ? '' : 'checked'}> ${esc(b.name)} can see</label>`).join('') : ''}
+              ${form.brands.length > 1 ? form.brands.map(b => `<label><input type="checkbox" data-brand="${b.brand_id}"
+                 ${p.hiddenFor.includes(b.brand_id) ? '' : 'checked'}> ${esc(brandName(b.brand_id))} can see</label>`).join('') : ''}
             </div></div>`).join('');
         $('photos').querySelectorAll('.fx-photo').forEach(box => {
           const p = form.photos.find(x => x.id === box.dataset.id);
@@ -308,12 +301,11 @@
         if (!files?.length) return;
         $('photo-msg').textContent = 'Preparing photos…';
         try {
-          const prepared = await preparePhotos([...files]);
-          for (const p of prepared) { p.url = URL.createObjectURL(p.blob); form.photos.push(p); }
+          for (const p of await preparePhotos([...files])) {
+            p.url = URL.createObjectURL(p.blob); form.photos.push(p);
+          }
           $('photo-msg').textContent = '';
-        } catch (e) {
-          $('photo-msg').textContent = errorText(e);
-        }
+        } catch (e) { $('photo-msg').textContent = errorText(e); }
         drawPhotos(); saveDraft();
       }
       $('take-photo').onclick = () => $('camera-input').click();
@@ -322,9 +314,10 @@
       $('library-input').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };
 
       function drawForm() {
+        $('name').value = form.name;
         $('close-date').max = todayIso();
         $('close-date').value = form.close_date;
-        $('name').value = form.name;
+        $('quantity').value = form.quantity;
         $('from-checkin').innerHTML = form.checkin
           ? `<div class="fx-card" style="margin:0 0 0.9rem">Logging your check-in at <strong>${esc(form.checkin.venue)}</strong>.
               <button type="button" class="link-btn" id="unlink">Not from this check-in</button></div>` : '';
@@ -335,13 +328,8 @@
         } else {
           venuePicker($('venue'), (v) => { form.venue = v; saveDraft(); }, form.venue);
         }
-        if (!form.lines.length) addLine();
-        drawLines(); drawPhotos();
+        drawBrands();
       }
-
-      $('close-date').oninput = (e) => { form.close_date = e.target.value; saveDraft(); };
-      $('name').oninput = (e) => { form.name = e.target.value; saveDraft(); };
-      $('add-line').onclick = () => { addLine(); drawLines(); saveDraft(); };
 
       /* ---------- the draft: nothing typed is lost if the page closes ---------- */
       let draftTimer = null;
@@ -349,10 +337,10 @@
         clearTimeout(draftTimer);
         draftTimer = setTimeout(() => {
           const { photos, ...rest } = form;
-          draftPut('log', { ...rest, photos: photos.map(({ url, ...p }) => p) }).catch(() => {});
+          draftPut('log-v2', { ...rest, photos: photos.map(({ url, ...p }) => p) }).catch(() => {});
         }, 400);
       }
-      const draft = await draftGet('log').catch(() => null);
+      const draft = await draftGet('log-v2').catch(() => null);
       if (draft?.value) {
         Object.assign(form, draft.value);
         form.photos = (form.photos || []).map(p => ({ ...p, url: URL.createObjectURL(p.blob) }));
@@ -363,53 +351,44 @@
       $('save').onclick = async () => {
         $('form-err').innerHTML = '';
         const problems = [];
+        if (!form.name.trim()) problems.push('Name the activity.');
         if (!form.venue) problems.push('Pick the venue.');
-        if (!form.name.trim()) problems.push('Give it a name.');
         if (!form.close_date || form.close_date > todayIso()) problems.push('The close date cannot be in the future.');
-        const lines = form.lines.filter(l => l.brand_id || l.activity_type);
-        if (!lines.length) problems.push('Add at least one brand.');
-        for (const l of lines) {
-          const b = (brands || []).find(x => x.id === l.brand_id)?.name || 'a brand';
-          if (!l.brand_id || !l.activity_type) problems.push(`Pick a brand and an activity type on every line.`);
-          // A percentage-priced line with no amount charges $0.00 while looking
-          // priced (D98), so the amount is required there, not just suggested.
-          if (l.needs_amount && !(Number(l.amount) > 0)) problems.push(`${b}: this type is priced on the amount sold, so enter it.`);
-        }
+        if (!form.brands.length) problems.push('Add at least one brand.');
+        if (!form.activity_type) problems.push('Pick the activity type.');
+        if (!(Number(form.quantity) >= 0)) problems.push('Quantity cannot be negative.');
         if (problems.length) {
-          $('form-err').innerHTML = `<div class="err">${[...new Set(problems)].map(esc).join('<br>')}</div>`;
+          $('form-err').innerHTML = `<div class="err">${problems.map(esc).join('<br>')}</div>`;
           return;
         }
 
-        // Someone else already logged the same thing here today? Warn, never
-        // block: two people at one tasting is normal (each logs their own).
+        // Someone else logged the same thing here that day? Warn, never block:
+        // everyone logs their own (operator ruling).
         if (navigator.onLine && form.venue.id) {
           const { data: dupes } = await db.from('v_internal_activity')
-            .select('contractor, source_activity_type')
-            .eq('venue_id', form.venue.id).eq('activity_date', form.close_date)
-            .in('source_activity_type', lines.map(l => l.activity_type))
-            .neq('contractor_id', mine);
-          if (dupes?.length && !confirm(`${dupes[0].contractor || 'Someone'} already logged ${dupes[0].source_activity_type} here on this date. Save yours too?`)) return;
+            .select('contractor').eq('venue_id', form.venue.id)
+            .eq('activity_date', form.close_date).eq('source_activity_type', form.activity_type)
+            .neq('contractor_id', mine).limit(1);
+          if (dupes?.length && !confirm(`${dupes[0].contractor || 'Someone'} already logged ${form.activity_type} here on this date. Save yours too?`)) return;
         }
 
         $('save').disabled = true;
         $('save-msg').textContent = 'Getting your location…';
         const location = await getLocation();
 
-        const item = {
+        await outboxPut({
           kind: 'activity', id: newId(), created: Date.now(),
           venue: form.venue, close_date: form.close_date, name: form.name.trim(),
           checkin_id: form.checkin?.id || null, location,
-          lines: lines.map(l => ({ brand_id: l.brand_id, activity_type: l.activity_type,
-            quantity: Number(l.quantity || 0), amount: l.needs_amount ? Number(l.amount) : null,
-            summary: l.summary, notes: l.notes })),
+          // One row per brand, all the same type and quantity; notes per brand.
+          lines: form.brands.map(b => ({ brand_id: b.brand_id, activity_type: form.activity_type,
+            quantity: Number(form.quantity || 0), summary: b.summary, notes: b.notes })),
           photos: form.photos.map(({ url, ...p }) => p),
-        };
-        await outboxPut(item);
-        await draftDelete('log');
+        });
+        await draftDelete('log-v2');
 
-        // Reset the form for the next one.
         form.photos.forEach(p => URL.revokeObjectURL(p.url));
-        Object.assign(form, { venue: null, close_date: todayIso(), name: '', checkin: null, lines: [], photos: [] });
+        Object.assign(form, blank());
         drawForm();
 
         $('save-msg').textContent = 'Sending…';
@@ -417,7 +396,7 @@
         $('save').disabled = false;
         $('save-msg').textContent = failed
           ? 'Saved on this phone. It will send when it can (see above).'
-          : `Saved${location.status === 'ok' ? '' : ' (no location: ' + location.status + ')'}.`;
+          : `Saved${location.status === 'ok' ? '' : ` (no location: ${location.status})`}.`;
         await Promise.all([drawOutbox(), drawOpen(), drawPay()]);
       };
 

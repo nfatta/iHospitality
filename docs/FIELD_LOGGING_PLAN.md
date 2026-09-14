@@ -53,28 +53,35 @@ saved.** Brands see a month only after the operator has reconciled it.
 
 ## 1. Logging an Activity
 
-### Fields
+### Fields (revised 14 Sep 2026 after the operator saw the first screens)
+
+**Check in is its own page.** Log activity keeps the check-ins not logged yet at
+the top.
 
 | Field | Level | Notes |
 |---|---|---|
+| Activity name | Activity | **First field.** Typed. Stored as `activities.title`. |
 | Venue | Activity | Search existing, or **+ Create new venue** (section 3). |
 | Close date | Activity | Defaults to today, can be backdated, never in the future (the `activities_date_not_future` CHECK stays). For future work, see **Planned**. |
-| Name | Activity | Typed. |
+| Brands | Activity | One or more active brands. |
+| Activity type | **Activity, once** | The same type for every brand (a shared tasting is `tasting event split` for all of them). The list offers the types **every** chosen brand's rate card knows. **No money shown.** |
+| Quantity | **Activity, once** | The multiplier (D65), saved on every brand's row. |
+| What the brand sees | Per brand | `brand_visible_summary`. What that brand reads after release. |
+| Internal notes | Per brand | `notes`. **Notes are per brand**, because month-end reports are per brand. |
 | Photos | Activity | Section 4. Per-photo, per-brand visibility. |
 | Location | Activity | Section 7. Captured on save. |
-| Brand | Brand line | Active brands. **+ Add another brand** adds a line. |
-| Activity type | Brand line | **Keyed to that brand**: the brand's own rate-card strings plus the shared `(all brands)` strings that price for it. **No money shown.** |
-| Quantity | Brand line | The multiplier (D65). |
-| Amount | Brand line | Shown only when that type is percentage-priced for that brand (D98). The form learns this without learning the percentage. |
-| Brand-facing description | Brand line | `brand_visible_summary`. What that brand reads after release. |
-| Internal notes | Brand line | `notes`. **Notes are per brand**, because month-end reports are per brand. |
 | Who did it | Activity | **From the login. Never a form field.** Written to `activity_contractor` (D135). |
 | Created | Activity | Server timestamp. |
 
+**No amount field** (operator, 14 Sep 2026). The dollar value a percentage rate
+is taken of comes from the distributor's depletion report and is filled in by the
+office at month end on Review and edit (D98), not typed in the field.
+
 ### Several brands, one Activity
 
-A shared tasting for two brands is ONE Activity with two brand lines, each with
-its own type (`tasting event split`), quantity, description and notes.
+A shared tasting for two brands is ONE Activity with two brand lines, all with
+the same type (`tasting event split`) and quantity, each with its own description
+and notes.
 
 **Stored as one `activities` row per brand line**, linked by a new
 `activity_group_id`. That keeps everything that already works per row working:

@@ -226,7 +226,9 @@ const ADMIN_NAV = [
 const CONTRACTOR_NAV_MINE = [
   ['index.html', 'Dashboard'],
   // Field logging (docs/FIELD_LOGGING_PLAN.md). First after the dashboard,
-  // because on a phone in a bar it is the reason the portal was opened.
+  // because on a phone in a bar it is the reason the portal was opened. Check
+  // in and Log activity are separate pages on purpose (operator, 14 Sep 2026).
+  ['checkin.html', 'Check in'],
   ['log.html', 'Log activity'],
   ['my-activity.html', 'My activity'],
   ['my-venues.html', 'My accounts'],
