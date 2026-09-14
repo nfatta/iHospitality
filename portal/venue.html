@@ -32,6 +32,7 @@
     </div>
 
     <div id="body"></div>
+    <div id="field-tools"></div>
   </main>
 
   <footer id="shell-footer"></footer>
@@ -166,6 +167,16 @@
             venueNotes: venueNotes?.data || [],
             profile: profile?.data || null,
           });
+        }
+
+        // FIELD TOOLS: contacts, a note, report a problem. For any login that
+        // can log field work (it has a contractor record, D140), and on EVERY
+        // venue -- including a new one made in the field that has no activity
+        // yet and so shows "Nothing to show" above. The writes go through the
+        // field_* functions, which check the login themselves.
+        if (id && auth.profile.contractor_id) {
+          const { drawFieldTools } = await import('./venue-field.js');
+          drawFieldTools(document.getElementById('field-tools'), id);
         }
       }
     }

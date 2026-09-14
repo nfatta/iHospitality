@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>My activity | iHospitality Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">My work</span>
+        <h1>My activity</h1>
+        <p class="portal-sub">What you logged. Change or delete it until the brand’s month is closed.</p>
+      </div>
+      <div class="filters">
+        <label class="filter-field"><span>Since</span>
+          <select id="since"></select></label>
+      </div>
+    </div>
+
+    <div id="gate"></div>
+    <div id="outbox"></div>
+    <div id="list"></div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, fmtDate, fmtNum } from './portal.js';
+    import { newId, todayIso, errorText, preparePhotos, outboxAll, outboxPut,
+             flushOutbox, keepFlushing, BUCKET } from './field.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('my-activity.html', auth.profile);
+      if (!auth.profile.contractor_id) {
+        render(document.getElementById('gate'), { empty: {
+          title: 'This login is not linked to a person in the field',
+          body: 'My activity lists the work you logged. Ask Nicholas to link your login to your contractor record.' } });
+        document.querySelector('.filters').style.display = 'none';
+      } else {
+        start(auth);
+      }
+    }
+
+    async function start(auth) {
+      const userId = auth.session.user.id;
+      const mine = auth.profile.contractor_id;
+      const $ = (id) => document.getElementById(id);
+
+      // Bounded (D122): the current and previous month by default, further back
+      // on request. Month starts, newest first.
+      const now = new Date();
+      const starts = [0, 1, 2, 5, 11].map(back => {
+        const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+      });
+      $('since').innerHTML = starts.map((s, i) =>
+        `<option value="${s}"${i === 1 ? ' selected' : ''}>${esc(fmtDate(s))}</option>`).join('');
+      $('since').onchange = draw;
+
+      const typeCache = new Map();
+      async function typesFor(brandId) {
+        if (!typeCache.has(brandId)) {
+          const { data } = await db.rpc('field_activity_types', { p_brand: brandId });
+          typeCache.set(brandId, data || []);
+        }
+        return typeCache.get(brandId);
+      }
+
+      async function drawOutbox() {
+        const items = await outboxAll();
+        $('outbox').innerHTML = items.length
+          ? `<div class="fx-banner"><strong>${items.length} not sent yet</strong> from this phone.
+             Open <a href="log.html" style="color:inherit">Log activity</a> to see why or send now.</div>` : '';
+      }
+      keepFlushing(userId, () => { drawOutbox(); draw(); });
+
+      /* The contractor_id filter is SCOPE ("yours"), not security: RLS and the
+         write functions are what stop anyone changing another person's work. */
+      async function draw() {
+        const el = $('list');
+        const { data: rows, error } = await db.from('v_internal_activity')
+          .select('activity_id, activity_group_id, brand_id, brand_name, venue_id, venue_name, activity_date, title, source_activity_type, quantity, amount, brand_visible_summary, notes, hand_edited_at, month_released')
+          .eq('contractor_id', mine).not('activity_group_id', 'is', null)
+          .gte('activity_date', $('since').value)
+          .order('activity_date', { ascending: false }).order('activity_id');
+        if (error) return render(el, { error });
+        if (!rows.length) {
+          return render(el, { empty: { title: 'Nothing logged in this range',
+            body: 'Work you log on the Log activity page appears here. Earlier work recorded through HubSpot is on My pay.' } });
+        }
+
+        const ids = rows.map(r => r.activity_id);
+        const { data: photos } = await db.from('photos')
+          .select('id, activity_id, storage_path, brand_visible').in('activity_id', ids);
+        const paths = (photos || []).map(p => p.storage_path);
+        const { data: signed } = paths.length
+          ? await db.storage.from(BUCKET).createSignedUrls(paths, 3600) : { data: [] };
+        const urlOf = new Map((signed || []).map(s => [s.path, s.signedUrl]));
+
+        const groups = new Map();
+        for (const r of rows) {
+          if (!groups.has(r.activity_group_id)) groups.set(r.activity_group_id, []);
+          groups.get(r.activity_group_id).push(r);
+        }
+
+        const lock = (r) => r.month_released ? 'Month closed'
+                          : r.hand_edited_at ? 'Edited by the office' : '';
+
+        el.innerHTML = [...groups.entries()].map(([gid, lines]) => {
+          const first = lines[0];
+          const anyLocked = lines.some(lock);
+          const openLines = lines.filter(l => !l.month_released);
+          return `<section class="fx-section" data-group="${gid}">
+            <div class="fx-row" style="justify-content:space-between">
+              <div style="flex:1 1 auto"><h2 style="margin-bottom:0.2rem">${esc(first.title || 'Activity')}</h2>
+                <div class="fx-muted">${esc(fmtDate(first.activity_date))} · ${first.venue_id ? `<a href="venue.html?id=${encodeURIComponent(first.venue_id)}" style="color:inherit">${esc(first.venue_name || 'Venue')}</a>` : 'No venue'}</div></div>
+              ${anyLocked ? '' : `<button class="fx-btn" data-edit-group style="flex:0 0 auto">Edit date / name</button>`}
+            </div>
+            <div data-group-form></div>
+            ${lines.map(l => `
+              <div class="fx-line" data-line="${l.activity_id}">
+                <div class="fx-line-head"><span>${esc(l.brand_name)}</span>
+                  ${lock(l) ? `<span class="fx-lock">${esc(lock(l))}</span>` : ''}</div>
+                <div>${esc(l.source_activity_type || '')} · qty ${fmtNum(l.quantity)}${l.amount != null ? ` · $${Number(l.amount).toFixed(2)} sold` : ''}</div>
+                ${l.brand_visible_summary ? `<div class="fx-muted" style="margin-top:0.35rem">Brand sees: ${esc(l.brand_visible_summary)}</div>` : ''}
+                ${l.notes ? `<div class="fx-muted" style="margin-top:0.2rem">Internal: ${esc(l.notes)}</div>` : ''}
+                ${lock(l) ? '' : `<div class="fx-row" style="margin-top:0.6rem">
+                  <button class="fx-btn" data-edit-line>Edit</button>
+                  <button class="fx-btn danger" data-delete-line>Delete</button></div>`}
+                <div data-line-form></div>
+              </div>`).join('')}
+            <div class="fx-photos">${(photos || []).filter(p => lines.some(l => l.activity_id === p.activity_id)).map(p => {
+              const line = lines.find(l => l.activity_id === p.activity_id);
+              const editable = line && !line.month_released;
+              return `<div class="fx-photo" data-photo="${p.id}">
+                <img src="${esc(urlOf.get(p.storage_path) || '')}" alt="">
+                ${editable ? '<button type="button" class="fx-x" aria-label="Remove photo">×</button>' : ''}
+                <div class="fx-photo-opts">${esc(line?.brand_name || '')}
+                  <label><input type="checkbox" data-visible ${p.brand_visible ? 'checked' : ''} ${editable ? '' : 'disabled'}> Brand can see</label></div>
+              </div>`; }).join('')}</div>
+            ${openLines.length ? `<button class="fx-btn" data-add-photo>Add photos</button>
+              <input type="file" accept="image/*" multiple hidden data-photo-input>` : ''}
+          </section>`;
+        }).join('');
+
+        // ---- wire up ----
+        el.querySelectorAll('[data-group]').forEach(sec => {
+          const gid = sec.dataset.group;
+          const lines = groups.get(gid);
+
+          const eg = sec.querySelector('[data-edit-group]');
+          if (eg) eg.onclick = () => {
+            const box = sec.querySelector('[data-group-form]');
+            box.innerHTML = `<div class="fx-card">
+              <div class="fx-row">
+                <label class="fx-label">Close date<input class="fx-input" type="date" max="${todayIso()}" value="${lines[0].activity_date}" data-date></label>
+                <label class="fx-label">Name<input class="fx-input" value="${esc(lines[0].title || '')}" data-name></label>
+              </div>
+              <div class="fx-row"><button class="btn-full" data-go>Save</button><button class="link-btn" data-cancel>Cancel</button></div></div>`;
+            box.querySelector('[data-cancel]').onclick = () => { box.innerHTML = ''; };
+            box.querySelector('[data-go]').onclick = async () => {
+              const { error } = await db.rpc('field_update_group', { p_group: gid,
+                p_close_date: box.querySelector('[data-date]').value || null,
+                p_name: box.querySelector('[data-name]').value });
+              if (error) return alert(errorText(error));
+              draw();
+            };
+          };
+
+          sec.querySelectorAll('[data-line]').forEach(lineEl => {
+            const l = lines.find(x => x.activity_id === lineEl.dataset.line);
+            const edit = lineEl.querySelector('[data-edit-line]');
+            if (edit) edit.onclick = async () => {
+              const types = await typesFor(l.brand_id);
+              const box = lineEl.querySelector('[data-line-form]');
+              const needs = (t) => !!types.find(x => x.source_activity_type === t)?.needs_amount;
+              box.innerHTML = `<div class="fx-card">
+                <label class="fx-label">Activity type<select data-type>${types.map(t =>
+                  `<option${t.source_activity_type === l.source_activity_type ? ' selected' : ''}>${esc(t.source_activity_type)}</option>`).join('')}</select></label>
+                <div class="fx-row">
+                  <label class="fx-label">Quantity<input class="fx-input" type="number" min="0" step="1" value="${esc(l.quantity)}" data-qty></label>
+                  <label class="fx-label" data-amount-wrap ${needs(l.source_activity_type) ? '' : 'hidden'}>Amount sold ($)<input class="fx-input" type="number" min="0" step="0.01" value="${esc(l.amount ?? '')}" data-amount></label>
+                </div>
+                <label class="fx-label">What the brand sees<textarea class="fx-input" rows="2" data-summary>${esc(l.brand_visible_summary || '')}</textarea></label>
+                <label class="fx-label">Internal notes<textarea class="fx-input" rows="2" data-notes>${esc(l.notes || '')}</textarea></label>
+                <div class="fx-row"><button class="btn-full" data-go>Save</button><button class="link-btn" data-cancel>Cancel</button></div></div>`;
+              const typeSel = box.querySelector('[data-type]');
+              typeSel.onchange = () => { box.querySelector('[data-amount-wrap]').hidden = !needs(typeSel.value); };
+              box.querySelector('[data-cancel]').onclick = () => { box.innerHTML = ''; };
+              box.querySelector('[data-go]').onclick = async () => {
+                const amountRaw = box.querySelector('[data-amount]').value;
+                if (needs(typeSel.value) && !(Number(amountRaw) > 0)) {
+                  return alert('This type is priced on the amount sold, so enter it.');
+                }
+                const { error } = await db.rpc('field_update_line', {
+                  p_activity: l.activity_id,
+                  p_activity_type: typeSel.value,
+                  p_quantity: Number(box.querySelector('[data-qty]').value || 0),
+                  p_amount: amountRaw === '' ? null : Number(amountRaw),
+                  // An empty string clears a text field; that is the function's rule.
+                  p_summary: box.querySelector('[data-summary]').value,
+                  p_notes: box.querySelector('[data-notes]').value,
+                });
+                if (error) return alert(errorText(error));
+                draw();
+              };
+            };
+
+            const del = lineEl.querySelector('[data-delete-line]');
+            if (del) del.onclick = async () => {
+              const reason = prompt(`Delete ${l.brand_name} from “${l.title}”? The office can restore it. Reason (optional):`);
+              if (reason === null) return;
+              const { error } = await db.rpc('field_delete_line', { p_activity: l.activity_id, p_reason: reason });
+              if (error) return alert(errorText(error));
+              draw();
+            };
+          });
+
+          sec.querySelectorAll('[data-photo]').forEach(ph => {
+            const id = ph.dataset.photo;
+            const x = ph.querySelector('.fx-x');
+            if (x) x.onclick = async () => {
+              if (!confirm('Remove this photo?')) return;
+              const { error } = await db.rpc('field_remove_photo', { p_photo: id });
+              if (error) return alert(errorText(error));
+              draw();
+            };
+            const vis = ph.querySelector('[data-visible]');
+            if (vis) vis.onchange = async () => {
+              const { error } = await db.rpc('field_set_photo_visibility', { p_photo: id, p_brand_visible: vis.checked });
+              if (error) { alert(errorText(error)); vis.checked = !vis.checked; }
+            };
+          });
+
+          const add = sec.querySelector('[data-add-photo]');
+          if (add) {
+            const input = sec.querySelector('[data-photo-input]');
+            add.onclick = () => input.click();
+            input.onchange = async () => {
+              if (!input.files.length) return;
+              add.disabled = true; add.textContent = 'Preparing…';
+              try {
+                const prepared = await preparePhotos([...input.files]);
+                // Through the outbox, like everything else, so a dropped signal
+                // finishes later instead of losing the picture.
+                await outboxPut({ kind: 'photos', id: newId(), group_id: gid,
+                                  name: lines[0].title, photos: prepared, created: Date.now() });
+                add.textContent = 'Sending…';
+                await flushOutbox(userId);
+              } catch (e) { alert(errorText(e)); }
+              drawOutbox(); draw();
+            };
+          }
+        });
+      }
+
+      await flushOutbox(userId);
+      drawOutbox();
+      draw();
+    }
+  </script>
+</body>
+</html>

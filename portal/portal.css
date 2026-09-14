@@ -429,3 +429,65 @@
 }
 .venue-notes li:last-child { border-bottom:none; }
 .venue-notes .when { flex:0 0 auto; color:rgba(232,224,213,0.35); font-size:0.75rem; white-space:nowrap; }
+
+/* ---------- Field logging (Log activity, My activity) ----------
+   docs/FIELD_LOGGING_PLAN.md Phase 3. Built for a phone held in one hand in a
+   dim bar: every control is at least 44px tall, text inputs are 16px so iOS
+   does not zoom into them on focus, and the primary action is always a full
+   width gold button. All classes are `fx-` and portal-only (D121). */
+.fx-section { border:1px solid var(--divider-dark); border-radius:2px; padding:1.25rem; margin-bottom:1.5rem; background:var(--black-rich); }
+.fx-section h2 { font-size:1.2rem; color:var(--white); font-weight:600; margin-bottom:0.9rem; }
+.fx-label { display:flex; flex-direction:column; gap:0.35rem; margin-bottom:0.9rem;
+  font-size:0.68rem; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:rgba(232,224,213,0.5); }
+.fx-input, .fx-section select, .fx-section textarea {
+  background:rgba(255,255,255,0.05); border:1px solid var(--divider-dark); border-radius:2px;
+  padding:0.75rem 0.85rem; min-height:44px; color:var(--white);
+  font-family:'Inter',sans-serif; font-size:16px; outline:none; width:100%;
+  text-transform:none; letter-spacing:normal; font-weight:400;
+}
+.fx-input:focus, .fx-section select:focus, .fx-section textarea:focus { border-color:var(--gold); }
+.fx-section select option { background:var(--black-soft); }
+.fx-row { display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap; }
+.fx-row > * { flex:1 1 140px; }
+.fx-card { border:1px solid var(--gold-border); background:var(--gold-dim); border-radius:2px; padding:1rem; margin-top:0.6rem; }
+.fx-contact { display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:0.9rem; }
+.fx-venue-results { display:flex; flex-direction:column; gap:0.35rem; margin-top:0.4rem; }
+.fx-result { text-align:left; background:rgba(255,255,255,0.04); border:1px solid var(--divider-dark); border-radius:2px;
+  color:rgba(232,224,213,0.85); padding:0.7rem 0.85rem; min-height:44px; font-size:0.9rem; cursor:pointer; font-family:'Inter',sans-serif; }
+.fx-result:hover { border-color:var(--gold-border); }
+.fx-create { color:var(--gold); }
+.fx-chip { display:flex; justify-content:space-between; align-items:center; gap:0.75rem;
+  border:1px solid var(--divider-dark); border-radius:2px; padding:0.7rem 0.85rem; color:var(--white); }
+.fx-line { border:1px solid var(--divider-dark); border-radius:2px; padding:1rem; margin-bottom:0.9rem; position:relative; }
+.fx-line-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;
+  font-size:0.7rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--gold); font-weight:600; }
+.fx-btn { background:transparent; color:var(--gold); border:1px solid var(--gold-border); border-radius:2px;
+  padding:0.7rem 1rem; min-height:44px; font-weight:600; font-size:0.78rem; letter-spacing:1px; text-transform:uppercase;
+  cursor:pointer; font-family:'Inter',sans-serif; }
+.fx-btn:hover:not(:disabled) { background:var(--gold-dim); }
+.fx-btn:disabled { opacity:0.5; cursor:not-allowed; }
+.fx-btn.danger { color:#D89A9A; border-color:rgba(184,112,112,0.4); }
+.fx-photos { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:0.6rem; margin:0.75rem 0; }
+.fx-photo { position:relative; border:1px solid var(--divider-dark); border-radius:4px; overflow:hidden; }
+.fx-photo img { width:100%; aspect-ratio:1/1; object-fit:cover; display:block; }
+.fx-photo .fx-photo-opts { padding:0.4rem; font-size:0.72rem; color:rgba(232,224,213,0.7); display:flex; flex-direction:column; gap:0.25rem; }
+.fx-photo .fx-photo-opts label { display:flex; gap:0.35rem; align-items:center; }
+.fx-photo .fx-x { position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.7); color:#fff; border:none;
+  border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:1rem; line-height:1; }
+.fx-pay { display:flex; justify-content:space-between; align-items:baseline; gap:1rem; flex-wrap:wrap;
+  border:1px solid var(--gold-border); background:var(--gold-dim); padding:1rem 1.25rem; border-radius:2px; margin-bottom:1.5rem; }
+.fx-pay .num { font-family:'Cormorant Garamond',serif; font-size:2.2rem; font-weight:700; color:var(--gold); line-height:1; }
+.fx-pay .lbl { font-size:0.7rem; color:rgba(232,224,213,0.55); text-transform:uppercase; letter-spacing:1.5px; }
+.fx-list { list-style:none; margin:0; padding:0; }
+.fx-list li { display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap;
+  padding:0.8rem 0; border-bottom:1px solid var(--divider-dark); color:rgba(232,224,213,0.8); font-size:0.9rem; }
+.fx-list li:last-child { border-bottom:none; }
+.fx-list .when { font-size:0.75rem; color:rgba(232,224,213,0.4); }
+.fx-banner { border:1px solid rgba(201,138,90,0.4); background:rgba(201,138,90,0.08); color:#E0B48E;
+  padding:0.85rem 1.1rem; border-radius:2px; font-size:0.85rem; margin-bottom:1.25rem; }
+.fx-muted { color:rgba(232,224,213,0.4); font-size:0.8rem; }
+.fx-lock { font-size:0.7rem; color:rgba(232,224,213,0.45); letter-spacing:1px; text-transform:uppercase; }
+@media (max-width: 600px) {
+  .fx-contact { grid-template-columns:1fr; }
+  .portal-main { padding-left:4%; padding-right:4%; }
+}

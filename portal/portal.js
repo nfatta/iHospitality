@@ -225,6 +225,10 @@ const ADMIN_NAV = [
    judgement about a colleague's account (see the note on that page). */
 const CONTRACTOR_NAV_MINE = [
   ['index.html', 'Dashboard'],
+  // Field logging (docs/FIELD_LOGGING_PLAN.md). First after the dashboard,
+  // because on a phone in a bar it is the reason the portal was opened.
+  ['log.html', 'Log activity'],
+  ['my-activity.html', 'My activity'],
   ['my-venues.html', 'My accounts'],
   ['my-pay.html', 'My pay'],
 ];

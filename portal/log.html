@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Log activity | iHospitality Portal</title>
+  <link rel="icon" href="../favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/site.css">
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+
+  <nav id="shell-nav"></nav>
+  <div class="mobile-nav" id="shell-mobile"></div>
+
+  <main class="portal-main">
+    <div class="portal-head">
+      <div>
+        <span class="portal-eyebrow">My work</span>
+        <h1>Log activity</h1>
+        <p class="portal-sub">Check in when you arrive. Log the work now or later.</p>
+      </div>
+    </div>
+
+    <div id="gate"></div>
+    <div id="app" hidden>
+      <div id="outbox"></div>
+      <div id="pay"></div>
+
+      <section class="fx-section">
+        <h2>I’m at an account</h2>
+        <div id="ck-venue"></div>
+        <label class="fx-label">Quick note (optional)
+          <input class="fx-input" id="ck-note" placeholder="e.g. GM out until 3">
+        </label>
+        <button class="btn-full" id="ck-go" disabled>Check in</button>
+        <p class="fx-muted" id="ck-msg" style="margin-top:0.6rem"></p>
+      </section>
+
+      <section class="fx-section" id="open-section" hidden>
+        <h2>Not logged yet</h2>
+        <ul class="fx-list" id="open-list"></ul>
+      </section>
+
+      <section class="fx-section" id="form-section">
+        <h2 id="form-title">Log an activity</h2>
+        <div id="from-checkin"></div>
+
+        <p class="fx-label">Venue</p>
+        <div id="venue"></div>
+
+        <div class="fx-row" style="margin-top:0.9rem">
+          <label class="fx-label">Close date (when it was done)
+            <input class="fx-input" type="date" id="close-date">
+          </label>
+          <label class="fx-label">Name
+            <input class="fx-input" id="name" placeholder="e.g. Tasting at Bella Napoli">
+          </label>
+        </div>
+
+        <div id="lines"></div>
+        <button type="button" class="fx-btn" id="add-line">+ Add another brand</button>
+
+        <p class="fx-label" style="margin-top:1.25rem">Photos</p>
+        <div class="fx-row">
+          <button type="button" class="fx-btn" id="take-photo">Take photo</button>
+          <button type="button" class="fx-btn" id="upload-photo">Upload</button>
+        </div>
+        <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
+        <input type="file" id="library-input" accept="image/*" multiple hidden>
+        <div class="fx-photos" id="photos"></div>
+        <p class="fx-muted" id="photo-msg"></p>
+
+        <div id="form-err"></div>
+        <button class="btn-full" id="save" style="margin-top:1rem">Save activity</button>
+        <p class="fx-muted" id="save-msg" style="margin-top:0.6rem"></p>
+      </section>
+    </div>
+  </main>
+
+  <footer id="shell-footer"></footer>
+
+  <script type="module">
+    import { db, requireAuth, renderShell, render, esc, money, fmtDate } from './portal.js';
+    import { newId, todayIso, errorText, getLocation, preparePhotos, venuePicker,
+             outboxAll, outboxPut, draftGet, draftPut, draftDelete,
+             flushOutbox, keepFlushing } from './field.js';
+
+    const auth = await requireAuth();
+    if (auth) {
+      renderShell('log.html', auth.profile);
+
+      if (!auth.profile.contractor_id) {
+        // Keyed on the contractor record, never the role (D140): the database
+        // refuses the same logins, and this says so before anyone types.
+        render(document.getElementById('gate'), { empty: {
+          title: 'This login is not linked to a person in the field',
+          body: 'Logging work records who did it. Ask Nicholas to link your login to your contractor record.' } });
+      } else {
+        start(auth);
+      }
+    }
+
+    async function start(auth) {
+      document.getElementById('app').hidden = false;
+      const userId = auth.session.user.id;
+      const mine = auth.profile.contractor_id;
+      const $ = (id) => document.getElementById(id);
+
+      /* ---------- brands and the activity types each one allows ---------- */
+      const { data: brands } = await db.from('brands')
+        .select('id, name').eq('is_active', true).order('name');
+      const typeCache = new Map();
+      async function typesFor(brandId) {
+        if (!typeCache.has(brandId)) {
+          const { data, error } = await db.rpc('field_activity_types', { p_brand: brandId });
+          typeCache.set(brandId, error ? [] : (data || []));
+        }
+        return typeCache.get(brandId);
+      }
+
+      /* ---------- this month so far: the contractor's OWN pay ----------
+         Never the charge (D137). The same two sources as My pay. A line appears
+         here once it has been sent; unsent work cannot be priced yet. */
+      async function drawPay() {
+        const month = todayIso().slice(0, 7);
+        const [{ data: earned }, { data: base }] = await Promise.all([
+          db.from('v_my_activity_pay').select('earned').eq('month', month),
+          db.from('v_my_pay').select('monthly_equivalent').eq('month', month),
+        ]);
+        const activity = (earned || []).reduce((a, r) => a + Number(r.earned || 0), 0);
+        const basePay = (base || []).reduce((a, r) => a + Number(r.monthly_equivalent || 0), 0);
+        $('pay').innerHTML = `<div class="fx-pay">
+          <div><div class="lbl">This month so far</div>
+            <div class="num">${money(activity + basePay)}</div></div>
+          <div class="fx-muted">${money(activity)} from ${(earned || []).length} activities
+            ${basePay ? `+ ${money(basePay)} base (monthly spread)` : ''}</div></div>`;
+      }
+
+      /* ---------- the outbox ---------- */
+      async function drawOutbox() {
+        const items = await outboxAll();
+        if (!items.length) { $('outbox').innerHTML = ''; return; }
+        const blocked = items.filter(i => i.blocked);
+        $('outbox').innerHTML = `<div class="fx-banner">
+          <strong>${items.length} not sent yet</strong> — saved on this phone and
+          sending ${navigator.onLine ? 'now' : 'when you are back online'}.
+          ${blocked.map(i => `<div style="margin-top:0.4rem">“${esc(i.name || i.venue?.name || 'Check-in')}”: ${esc(i.error || '')}</div>`).join('')}
+          <div style="margin-top:0.6rem"><button class="fx-btn" id="retry">Send now</button></div></div>`;
+        $('retry').onclick = async () => {
+          for (const i of items) { i.blocked = false; await outboxPut(i); }
+          await refresh();
+        };
+      }
+
+      const refresh = async () => {
+        await flushOutbox(userId);
+        await Promise.all([drawOutbox(), drawOpen(), drawPay()]);
+      };
+      keepFlushing(userId, () => Promise.all([drawOutbox(), drawOpen(), drawPay()]));
+
+      /* ---------- check in ---------- */
+      let ckVenue = null;
+      venuePicker($('ck-venue'), (v) => { ckVenue = v; $('ck-go').disabled = !v; });
+      $('ck-go').onclick = async () => {
+        $('ck-go').disabled = true;
+        $('ck-msg').textContent = 'Getting your location…';
+        const location = await getLocation();
+        await outboxPut({ kind: 'checkin', id: newId(), venue: ckVenue,
+                          note: $('ck-note').value.trim(), location, created: Date.now() });
+        $('ck-note').value = '';
+        venuePicker($('ck-venue'), (v) => { ckVenue = v; $('ck-go').disabled = !v; });
+        ckVenue = null;
+        $('ck-msg').textContent = location.status === 'ok'
+          ? 'Checked in.' : 'Checked in (no location: ' + location.status + ').';
+        await refresh();
+      };
+
+      /* ---------- check-ins not logged yet ----------
+         The contractor_id filter is SCOPE, not security: staff can read every
+         check-in (is_staff), and this list is "yours". RLS is still what stops
+         a contractor reading anyone else's. */
+      async function drawOpen() {
+        const { data, error } = await db.from('venue_checkin')
+          .select('id, venue_id, checked_in_at, note, venues(name, city)')
+          .eq('contractor_id', mine).eq('status', 'open')
+          .order('checked_in_at', { ascending: false });
+        const list = error ? [] : (data || []);
+        $('open-section').hidden = !list.length;
+        $('open-list').innerHTML = list.map(c => `<li>
+            <span><strong>${esc(c.venues?.name || 'Venue')}</strong>
+              <span class="when">${esc(new Date(c.checked_in_at).toLocaleString())}</span>
+              ${c.note ? `<br><span class="fx-muted">${esc(c.note)}</span>` : ''}</span>
+            <span class="fx-row" style="flex:0 0 auto">
+              <button class="fx-btn" data-log="${c.id}">Log it</button>
+              <button class="fx-btn" data-dismiss="${c.id}">Nothing to log</button></span></li>`).join('');
+        $('open-list').querySelectorAll('[data-log]').forEach(b => b.onclick = () => {
+          const c = list.find(x => x.id === b.dataset.log);
+          fromCheckin(c);
+        });
+        $('open-list').querySelectorAll('[data-dismiss]').forEach(b => b.onclick = async () => {
+          const reason = prompt('Why was there nothing to log? (optional)') ?? null;
+          if (reason === null) return;
+          const { error } = await db.rpc('field_dismiss_checkin', { p_checkin: b.dataset.dismiss, p_reason: reason });
+          if (error) alert(errorText(error));
+          drawOpen();
+        });
+      }
+
+      /* ---------- the activity form ---------- */
+      const form = {
+        venue: null, close_date: todayIso(), name: '', checkin: null,
+        lines: [], photos: [],
+      };
+
+      function fromCheckin(c) {
+        form.checkin = { id: c.id, venue: c.venues?.name };
+        form.venue = { id: c.venue_id, name: c.venues?.name, city: c.venues?.city };
+        form.close_date = c.checked_in_at.slice(0, 10);
+        drawForm();
+        $('form-section').scrollIntoView({ behavior: 'smooth' });
+      }
+
+      const addLine = () => form.lines.push({ key: newId(), brand_id: '', activity_type: '',
+        quantity: 1, amount: '', summary: '', notes: '', needs_amount: false });
+
+      async function drawLines() {
+        const el = $('lines');
+        el.innerHTML = form.lines.map((l, i) => `
+          <div class="fx-line" data-key="${l.key}">
+            <div class="fx-line-head"><span>Brand ${i + 1}</span>
+              ${form.lines.length > 1 ? `<button type="button" class="link-btn" data-remove="${l.key}">Remove</button>` : ''}</div>
+            <label class="fx-label">Brand
+              <select data-f="brand_id"><option value="">Pick a brand</option>
+                ${(brands || []).map(b => `<option value="${b.id}"${b.id === l.brand_id ? ' selected' : ''}>${esc(b.name)}</option>`).join('')}
+              </select></label>
+            <label class="fx-label">Activity type
+              <select data-f="activity_type" ${l.brand_id ? '' : 'disabled'}><option value="">${l.brand_id ? 'Pick a type' : 'Pick a brand first'}</option></select></label>
+            <div class="fx-row">
+              <label class="fx-label">Quantity<input class="fx-input" type="number" min="0" step="1" data-f="quantity" value="${esc(l.quantity)}"></label>
+              <label class="fx-label" data-amount ${l.needs_amount ? '' : 'hidden'}>Amount sold ($)<input class="fx-input" type="number" min="0" step="0.01" data-f="amount" value="${esc(l.amount)}"></label>
+            </div>
+            <label class="fx-label">What the brand sees<textarea class="fx-input" rows="2" data-f="summary">${esc(l.summary)}</textarea></label>
+            <label class="fx-label">Internal notes (never shown to the brand)<textarea class="fx-input" rows="2" data-f="notes">${esc(l.notes)}</textarea></label>
+          </div>`).join('');
+
+        for (const l of form.lines) {
+          const box = el.querySelector(`[data-key="${l.key}"]`);
+          const typeSel = box.querySelector('[data-f="activity_type"]');
+          if (l.brand_id) {
+            const types = await typesFor(l.brand_id);
+            typeSel.insertAdjacentHTML('beforeend', types.map(t =>
+              `<option value="${esc(t.source_activity_type)}"${t.source_activity_type === l.activity_type ? ' selected' : ''}>${esc(t.source_activity_type)}</option>`).join(''));
+          }
+          box.querySelectorAll('[data-f]').forEach(input => {
+            input.addEventListener('input', async () => {
+              l[input.dataset.f] = input.value;
+              if (input.dataset.f === 'brand_id') { l.activity_type = ''; l.needs_amount = false; await drawLines(); drawPhotos(); }
+              if (input.dataset.f === 'activity_type') {
+                const t = (await typesFor(l.brand_id)).find(x => x.source_activity_type === l.activity_type);
+                l.needs_amount = !!t?.needs_amount;
+                box.querySelector('[data-amount]').hidden = !l.needs_amount;
+              }
+              saveDraft();
+            });
+          });
+          const rm = box.querySelector('[data-remove]');
+          if (rm) rm.onclick = () => { form.lines = form.lines.filter(x => x.key !== l.key); drawLines(); drawPhotos(); saveDraft(); };
+        }
+      }
+
+      /* Photos: take or upload, then per photo a consent tick and, when the
+         Activity has more than one brand, which brands may see it. Visible by
+         default (operator ruling). */
+      function drawPhotos() {
+        const chosenBrands = form.lines.filter(l => l.brand_id)
+          .map(l => (brands || []).find(b => b.id === l.brand_id)).filter(Boolean);
+        $('photos').innerHTML = form.photos.map(p => `
+          <div class="fx-photo" data-id="${p.id}">
+            <img src="${p.url}" alt="">
+            <button type="button" class="fx-x" aria-label="Remove photo">×</button>
+            <div class="fx-photo-opts">
+              <label><input type="checkbox" data-consent ${p.consent ? 'checked' : ''}> People in it agreed</label>
+              ${chosenBrands.length > 1 ? chosenBrands.map(b => `<label><input type="checkbox" data-brand="${b.id}"
+                 ${p.hiddenFor.includes(b.id) ? '' : 'checked'}> ${esc(b.name)} can see</label>`).join('') : ''}
+            </div></div>`).join('');
+        $('photos').querySelectorAll('.fx-photo').forEach(box => {
+          const p = form.photos.find(x => x.id === box.dataset.id);
+          box.querySelector('.fx-x').onclick = () => { form.photos = form.photos.filter(x => x !== p); drawPhotos(); saveDraft(); };
+          box.querySelector('[data-consent]').onchange = (e) => { p.consent = e.target.checked; saveDraft(); };
+          box.querySelectorAll('[data-brand]').forEach(cb => cb.onchange = () => {
+            p.hiddenFor = cb.checked ? p.hiddenFor.filter(x => x !== cb.dataset.brand)
+                                     : [...new Set([...p.hiddenFor, cb.dataset.brand])];
+            saveDraft();
+          });
+        });
+      }
+
+      async function addFiles(files) {
+        if (!files?.length) return;
+        $('photo-msg').textContent = 'Preparing photos…';
+        try {
+          const prepared = await preparePhotos([...files]);
+          for (const p of prepared) { p.url = URL.createObjectURL(p.blob); form.photos.push(p); }
+          $('photo-msg').textContent = '';
+        } catch (e) {
+          $('photo-msg').textContent = errorText(e);
+        }
+        drawPhotos(); saveDraft();
+      }
+      $('take-photo').onclick = () => $('camera-input').click();
+      $('upload-photo').onclick = () => $('library-input').click();
+      $('camera-input').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };
+      $('library-input').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };
+
+      function drawForm() {
+        $('close-date').max = todayIso();
+        $('close-date').value = form.close_date;
+        $('name').value = form.name;
+        $('from-checkin').innerHTML = form.checkin
+          ? `<div class="fx-card" style="margin:0 0 0.9rem">Logging your check-in at <strong>${esc(form.checkin.venue)}</strong>.
+              <button type="button" class="link-btn" id="unlink">Not from this check-in</button></div>` : '';
+        if (form.checkin) $('unlink').onclick = () => { form.checkin = null; drawForm(); saveDraft(); };
+        // A check-in fixes the venue: the database refuses any other.
+        if (form.checkin) {
+          $('venue').innerHTML = `<div class="fx-chip"><span><strong>${esc(form.venue.name)}</strong></span></div>`;
+        } else {
+          venuePicker($('venue'), (v) => { form.venue = v; saveDraft(); }, form.venue);
+        }
+        if (!form.lines.length) addLine();
+        drawLines(); drawPhotos();
+      }
+
+      $('close-date').oninput = (e) => { form.close_date = e.target.value; saveDraft(); };
+      $('name').oninput = (e) => { form.name = e.target.value; saveDraft(); };
+      $('add-line').onclick = () => { addLine(); drawLines(); saveDraft(); };
+
+      /* ---------- the draft: nothing typed is lost if the page closes ---------- */
+      let draftTimer = null;
+      function saveDraft() {
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(() => {
+          const { photos, ...rest } = form;
+          draftPut('log', { ...rest, photos: photos.map(({ url, ...p }) => p) }).catch(() => {});
+        }, 400);
+      }
+      const draft = await draftGet('log').catch(() => null);
+      if (draft?.value) {
+        Object.assign(form, draft.value);
+        form.photos = (form.photos || []).map(p => ({ ...p, url: URL.createObjectURL(p.blob) }));
+      }
+      drawForm();
+
+      /* ---------- save ---------- */
+      $('save').onclick = async () => {
+        $('form-err').innerHTML = '';
+        const problems = [];
+        if (!form.venue) problems.push('Pick the venue.');
+        if (!form.name.trim()) problems.push('Give it a name.');
+        if (!form.close_date || form.close_date > todayIso()) problems.push('The close date cannot be in the future.');
+        const lines = form.lines.filter(l => l.brand_id || l.activity_type);
+        if (!lines.length) problems.push('Add at least one brand.');
+        for (const l of lines) {
+          const b = (brands || []).find(x => x.id === l.brand_id)?.name || 'a brand';
+          if (!l.brand_id || !l.activity_type) problems.push(`Pick a brand and an activity type on every line.`);
+          // A percentage-priced line with no amount charges $0.00 while looking
+          // priced (D98), so the amount is required there, not just suggested.
+          if (l.needs_amount && !(Number(l.amount) > 0)) problems.push(`${b}: this type is priced on the amount sold, so enter it.`);
+        }
+        if (problems.length) {
+          $('form-err').innerHTML = `<div class="err">${[...new Set(problems)].map(esc).join('<br>')}</div>`;
+          return;
+        }
+
+        // Someone else already logged the same thing here today? Warn, never
+        // block: two people at one tasting is normal (each logs their own).
+        if (navigator.onLine && form.venue.id) {
+          const { data: dupes } = await db.from('v_internal_activity')
+            .select('contractor, source_activity_type')
+            .eq('venue_id', form.venue.id).eq('activity_date', form.close_date)
+            .in('source_activity_type', lines.map(l => l.activity_type))
+            .neq('contractor_id', mine);
+          if (dupes?.length && !confirm(`${dupes[0].contractor || 'Someone'} already logged ${dupes[0].source_activity_type} here on this date. Save yours too?`)) return;
+        }
+
+        $('save').disabled = true;
+        $('save-msg').textContent = 'Getting your location…';
+        const location = await getLocation();
+
+        const item = {
+          kind: 'activity', id: newId(), created: Date.now(),
+          venue: form.venue, close_date: form.close_date, name: form.name.trim(),
+          checkin_id: form.checkin?.id || null, location,
+          lines: lines.map(l => ({ brand_id: l.brand_id, activity_type: l.activity_type,
+            quantity: Number(l.quantity || 0), amount: l.needs_amount ? Number(l.amount) : null,
+            summary: l.summary, notes: l.notes })),
+          photos: form.photos.map(({ url, ...p }) => p),
+        };
+        await outboxPut(item);
+        await draftDelete('log');
+
+        // Reset the form for the next one.
+        form.photos.forEach(p => URL.revokeObjectURL(p.url));
+        Object.assign(form, { venue: null, close_date: todayIso(), name: '', checkin: null, lines: [], photos: [] });
+        drawForm();
+
+        $('save-msg').textContent = 'Sending…';
+        const { failed } = await flushOutbox(userId);
+        $('save').disabled = false;
+        $('save-msg').textContent = failed
+          ? 'Saved on this phone. It will send when it can (see above).'
+          : `Saved${location.status === 'ok' ? '' : ' (no location: ' + location.status + ')'}.`;
+        await Promise.all([drawOutbox(), drawOpen(), drawPay()]);
+      };
+
+      await refresh();
+    }
+  </script>
+</body>
+</html>
