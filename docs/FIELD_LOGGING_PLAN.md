@@ -1,7 +1,10 @@
 # Field Logging Plan (V3): contractors log their own work
 
 > **Written 14 Sep 2026 from a design conversation with the operator. The design
-> below is AGREED. NOTHING IS BUILT.** Read `CLAUDE.md`, `docs/PORTAL_PLAN.md`
+> below is AGREED.** **Status at the close of 14 Sep 2026: Phases 1, 2, 3 and 3b
+> are BUILT, applied to Supabase and deployed** (D184 to D201). Phil begins beta
+> testing on 15 Sep. Next: the Streamlit admin screens (Phase 6), September
+> invoicing from the portal (D200), then Phases 4, 5 and 7. Read `CLAUDE.md`, `docs/PORTAL_PLAN.md`
 > and `docs/DATA_ACCESS_TIERS.md` first. This is the V3 item in `HANDOFF.md`:
 > contractors enter their own work in the portal and HubSpot stops being the
 > input.
@@ -428,17 +431,33 @@ per portal phase.
 
 | Phase | What | Verify |
 |---|---|---|
-| **1. Release gate** | `brand_month_release`, brand policies, brand-facing account status from released months, photo policies, day-one release through Aug 2026, admin Release page. **Useful before anything else exists.** | Impersonate a brand: Aug visible, Sep invisible across activities, venues, photos, status. Staff pages unchanged. |
-| **2. Write foundation** | RPC gate pattern, `activity_group_id`, `contractor_edited_at`, capture tables, brand-keyed activity-type vocabulary (no money), venue create, contacts (nullable HubSpot ids), venue notes, venue problems, recycle bin, storage policies, **`merge_venue()` rescue fix**. | SQL suite incl. new test files; grant audit 0. |
-| **3. Log Activity (portal)** | Log page with multi-brand lines, photos (camera/upload, shrink, EXIF, visibility), GPS capture, drafts and retry, month-to-date pay, My activity (edit/delete until release), venue create, contacts, report problem. `ALLOWED` list (D124), nav, `sw.js` version. | Open as contractor AND admin (D154), on a phone; type in every field (D92). |
-| **3b. Check-ins** | "I'm at an account", `venue_checkin`, the not-logged-yet list at the top of Log Activity, prefill, dismiss, `checkin_id` on activities. | A check-in logged later lands with its venue, date and location; brands read 0 check-ins. |
+| **1. Release gate** ✅ live | `brand_month_release`, brand policies, brand-facing account status from released months, photo policies, day-one release through Aug 2026, admin Release page. **Useful before anything else exists.** | Impersonate a brand: Aug visible, Sep invisible across activities, venues, photos, status. Staff pages unchanged. |
+| **2. Write foundation** ✅ live | RPC gate pattern, `activity_group_id`, `contractor_edited_at`, capture tables, brand-keyed activity-type vocabulary (no money), venue create, contacts (nullable HubSpot ids), venue notes, venue problems, recycle bin, storage policies, **`merge_venue()` rescue fix**. | SQL suite incl. new test files; grant audit 0. |
+| **3. Log Activity (portal)** ✅ deployed | Log page with multi-brand lines, photos (camera/upload, shrink, EXIF, visibility), GPS capture, drafts and retry, month-to-date pay, My activity (edit/delete until release), venue create, contacts, report problem. `ALLOWED` list (D124), nav, `sw.js` version. | Open as contractor AND admin (D154), on a phone; type in every field (D92). |
+| **3b. Check-ins** ✅ deployed | "I'm at an account", `venue_checkin`, the not-logged-yet list at the top of Log Activity, prefill, dismiss, `checkin_id` on activities. | A check-in logged later lands with its venue, date and location; brands read 0 check-ins. |
 | **4. Planned / Done** | `planned_activity`, Upcoming, Mark done. | Planned counts for nothing; Done lands as activities. |
 | **5. Expenses** | `expense`, `expense_category`, receipts bucket, portal form, admin expense page, migrate the 5 rows. | Brand and other contractor read 0 expenses and receipts. |
-| **6. Admin** | Field entries on Review and edit with flags, recycle bin, venue problem queue, Upcoming. | Open every tab. |
+| **6. Admin** (next; Streamlit, D199) | Field entries on Review and edit with flags, recycle bin, venue problem queue, Upcoming. | Open every tab. |
 | **7. Reminders** | In-portal list first, then push subscription, scheduled job, Edge Function, email fallback (needs SMTP). | A due reminder arrives on Phil's phone and by email. |
 | **8. Pilot and cutover** | Phil portal-only for 2 to 4 weeks, written GPS notice, compare with HubSpot, move everyone, sync off. | Month reconciles from portal data alone. |
 
 ---
+
+## Built differently from the plan above (14 Sep 2026)
+
+- **Log activity:** one activity type and one quantity for the whole Activity;
+  brands add only their notes; no amount field (D196). Check in is its own page
+  (D193).
+- **Photos:** one stored file per brand line, copied in storage (D194). Take photo
+  uses an in-page camera, because Android killed the browser behind the Camera app
+  (D198).
+- **Location:** GPS for 12s, then the network position; permission asked when a
+  logging page opens (D195).
+- **The field picker is `brand_activity_offer`**, filled from the operator's
+  activity-type checklist; archiving a type is unoffering it (D197).
+- **Venue problem "duplicate of"** is written in the note from the portal; the
+  office picks the venue in the admin.
+- **Phase 2's storage policies moved into Phase 3** with the photo work.
 
 ## Logged for later
 

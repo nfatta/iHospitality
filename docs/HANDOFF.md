@@ -1,7 +1,102 @@
 # HANDOFF - start here
 
-Written at the close of **11 Sep 2026**, local session with a live database.
+Written at the close of **14 Sep 2026**, local session with the live database.
 Earlier sessions are kept below, newest first, each marked superseded.
+
+## FIELD LOGGING (V3) IS LIVE, AND PHIL STARTS BETA TESTING ON 15 SEP.
+
+A very long day. Admin cleanup in the morning, then V3 designed with the operator
+and Phases 1 to 3 built, applied to Supabase, tested on a real Android phone and
+deployed. **Decisions D184 to D201.** The design is `docs/FIELD_LOGGING_PLAN.md`.
+
+### Where everything is
+
+| What | State |
+|---|---|
+| `portal_seed` (no remote) | All committed on `main`. Not deployed, never deploys. |
+| Supabase | Everything below applied. Backups in `~/Backups/ihospitality/` before each apply, last `ihospitality-2026-09-14_1912`. |
+| Website repo | `main` pushed at `9feab99`; ihospitality.vip serves the new portal pages (app version `ih-portal-v4`). One Netlify build used. |
+| Test data | All wiped. No field rows exist on live except whatever Phil logs from 15 Sep. |
+
+### What was built today
+
+**Admin (Streamlit)** - restart it to see any of this (D173: an imported module
+does not reload on rerun).
+- Review and edit and Rate card: one section at a time, fragments, tooltips (D184).
+- `lib.flash` / `lib.show_flash`: a message before `st.rerun()` never shows (D185).
+- Rate card Problems tiles with "mark expected" per check (D186).
+- **Release months** page (D188) and **Field picker** on Rate card (D197).
+
+**Database**
+- Month release gate: brands see a month only once released, per brand; day one
+  released everything through Aug 2026 (D188).
+- Field write functions, the gate, locks, recycle bin, merge fix, contacts and
+  notes from the field, venue problem reports (D189 to D192).
+- Check-ins, field photos with per-brand visibility, `field_location` (D193 to D195).
+- `brand_activity_offer` and the activity-type cleanup, proof 0 of 1,390 moved (D197).
+- `authenticated` write grants: 0 (D187).
+- Tests: `db/test/13` to `16`; `bash db/test/run.sh` is green.
+
+**Portal** (`portal/`)
+- `checkin.html`, `log.html`, `my-activity.html`, `field.js`, `venue-field.js`;
+  nav, login `ALLOWED`, `sw.js` updated (D190, D193, D196, D198).
+
+### ⚠️ Open, in priority order
+
+1. **Phil's beta (15 Sep).** He must fully close and reopen the installed app
+   (twice) to get v4 (D150). Sidebar should show Check in, Log activity, My
+   activity. He logs in the PORTAL ONLY. Watch his first entries on Review and edit.
+2. **Contractors adding venues.** Built, and verified on live as Phil's login in
+   a rolled-back transaction (create with city and note, retry returns the same
+   venue, manager contact with best time, log an activity there, exact duplicate
+   name refused). **The phone screen for it has not been used yet**: in Check in
+   or Log activity, type a name in the venue box and tap "+ Create new venue".
+   Have Phil try it first thing. The admin has **no venue problem queue** yet:
+   reports sit in `venue_problem_report` unread, and field-created venues have no
+   market until someone sets it on the Venues page.
+3. **Admin screens on Streamlit (D199):** recycle bin review and restore
+   (`activity_deleted`), venue problem queue, field entries on Review and edit
+   with no-location flags (`field_location`), check-ins.
+4. **⚠️ D200: September invoicing must include portal-logged activities** before
+   30 Sep. `monthly_invoice.py` reads HubSpot only; Phil's work is not there.
+5. Then Phase 4 Planned/Done, Phase 5 expenses and receipts, Phase 7 reminders.
+6. Release September per brand once reconciled (Release months page).
+
+### Things that will bite
+
+- **The Field picker decides what a contractor can log.** A new brand, or a new
+  rate-card line, shows nothing in the field form until it is ticked there (D197).
+- **Logging into a released month is refused** by design; the office adds late
+  work in Review and edit (D190).
+- **A real phone is the only test for camera and location.** The desktop browser
+  pane blocks location and cannot open a file picker. For a phone test before a
+  deploy, tunnel ONLY portal files, never the repo root (D201).
+- **Staff logins can log only with a contractor record** linked
+  (`create_portal_user.py --set-role staff --contractor "Name"`) (D189).
+- **Netlify builds cost credits.** Docs-only commits skip the build
+  (`netlify.toml`); a portal change is one build if pushed straight to `main`.
+
+## THE NEXT PROMPT
+
+> Read `CLAUDE.md`, `docs/HANDOFF.md`, `docs/FIELD_LOGGING_PLAN.md`, and **D184 to
+> D201** in `docs/DECISIONS.md`.
+>
+> Field logging is live and Phil is beta testing. Start with **venues**: confirm a
+> contractor can create a venue from the portal's venue box on a phone (the
+> database side is verified), then build the **venue problem queue** and a view of
+> field-created venues on the admin's Venues page. Then the rest of the
+> Streamlit admin screens (D199): recycle bin restore, field entries and check-ins
+> with no-location flags on Review and edit.
+>
+> Before 30 Sep: **D200**, portal-logged activities into the month-end invoice run.
+>
+> Ask me before any Netlify push or any schema apply to Supabase. Back up first
+> (`python backup_db.py`), run `bash db/test/run.sh`, and open every changed page
+> in a browser before calling it done.
+
+---
+
+# HANDOFF (superseded 14 Sep 2026) - written at the close of 11 Sep 2026
 
 ## DAME MAS NOW GOES THROUGH THE FLASH PAGE, AND AUGUST BILLS $590.13.
 

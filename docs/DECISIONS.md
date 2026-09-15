@@ -7792,3 +7792,233 @@ defaulted to Phil King and one to Eric Anderson, and the operator looked for the
 new work under Eric's login first. That is the default behaving correctly, not a
 fault, but it is worth knowing the page will concentrate a month on whoever holds
 the venues.
+
+---
+
+# 14 Sep 2026: admin cleanup, the release gate, and field logging (V3) Phases 1 to 3
+
+Recorded at the close of a long session with the live database. The design lives in
+`docs/FIELD_LOGGING_PLAN.md`; these are the calls that were made and built.
+
+---
+
+**D184 - REVIEW AND EDIT AND RATE CARD SHOW ONE SECTION AT A TIME, AND NOTHING WAS REMOVED.** ✅ operator-confirmed 14 Sep 2026
+
+Operator: *"too much scrolling and jumping"* and, of Rate card, *"so much on there."*
+Both pages open with a section switcher (`st.segmented_control`) and each section is
+an `st.fragment`, so a click reruns that section only. Review and edit: Waiting for
+you, Promoted grid, Bottle calculator, Add a missing activity; a waiting deal opens
+from a row click instead of one expander per deal, because a collapsed expander still
+runs its body and every deal was building its correction form on every click. Rate
+card: Problems (three tiles), Current rates, Add or retire a rate, Field picker,
+Product price list.
+
+The condition was *"do not remove any function or relevant data."* Standing
+explanations moved into `help=` tooltips; every warning about the data kept its
+wording. Found on the way: Add a missing activity raised NameError on a month with
+nothing promoted (it borrowed `contractor_names` from the grid), and a grid edit could
+reappear on a reordered row, so grid keys now carry a save counter.
+
+---
+
+**D185 - A MESSAGE DRAWN BEFORE `st.rerun()` NEVER REACHES THE SCREEN, `st.toast` INCLUDED.** ✅ verified 14 Sep 2026
+
+Checked in a throwaway app rather than assumed: neither `st.success` nor `st.toast`
+survives a rerun, full or fragment. "Saved this rate" and "Promoted N deals" had never
+shown. `lib.flash(message, key)` parks it in session state and `lib.show_flash(key)`
+draws it once on the next run.
+
+---
+
+**D186 - A RATE-CARD PROBLEM ROW CAN BE MARKED EXPECTED, PER CHECK, WITH A REASON.** ✅ operator-confirmed 14 Sep 2026
+
+`rate_check_expected`. The three checks (no rate, no pay rate, loses money) listed the
+same deliberate rows on every visit. A mark belongs to ONE check (mileage earning no
+margin is right; mileage with no pay rate is a fault), has three widths only (brand +
+activity, activity for every brand, everything for a brand; never a whole check for
+every brand), and a NULL type with `all_types` false means the BLANK type. Not seeded
+in `schema.sql`: the four documented exceptions were inserted once on live, so a
+re-apply never brings back a mark the operator removed. Only the Rate card page reads
+it; Health and Analysis count as before.
+
+---
+
+**D187 - `authenticated` HOLDS NO WRITE PRIVILEGE ON ANYTHING IN `public`, ENFORCED AT THE END OF THE FILE.** ✅ applied 14 Sep 2026
+
+The grant audit read 1: TRUNCATE on `v_contractor_activity_pay`, a view created after
+Section 7's sweep. Harmless on a view, and still a guarantee reading "0, except the one
+we know about". The default-privileges revoke now names TRUNCATE, and a final
+`revoke insert, update, delete, truncate` is the last statement of `schema.sql`. Keep
+it last.
+
+---
+
+**D188 - A BRAND SEES A MONTH ONLY ONCE IT IS RELEASED, PER BRAND.** ✅ operator-confirmed, live 14 Sep 2026
+
+Operator: *"only after we reconcile the month, not during the month."*
+`brand_month_release (brand_id, month)`; the brand branches of the policies on
+`activities`, `venues`, `photos`, `brand_venue_status` and the photo files require it.
+Day one released every brand through Aug 2026, inside the block that CREATES the
+table, so it runs once in a database's life and a re-apply never re-releases a
+withdrawn month. Staff, contractors and service_role are untouched.
+
+The subtle part is account STATUS: the trigger advances the stored row the moment work
+is inserted, so the two account views rebuild status, first placed and last touched
+from released work whenever a brand login looks at a pair with unreleased work
+(`brand_pair_partly_unreleased`). The definer helpers answer only about the caller's
+own brand, or PostgREST would let a brand map a competitor's accounts. Release months
+page in the admin; `month_release.py` on the command line. `14_release_gate_test.sql`
+was run with the status rebuild disabled to prove it fails.
+
+---
+
+**D189 - D61 IS REOPENED NARROWLY: FIELD WRITES GO THROUGH GATED FUNCTIONS, NEVER TABLE GRANTS.** ✅ live 14 Sep 2026
+
+The portal writes for the first time. `authenticated` still has no table write grant.
+Every write is a `security definer` `field_*` function whose first statement is
+`field_contractor_id()`, which raises unless the login is active and carries a
+contractor record (keyed on the record, never the role, D140). Who did the work is
+taken from the login and is never a parameter. Staff logins with a contractor record
+can log (Phil's staff login was linked to "Phil King" the same day); a staff login
+without one is refused. `15_field_write_test.sql` proves the gate, and was run with the
+gate opened to prove it can fail.
+
+---
+
+**D190 - A FIELD ENTRY LANDS AS A REAL ACTIVITY; THE RELEASE IS THE REVIEW.** ✅ operator-confirmed 14 Sep 2026
+
+Contractors need to see their own work and pay all month, and D188 already keeps it
+from brands, so field entries skip staging. One visit is an `activity_group`; each
+brand is an ordinary `activities` row carrying `activity_group_id`, so money,
+isolation and the status trigger stay per row. The new columns are not on the brand
+column grant (D134); contractors read them through `v_internal_activity`.
+
+A contractor changes only their own lines, only while the brand's month is unreleased
+and staff has not edited the row (`contractor_edited_at` is theirs; `hand_edited_at`
+stays the office's). New or moved work may not land in a released month: *"ask the
+office to add it"*. A `client_ref` made on the phone makes every retry a no-op. Every
+contractor is always their own, never joint.
+
+---
+
+**D191 - A CONTRACTOR'S DELETE IS AN ARCHIVE ROW, NOT A FLAG.** ✅ operator-confirmed 14 Sep 2026
+
+*"Removed from the portal but stored so I can review later."* `activity_deleted` holds
+the whole row, notes, contractor, photos and group as JSON; the activity itself is
+deleted, so every money view, including the admin's service_role reads, drops it
+without anyone remembering a filter. Photo files stay. `recompute_brand_venue_status`
+walks the stored status back and removes a phantom account row the deleted work
+created (D113, done by the database). Restore is an admin screen, not built yet.
+
+---
+
+**D192 - `merge_venue()` CARRIES EVERYTHING HUNG OFF A VENUE.** ✅ live 14 Sep 2026
+
+D174's warning, fixed before contractors start creating venues: contacts, notes,
+profile, the distributor customer number (which would otherwise make the merged venue
+invisible to the flash), depletion rulings, staged corrections, activity groups,
+check-ins, problem reports and field origin all follow the merge.
+`activity_group.venue_id` is ON DELETE RESTRICT so a forgotten table fails the merge
+loudly instead of losing a visit.
+
+---
+
+**D193 - CHECKING IN IS SEPARATE FROM LOGGING, ARRIVAL ONLY, ALWAYS YOUR OWN.** ✅ operator-confirmed 14 Sep 2026
+
+Work is often logged later and some has no visit at all. `venue_checkin` stamps venue,
+time and location; Log activity starts from the check-ins not logged yet; logging from
+one closes it and must be at the same venue; "Nothing to log" dismisses it. No
+check-out. Own-or-staff reads. Its own page, `checkin.html`, at the operator's request.
+
+---
+
+**D194 - FIELD PHOTOS: OWN FOLDER, ONE FILE PER BRAND LINE, VISIBLE TO BRANDS BY DEFAULT.** ✅ live 14 Sep 2026
+
+`authenticated` may INSERT into `activation-photos` under `field/<own auth uid>/`
+only, never update or delete. `field_attach_photo` makes a row only for a file that
+exists under that prefix, on a line the caller owns in an unreleased month. A photo on
+a shared activity is copied inside storage so each brand line has its own row and its
+own `photos.brand_visible`, which `photos_select` and `photos_storage_select` both
+enforce; `storage_path` stays unique for the HubSpot pipeline. Shrunk to about 1600px
+on the phone with EXIF read first. Only the shrunk file is kept.
+
+---
+
+**D195 - LOCATION IS RECORDED, NEVER BLOCKS, NEVER TRACKS, AND IS NEVER A COLUMN A BRAND CAN READ.** ✅ operator-confirmed 14 Sep 2026
+
+`field_location` holds every capture (check-in, activity, photo, venue),
+own-or-staff, kept for ever, with no foreign key so it outlives what it describes. A
+refusal is recorded as `denied`. Measured on an Android phone: uploaded library photos
+carry no EXIF GPS or date, and the first GPS fix of a session timed out at 10s while a
+later one got 4 m. So `getLocation()` tries GPS for 12s, then the network position,
+and `warmLocation()` asks permission and warms the GPS when a logging page opens,
+recording nothing. The second test located the check-in within 18 m.
+
+---
+
+**D196 - AN ACTIVITY HAS ONE TYPE AND ONE QUANTITY; BRANDS ADD ONLY THEIR NOTES; NO AMOUNT FIELD.** ✅ operator-confirmed 14 Sep 2026
+
+After seeing the first screens: *"each brand would be the same activity... no need to
+pick activity type and quantity for each"*, the name goes first, and *"what is this
+amount sold? That shouldn't be on there."* The type list offers only what every chosen
+brand allows. The dollar value a percentage rate is taken of comes from the depletion
+report at month end (D98), filled in by the office.
+
+---
+
+**D197 - THE FIELD PICKER IS AN EXPLICIT LIST, AND ARCHIVING A TYPE LEAVES ITS HISTORY PRICED.** ✅ operator-confirmed, applied 14 Sep 2026
+
+`brand_activity_offer (brand_id, source_activity_type)`; `field_activity_types`
+returns only offered types. Filled from the operator's checklist sheet, kept at
+`portal_seed/reconciliation/activity_types_by_brand_2026-09-14.csv` as the record of
+the decision, not a source. `activity_type_cleanup.py` applied it in one transaction:
+merges (`1st case sale` into `case sale`, `account visit (pk)`, `market needs`,
+`tap cocktail`, `tap w/2 cases`) with the old lines copied first so Blue Run, Barmen
+1873, Five Trail and Wodka kept their shared $25 case pay; anything with logged
+history archived (unoffered, still priced); only never-logged types deleted; every
+real rate change forward-dated (mileage 0.72 from 1 Sep; day buy-outs, hourly labor,
+Dame Mas staff training, drink list n/c pay and tap with labor pay from 14 Sep); Aspen
+Green case sale stays $5/$5; Dame Mas case sale pays 8%. The proof held on the real
+write: 0 of 1,390 activities changed charge or cost, and today's price for every
+offered brand and type equals the sheet. The Rate card page's Field picker edits the
+list from now on.
+
+---
+
+**D198 - TAKE PHOTO USES A CAMERA INSIDE THE PAGE.** ✅ verified on a real Android phone 14 Sep 2026
+
+`<input capture>` hands off to the separate Camera app; Android killed the
+backgrounded browser and returning failed with "low memory". `openCamera()` uses
+`getUserMedia` in a full-screen viewfinder so the browser stays in front; the camera
+app is only the fallback. Worked on the second phone test.
+
+---
+
+**D199 - OFFICE ACTIONS STAY ON THE STREAMLIT ADMIN.** ✅ operator-confirmed 14 Sep 2026
+
+Recycle bin restore, the venue problem queue, field entries with location flags,
+expense review, release and the field picker all belong on the laptop
+(DATA_ACCESS_TIERS Tier 3). The portal stays field-facing; staff pages there may show
+things read-only. An office action moves to a phone only one action at a time, through
+a gated function, if the operator asks.
+
+---
+
+**D200 - THE PILOT IS PHIL, PORTAL ONLY, AND SEPTEMBER'S INVOICE MUST READ THE PORTAL.** ⚠️ OPEN, due before 30 Sep 2026
+
+Phil (Android, installed app) begins beta testing on 15 Sep 2026 and logs only in the
+portal. `monthly_invoice.py` pulls deals from HubSpot, so Phil's September work is
+invisible to it. The operator chose to add portal-logged activities to the month-end
+invoice run, on another day. It must land before September is invoiced.
+
+---
+
+**D201 - A PORTAL-ONLY CHANGE DEPLOYS AS ONE BUILD, AND A PHONE TEST NEVER TUNNELS THE WHOLE REPO.** ✅ 14 Sep 2026
+
+Builds cost credits. The portal pages went live by fast-forwarding `main` and pushing
+directly (one build) instead of a PR plus preview (two); acceptable because nothing
+under `index.html`, `gallery.html` or `css/site.css` changed, and the homepage was
+checked after. Before that, the phone test ran through ngrok to a small server serving
+only `/portal/`, `/css/`, `/images/` and `/favicon.ico`: `python -m http.server` from
+the repo root would have published `docs/` (pay, margins) and `.git`, which only
+Netlify's `_redirects` hides.

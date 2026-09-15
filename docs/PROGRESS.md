@@ -21,6 +21,32 @@ it before it becomes real.
 > one: margin per brand is still not a meaningful number, and the Dame Mas
 > account read as *negative* until the retainer was found.
 
+### 14 Sep 2026 — field logging (V3) Phases 1 to 3, live and deployed
+
+**Current position moves:** contractors now log their own work in the portal, and
+**Phil begins beta testing on 15 Sep 2026**. Full detail in `docs/HANDOFF.md`;
+decisions **D184 to D201**; design in `docs/FIELD_LOGGING_PLAN.md`.
+
+- **Admin:** Review and edit and Rate card rebuilt as one section at a time (D184);
+  `lib.flash` (D185); Rate card problem rows can be marked expected (D186); new
+  **Release months** page and **Field picker** section.
+- **Database (applied to Supabase, backups taken before each apply):** month
+  release gate (D188), gated `field_*` write functions (D189), field entries as
+  activity groups with brand lines (D190), recycle bin (D191), `merge_venue()`
+  carries contacts, notes, customer numbers and field rows (D192), check-ins
+  (D193), field photos with per-brand visibility (D194), `field_location` (D195),
+  `brand_activity_offer` and the activity-type cleanup with a proof of 0 of 1,390
+  activities moved (D197). `authenticated` write grants: 0 (D187).
+- **Portal (deployed to ihospitality.vip, one build):** Check in, Log activity, My
+  activity, venue contacts / notes / report a problem, in-page camera (D198),
+  location with GPS-then-network fallback (D195). Tested on a real Android phone.
+- **Tests:** `db/test/13` rate-check marks, `14` release gate, `15` field writes,
+  `16` check-ins and photos; `05` extended for the merge. Release gate and field
+  gate each run once with the protection disabled to prove the test fails.
+- **Open:** venue problem queue and the other Streamlit admin screens (D199);
+  **September invoicing must include portal-logged activities before 30 Sep (D200)**;
+  Planned/Done, expenses, reminders.
+
 ### 2 Sep 2026 — two threads opened, neither built
 
 ⚠️ **Ran in a cloud session with no `portal_seed` and no `DATABASE_URL`**, so

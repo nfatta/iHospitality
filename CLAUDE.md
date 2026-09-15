@@ -59,9 +59,11 @@ python make_portal_icons.py            # regenerate the app icons
 python create_portal_user.py --list    # who has portal access
 python create_portal_user.py --email x@y --contractor "Eric Anderson"   # a field login
 python create_portal_user.py --email x@y --set-role staff --contractor "Nick Fatta"
+python month_release.py                # which brand-months hold work but are not released (D188)
+python month_release.py --brand "44 North" --month 2026-09 --release --apply
 python backfill_activity_contractor.py # who did the work, from HubSpot; --apply to write
 python -m pytest test_normalize.py test_sync.py test_admin_sql.py -q  # 103 tests
-bash db/test/run.sh                    # schema + RLS + contractor isolation, no network
+bash db/test/run.sh                    # schema, RLS, contractor isolation, release gate (14), field writes (15), check-ins and photos (16); no network
 python backfill_staging.py             # one-time; already applied 19 Aug
 bash test_seed_integration.sh          # end-to-end load, asserts idempotency
 ```
@@ -416,12 +418,22 @@ reproduces it; keep it that way.
   implies the security lives in the browser, and it does not.
 - **Escape anything from the database before putting it in HTML** (`esc()` in
   `portal.js`). Venue names come from HubSpot and are untrusted.
-- The portal is **read-only by construction**: RLS has SELECT policies only, and
-  `authenticated` holds no write grants. Writes go through `service_role` in the
-  Python tooling. **The staff admin is a separate Streamlit app for this reason**
-  — it connects from Python with `DATABASE_URL`, where the credential never
-  reaches a browser. Do not add write grants to `authenticated` to save building
-  a page; that would dissolve the guarantee for brand logins too (D61).
+- The portal holds **no table write grants for `authenticated`**: RLS has SELECT
+  policies only, and the grant audit in `db/test/run.sh` must read 0 (D187).
+  Office writes go through `service_role` in the Python tooling. **The staff admin
+  is a separate Streamlit app for this reason** — it connects from Python with
+  `DATABASE_URL`, where the credential never reaches a browser. Do not add write
+  grants to `authenticated` to save building a page (D61).
+- **⚠️ D61 WAS REOPENED ON PURPOSE, AND ONLY FOR FIELD LOGGING** (D189, 14 Sep
+  2026). A contractor writes ONLY through the `security definer` `field_*`
+  functions in `schema.sql` Section 14, each of whose FIRST statement is
+  `field_contractor_id()` (active login WITH a contractor record, else it raises).
+  Who did the work is taken from the login and is **never a parameter**. A new
+  field write is a new function with the same gate, a test in
+  `db/test/15_field_write_test.sql` shape that proves a brand call RAISES, and a
+  run with the gate opened to prove the test can fail (D114). Never an INSERT
+  policy, never a table grant. Field photos are the one storage INSERT, confined to
+  `field/<own auth uid>/` (D194).
 - **No hardcoded business data** (D60). Rates, classification rules, activity
   aliases and invoice figures live in tables the admin edits at runtime. A rule
   compiled into a script is a rule the operator cannot reach. `load_rate_card.py`
@@ -870,12 +882,56 @@ reproduces it; keep it that way.
   the Coors pool at all**, because `invoice_recap` is keyed on one brand and
   those invoices belong to three.
 
+## Field logging (V3), added 14 Sep 2026
+
+- **BRANDS SEE A MONTH ONLY ONCE IT IS RELEASED, PER BRAND** (D188).
+  `brand_month_release`; the brand branches of the activities, venues, photos,
+  account and photo-file policies all require it, and the two account views
+  rebuild STATUS from released work for a brand login. Staff, contractors and
+  service_role are unaffected. Release on the admin's **Release months** page or
+  with `python month_release.py`. A brand added later is released for nothing.
+- **A FIELD ENTRY IS A REAL ACTIVITY, NOT STAGING** (D190). One visit is an
+  `activity_group`; each brand is an ordinary `activities` row with
+  `activity_group_id`. Those columns are NOT on the brand column grant (D134):
+  contractors read them through `v_internal_activity`. A contractor edits only
+  their own line, only while its month is unreleased and until staff edits it
+  (`contractor_edited_at` is theirs, `hand_edited_at` stays the office's). Work may
+  not be logged INTO a released month; the office adds it.
+- **A CONTRACTOR'S DELETE MOVES THE ROW TO `activity_deleted`** (D191), a full JSON
+  snapshot, and recomputes the account status. It is never a `deleted_at` flag:
+  the admin reads `activities` with service_role and would count a flagged row.
+- **THE FIELD PICKER IS `brand_activity_offer`** (D197). `field_activity_types()`
+  returns only offered types. A new brand or a new rate line shows NOTHING in the
+  field form until ticked on Rate card → Field picker. Unticking archives: rates
+  and history stay. The 14 Sep cleanup (`activity_type_cleanup.py`) is a one-time
+  record; do not re-run it.
+- **LOCATION LIVES IN `field_location`, NEVER ON `activities` OR `venues`** (D195),
+  own-or-staff, kept for ever, and a refusal is recorded rather than blocking.
+  Check-ins (`venue_checkin`) are own-or-staff too (D193).
+- **`merge_venue()` MUST CARRY EVERY TABLE THAT REFERENCES A VENUE** (D192). Adding
+  a table with a `venue_id` means adding it to the merge.
+- **TEST CAMERA AND LOCATION ON A REAL PHONE** (D198). The desktop browser pane
+  blocks geolocation and cannot open a file picker. A phone test needs https: tunnel
+  ONLY `/portal/`, `/css/`, `/images/`, `/favicon.ico` — never `http.server` from the
+  repo root, which would publish `docs/` and `.git` (D201).
+- **`st.toast` AND `st.success` DO NOT SURVIVE `st.rerun()`** (D185). Use
+  `lib.flash(msg, key)` before the rerun and `lib.show_flash(key)` in the section.
+- **OFFICE ACTIONS STAY ON STREAMLIT** (D199): recycle bin restore, venue problem
+  queue, expense review, release, field picker. The portal stays field-facing.
+- **⚠️ D200 IS OPEN:** month-end invoicing reads HubSpot, and portal-logged work is
+  not in HubSpot. Portal activities must reach the invoice run before September is
+  invoiced.
+
 ## Where things are
 
 | Path | What |
 |---|---|
 | `portal/` | The sixteen portal pages, `portal.css`, `portal.js`, `sw.js`, `manifest.webmanifest`, `icons/`. Servable files only. |
 | `portal/my-venues.html`, `my-pay.html` | The contractor's own surface (D137). Also on the admin rail (D140). |
+| `portal/checkin.html`, `log.html`, `my-activity.html` | Field logging (V3): check in, log an Activity, change or delete your own (D190, D193, D196). |
+| `portal/field.js` | Shared field client: location (D195), photo shrink and upload (D194), in-page camera (D198), the IndexedDB outbox. |
+| `portal/venue-field.js` | Contacts, notes and "report a problem" on `venue.html` for field logins. |
+| `docs/FIELD_LOGGING_PLAN.md` | V3 design and phase status. |
 | `portal/brands-info.html`, `training.html` | Deliberate "Coming soon" stubs — V2. |
 | `portal/reset.html` | Set a new password. No `requireAuth()`, not in `ALLOWED` (D144). |
 | `_headers` | Netlify response headers: the manifest's content type, `sw.js` not cached, `/portal/*` noindex (D148). |
@@ -894,6 +950,8 @@ reproduces it; keep it that way.
 | `docs/HANDOFF.md` | Where the last session stopped, and the next prompt. |
 | `docs/DATA_ACCESS_TIERS.md` | Reads / routine writes / dangerous writes, and where each belongs. **A design note, not a decision.** Read before V3. |
 | `../../Hubspot/portal_seed/admin/` | The staff admin (Streamlit). Analysis, review, cleanup. |
+| `../../Hubspot/portal_seed/month_release.py` | Release or withdraw a brand's month; the Release months page calls the same `apply_changes()` (D188). |
+| `../../Hubspot/portal_seed/activity_type_cleanup.py` | One-time record of the 14 Sep 2026 activity-type cleanup (D197). Do not re-run. |
 | `../../Hubspot/portal_seed/promote.py` | Promote / reject / suppress a staged deal, **applying any correction** (D167). One definition, two callers. |
 | `../../Hubspot/portal_seed/db/test/12_correction_test.sql` | The correction overlay's contract: applied, HubSpot untouched, stale ruling raises a conflict. |
 | `../../Hubspot/portal_seed/create_portal_user.py` | Create / re-scope / deactivate a login. One definition; the CLI and the admin's Users page both call it. |
